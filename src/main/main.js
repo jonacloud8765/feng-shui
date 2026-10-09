@@ -334,6 +334,7 @@ app.whenReady().then(() => {
     openSettings();
   }
 
+  if (process.env.MORROW_OPEN_SETTINGS) openSettings(process.env.MORROW_OPEN_SETTINGS);
   if (store.notice) dialog.showMessageBox({ type: 'warning', message: 'Configuration reset', detail: store.notice });
 
   screen.on('display-removed', () => windows.revalidateScreens());

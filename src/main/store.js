@@ -35,8 +35,18 @@ function merge(base, patch) {
 const clone = (v) => JSON.parse(JSON.stringify(v));
 const newId = () => crypto.randomUUID();
 
+// Older saved data, upgraded in place so nothing a user set up is lost.
+function migrate(raw) {
+  if (raw.type === 'countdown' && isObject(raw.config) && raw.config.layout && !raw.config.style) {
+    const { layout, ...rest } = raw.config;
+    return { ...raw, config: { ...rest, style: layout === 'live' ? 'live' : 'editorial' } };
+  }
+  return raw;
+}
+
 function normalizeWidget(raw, fallbackAppearance) {
   if (!isObject(raw) || !TYPES[raw.type]) return null;
+  raw = migrate(raw);
   const type = TYPES[raw.type];
   const w = merge(
     {

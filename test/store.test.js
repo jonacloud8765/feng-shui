@@ -68,3 +68,18 @@ test('layouts keep separate widgets; duplicate copies with new ids', () => {
   s.switchLayout(first);
   assert.equal(s.widgets.length, 1);
 });
+
+test('old countdown layouts map onto the new styles', () => {
+  const dir = tmp();
+  fs.writeFileSync(path.join(dir, 'morrow-config.json'), JSON.stringify({
+    layouts: [{ id: 'L', name: 'Old', widgets: [
+      { id: 'a', type: 'countdown', config: { title: 'Trip', target: '2027-05-01T10:00', layout: 'live' } },
+      { id: 'b', type: 'countdown', config: { title: 'Exam', target: '2027-06-01T09:00', layout: 'days' } },
+    ] }],
+  }));
+  const s = new Store(dir);
+  assert.equal(s.widget('a').config.style, 'live');
+  assert.equal(s.widget('a').config.title, 'Trip');
+  assert.equal(s.widget('b').config.style, 'editorial');
+  assert.equal(s.widget('b').config.target, '2027-06-01T09:00');
+});

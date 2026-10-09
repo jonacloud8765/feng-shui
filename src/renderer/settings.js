@@ -173,7 +173,11 @@ function render(animate = false) {
 function summary(w) {
   const c = w.config;
   switch (w.type) {
-    case 'countdown': return c.title || 'Countdown';
+    case 'countdown': {
+      const ms = c.target ? new Date(c.target) - Date.now() : null;
+      const d = ms === null ? null : Math.floor(ms / 86400000);
+      return `${c.title || 'Countdown'}${ms === null ? '' : ms < 0 ? ' · passed' : d === 0 ? ' · today' : ` · ${d} day${d === 1 ? '' : 's'}`}`;
+    }
     case 'clock': return `${c.hour12 ? '12' : '24'}-hour${c.seconds ? ', seconds' : ''}`;
     case 'random': return `${c.min} – ${c.max}`;
     case 'coin': return `${c.heads} / ${c.tails}`;
@@ -210,7 +214,7 @@ function inspector(w) {
     h('button.btn.danger', { onclick: () => { api.removeWidget(w.id); selected = null; } }, 'Remove'),
   );
 
-  const content = t.fields.length ? [h('h2', {}, 'Content'), h('div.group', {}, ...t.fields.filter((f) => matches(f, w.config)).map((f) => field(w, f)))] : [];
+  const content = t.fields.length ? [h('h2', {}, w.type === 'countdown' ? 'Event' : 'Content'), h('div.group', {}, ...t.fields.filter((f) => matches(f, w.config)).map((f) => field(w, f)))] : [];
 
   const size = [
     h('h2', {}, 'Size'),
@@ -242,6 +246,7 @@ function field(w, f) {
     case 'timezone': return row(f.label, timezone(v, set), 'Leave empty to use this Mac’s time zone.');
     case 'range': return row(f.label, slider(v, { min: f.min, max: f.max, step: f.step || 1 }, set, f.label));
     case 'apps': return appsEditor(w);
+    case 'countdown': return countdownEditor(w);
     case 'city': return cityEditor(w, f, false);
     case 'cities': return cityEditor(w, f, true);
     default: return row(f.label, text(v, set, { placeholder: f.placeholder || '', label: f.label }));
@@ -311,6 +316,67 @@ function appsEditor(w) {
       h('div.v', {}, search, h('button.link', { title: 'Rescan', onclick: async () => { installed = await api.listApps(true); paintList(); } }, '↻'))),
     listBox);
 }
+
+// Countdown: a focused editor for the event and how it's shown.
+const EVENT_ICONS = ['', '✈️', '🎂', '🎉', '💍', '🎓', '🎵', '🏝️', '🏁', '❤️', '⭐️', '🎄', '👶', '🏠', '🗓️'];
+const CD_STYLES = {
+  editorial: ['Editorial', '<b class="n">48</b><i>days</i>'],
+  live: ['Live', '<span class="t">48</span><span class="t">06</span><span class="t">12</span>'],
+  ring: ['Ring', '<span class="ring"><b>48</b></span>'],
+  minimal: ['Minimal', '<b class="n s">48</b><i>days</i>'],
+};
+
+function countdownEditor(w) {
+  const c = w.config;
+  const set = (patch, rerender = false) => { editWidget(w.id, { config: patch }); if (rerender) render(); };
+  const date = (c.target || '').slice(0, 10);
+  const time = (c.target || '').slice(11, 16) || '09:00';
+  const setTarget = (d, t) => {
+    if (!d) return set({ target: '' }, true);
+    // A new date starts the progress bar from now.
+    set({ target: `${d}T${t || '00:00'}`, startedAt: Date.now() }, true);
+  };
+
+  const title = h('input', { type: 'text', value: c.title, placeholder: 'Name your event', 'aria-label': 'Event name', style: { width: '100%', fontSize: '15px', padding: '7px 10px' } });
+  title.addEventListener('input', () => set({ title: title.value }));
+
+  const dateInput = h('input', { type: 'date', value: date, 'aria-label': 'Date' });
+  const timeInput = h('input', { type: 'time', value: time, disabled: !!c.allDay, 'aria-label': 'Time' });
+  dateInput.addEventListener('change', () => setTarget(dateInput.value, timeInput.value));
+  timeInput.addEventListener('change', () => dateInput.value && setTarget(dateInput.value, timeInput.value));
+
+  const icons = h('div.chips', { style: { padding: '0' } }, ...EVENT_ICONS.map((ic) =>
+    h(`button.chip.icon-chip${(c.icon || '') === ic ? '.on' : ''}`, { title: ic ? `Use ${ic}` : 'No icon', onclick: () => set({ icon: ic }, true) }, ic || '∅')));
+  const custom = h('input', { type: 'text', value: EVENT_ICONS.includes(c.icon || '') ? '' : c.icon, placeholder: 'Any emoji', 'aria-label': 'Custom icon', style: { width: '90px' } });
+  custom.addEventListener('change', () => set({ icon: [...custom.value.trim()].slice(0, 2).join('') }, true));
+
+  const styles = h('div.cd-styles', {}, ...Object.entries(CD_STYLES).map(([k, [label, art]]) =>
+    h(`button.cd-style${(c.style || 'editorial') === k ? '.on' : ''}`, { onclick: () => set({ style: k }, true), 'aria-label': `${label} style` },
+      h('span.art', { html: art }), h('span.lbl', {}, label))));
+
+  const target = c.target ? new Date(c.target) : null;
+  const when = target && !Number.isNaN(target.getTime())
+    ? (() => { const ms = target - Date.now(); const d = Math.floor(ms / 86400000); return ms < 0 ? 'Already passed' : d === 0 ? 'Less than a day away' : `${d} day${d === 1 ? '' : 's'} away`; })()
+    : 'Pick a date to start the countdown.';
+
+  return h('div', {},
+    h('div.row', {}, h('div.k', {}, title)),
+    h('div.row', {}, h('div.k', {}, 'Date', h('small', {}, when)), h('div.v', {}, dateInput, timeInput)),
+    row('All day', toggle(c.allDay, (v) => set({ allDay: v }, true), 'All day'), 'Counts to the start of the day, without a time.'),
+    row('Time zone', timezone(c.timeZone, (v) => set({ timeZone: v }, true)), 'For an event in another city. Leave empty for this Mac’s time.'),
+    h('div.row', {}, h('div.k', {}, 'Icon'), h('div.v', { style: { flexWrap: 'wrap', justifyContent: 'flex-end', maxWidth: '70%' } }, icons, custom)),
+    h('div.row', { style: { display: 'block' } }, h('div.k', { style: { marginBottom: '10px' } }, 'Style'), styles),
+    ...(c.style === 'live' ? [row('Units', h('span', { style: { display: 'flex', gap: '12px', alignItems: 'center' } },
+      ...UNIT_KEYS.map(([k, label]) => h('label', { style: { display: 'flex', gap: '6px', alignItems: 'center' } }, toggle(c[k], (v) => set({ [k]: v }), label), label))))] : []),
+    row('Show the date', toggle(c.showDate, (v) => set({ showDate: v }), 'Show the date')),
+    ...(c.style !== 'minimal' ? [row(c.style === 'ring' ? 'Fill the ring as the day gets closer' : 'Progress bar', toggle(c.showProgress, (v) => set({ showProgress: v }), 'Progress'), c.startedAt ? `Counting since ${new Date(c.startedAt).toLocaleDateString(undefined, { day: 'numeric', month: 'long', year: 'numeric' })}.` : '')] : []),
+    ...(c.startedAt ? [row('Restart progress from today', h('button.btn', { onclick: () => { set({ startedAt: Date.now() }, true); toast('Progress restarted'); } }, 'Restart'))] : []),
+    row('When it arrives', h('span', { style: { display: 'flex', gap: '8px' } },
+      Object.assign(text(c.afterLabel, (v) => set({ afterLabel: v }), { placeholder: 'It’s here', label: 'Message when it arrives' }), { style: 'width: 150px' }),
+      select(c.afterMode, { label: 'Show the message', countup: 'Then count up' }, (v) => set({ afterMode: v }), 'After the event'))),
+  );
+}
+const UNIT_KEYS = [['days', 'Days'], ['hours', 'Hours'], ['minutes', 'Minutes'], ['seconds', 'Seconds']];
 
 // City search for weather and world clocks. Online results come from the
 // weather provider's geocoder (with coordinates, so weather works); time-zone

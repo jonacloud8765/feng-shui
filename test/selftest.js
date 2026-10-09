@@ -30,7 +30,7 @@ module.exports = function selftest({ app, BrowserWindow, store, windows }) {
       ids[t] = w.id;
       x += 40;
     }
-    store.updateWidget(ids.countdown, { config: { title: 'Lisbon', target: '2027-06-01T09:30', timeZone: 'Europe/Lisbon', layout: 'live' } });
+    store.updateWidget(ids.countdown, { config: { title: 'Lisbon', target: '2027-06-01T09:30', timeZone: 'Europe/Lisbon', style: 'live' } });
     store.updateWidget(ids.launcher, { config: { labels: true, apps: [
       { path: '/System/Applications/Calendar.app', name: 'Calendar', bundleId: 'com.apple.iCal' },
       { path: '/System/Applications/Notes.app', name: 'Notes', bundleId: 'com.apple.Notes' },
@@ -45,7 +45,7 @@ module.exports = function selftest({ app, BrowserWindow, store, windows }) {
     await wait(4000);
     const results = {};
     results.clock = await run(ids.clock, `document.querySelector('.time').textContent`);
-    results.countdown = await run(ids.countdown, `[...document.querySelectorAll('.unit .n')].map(e=>e.textContent).join(' ')`);
+    results.countdown = await run(ids.countdown, `[...document.querySelectorAll('.tile .n')].map(e=>e.textContent).join(' ')`);
     await run(ids.random, `document.querySelectorAll('input.field')[0].value='-5'; document.querySelectorAll('input.field')[0].dispatchEvent(new Event('change')); document.querySelector('.pill.primary').click()`);
     await run(ids.coin, `document.querySelector('.pill').click()`);
     await run(ids.stopwatch, `document.querySelectorAll('.controls .icon-btn')[1].click()`);
