@@ -126,6 +126,7 @@ function rebuildTray() {
   const menu = Menu.buildFromTemplate([
     { label: s.widgetsVisible ? 'Hide Widgets' : 'Show Widgets', accelerator: 'Alt+Command+W', click: toggleWidgets },
     desktopToggle(),
+    { label: 'Show in Dock', type: 'checkbox', checked: !!s.showDock, click: () => store.updateSettings({ showDock: !s.showDock }) },
     ...(windows.needsArranging
       ? [{ label: 'Arrange Widgets', type: 'checkbox', checked: windows.arranging, click: () => windows.setArranging(!windows.arranging) }]
       : []),
@@ -269,8 +270,15 @@ function registerIpc() {
 // Settings that need native side effects.
 function applySettings(prev) {
   const s = store.doc.settings;
-  if (!prev || prev.showDock !== s.showDock) {
-    if (s.showDock) app.dock.show(); else app.dock.hide();
+  // The packaged app starts without a Dock icon (LSUIElement), so at launch
+  // only showing it needs a call; hiding is for when the toggle changes.
+  if (!prev ? s.showDock : prev.showDock !== s.showDock) {
+    if (s.showDock) app.dock.show();
+    else {
+      app.dock.hide();
+      // Hiding the Dock icon can drop focus from the settings window.
+      if (settingsWin && !settingsWin.isDestroyed()) setTimeout(() => { settingsWin.show(); settingsWin.focus(); }, 150);
+    }
   }
   if (prev && prev.launchAtLogin !== s.launchAtLogin) {
     try { app.setLoginItemSettings({ openAtLogin: !!s.launchAtLogin }); } catch {}

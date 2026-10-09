@@ -14,7 +14,7 @@ const DEFAULT_SETTINGS = {
   allSpaces: true,
   snapping: true,
   locked: false,
-  showDock: true,
+  showDock: false,
   launchAtLogin: false,
   appearance: { ...DEFAULT_APPEARANCE },
 };

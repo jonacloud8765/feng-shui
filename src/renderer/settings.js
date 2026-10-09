@@ -532,7 +532,7 @@ function generalPage() {
     ),
     h('h2', {}, 'App'),
     h('div.group', {},
-      row('Show in Dock', toggle(s.showDock, (v) => editSettings({ showDock: v }), 'Show in Dock'), 'Morrow is always available from the menu bar.'),
+      row('Show in Dock', toggle(s.showDock, (v) => editSettings({ showDock: v }), 'Show in Dock'), 'Off by default. Morrow keeps running and is always available from the sun icon in the menu bar.'),
       row('Open at login', toggle(s.launchAtLogin, (v) => editSettings({ launchAtLogin: v }), 'Open at login'), 'Works once Morrow is packaged as an app. See the README.'),
     ),
   ];

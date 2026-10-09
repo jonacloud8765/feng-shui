@@ -28,6 +28,8 @@ plutil -replace CFBundleName -string Morrow "$PLIST"
 plutil -replace CFBundleDisplayName -string Morrow "$PLIST"
 plutil -replace CFBundleIdentifier -string app.morrow.desktop "$PLIST"
 plutil -replace CFBundleShortVersionString -string "$(node -p "require('./package.json').version")" "$PLIST"
+# No Dock icon at launch; Morrow shows one only if "Show in Dock" is on.
+plutil -replace LSUIElement -bool true "$PLIST"
 plutil -replace LSApplicationCategoryType -string public.app-category.productivity "$PLIST"
 plutil -replace NSLocationUsageDescription -string "Morrow uses your location only when you ask it to show local weather." "$PLIST"
 plutil -replace NSLocationWhenInUseUsageDescription -string "Morrow uses your location only when you ask it to show local weather." "$PLIST"
