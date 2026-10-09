@@ -9,3 +9,6 @@ DerivedData/
 Secrets.xcconfig
 node_modules/
 .devdata/
+native/build/
+.selftestdata/
+test/out/

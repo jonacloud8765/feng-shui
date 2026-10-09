@@ -108,7 +108,7 @@ function rebuildTray() {
   const s = store.doc.settings;
   const menu = Menu.buildFromTemplate([
     { label: s.widgetsVisible ? 'Hide Widgets' : 'Show Widgets', accelerator: 'Alt+Command+W', click: toggleWidgets },
-    ...(s.windowMode === 'desktop'
+    ...(windows.needsArranging
       ? [{ label: 'Arrange Widgets', type: 'checkbox', checked: windows.arranging, click: () => windows.setArranging(!windows.arranging) }]
       : []),
     { label: 'Add Widget', submenu: addWidgetMenu() },
@@ -191,6 +191,7 @@ function registerIpc() {
     doc: id ? null : store.doc,
     registry,
     notice: store.notice,
+    nativeAvailable: require('./native').available,
   }));
 
   ipcMain.on('morrow:update-widget', (e, id, patch) => store.updateWidget(id || senderWidgetId(e), patch));
@@ -270,6 +271,7 @@ app.whenReady().then(() => {
   });
 
   windows.sync();
+  if (process.env.MORROW_SELFTEST) return require('../../test/selftest')({ app, BrowserWindow, store, windows });
 
   // First launch: start with a calm, useful arrangement instead of an empty desktop.
   if (!store.widgets.length && !require('fs').existsSync(store.file)) {

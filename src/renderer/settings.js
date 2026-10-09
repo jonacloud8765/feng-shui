@@ -8,6 +8,7 @@ const foot = document.getElementById('foot');
 let doc;
 let registry;
 let zones = [];
+let nativeAvailable = false;
 let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
@@ -372,7 +373,9 @@ function generalPage() {
   };
   const modeHints = {
     normal: 'Widgets behave like ordinary windows. Click one to bring it forward; your apps cover them as usual.',
-    desktop: 'Widgets sit below every app, on the wallpaper. macOS doesn’t send clicks to this layer, so use Arrange Widgets in the menu bar to edit them.',
+    desktop: nativeAvailable
+      ? 'Widgets live on the wallpaper, just above desktop icons and below every app. They stay clickable and stay put in Mission Control.'
+      : 'Widgets sit below every app, on the wallpaper. Without the native helper macOS doesn’t send clicks to this layer, so use Arrange Widgets in the menu bar to edit them.',
     float: 'Widgets float above other apps. Useful for a timer you need to watch.',
   };
   return [
@@ -400,6 +403,7 @@ async function boot() {
   const init = await api.init(null);
   doc = init.doc;
   registry = init.registry;
+  nativeAvailable = init.nativeAvailable;
   zones = await api.timeZones();
   render(true);
   api.onDoc((d) => {

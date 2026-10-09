@@ -112,8 +112,8 @@ const TYPES = {
   random: {
     name: 'Random Number',
     description: 'A fair integer between two bounds, in one click.',
-    size: { width: 220, height: 200 },
-    min: { width: 160, height: 150 },
+    size: { width: 230, height: 240 },
+    min: { width: 150, height: 130 },
     max: { width: 700, height: 600 },
     config: { min: 1, max: 100, last: null },
     fields: [

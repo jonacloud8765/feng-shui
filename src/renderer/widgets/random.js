@@ -11,7 +11,7 @@ const css = `
 .rng .range .dash { opacity: 0.45; }
 .rng .row { display: flex; gap: 0.5em; align-items: center; }
 .rng .error { font-size: calc(clamp(10px, 6cqmin, 12px) * var(--scale)); color: #ffb3a8; min-height: 1.2em; }
-@container (max-height: 175px) { .rng .range { display: none; } .rng .error { display: none; } }
+@container (max-height: 150px) { .rng .range { display: none; } .rng .error { display: none; } }
 `;
 
 export function mount(root, ctx) {

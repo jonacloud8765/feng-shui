@@ -8,11 +8,13 @@
 // Window modes (Settings > General):
 //   normal  - Default. Ordinary window level. Widgets sit beside your apps:
 //             clicking one brings it forward, other apps cover it as usual.
-//   desktop - Electron's "desktop" window type, which puts the window at the
-//             desktop-background level, below every app and above the
-//             wallpaper. macOS doesn't deliver clicks or keys to that level,
-//             so widgets become display-only. Use "Arrange widgets" in the
-//             menu bar to bring them up temporarily to edit them.
+//   desktop - Just above the desktop icons and below every app window
+//             (CGWindowLevelForKey(kCGDesktopIconWindowLevelKey) + 1, set by
+//             the native helper). Widgets stay on the wallpaper, still take
+//             clicks, and stay put during Mission Control. Without the native
+//             helper this falls back to Electron's "desktop" window type,
+//             which macOS doesn't send clicks to, so "Arrange Widgets" in the
+//             menu bar lifts them temporarily for editing.
 //   float   - Always on top (floating level). Opt-in only.
 //
 // Spaces: with "Show on all Spaces" on, widgets follow you to every desktop
@@ -24,6 +26,7 @@
 const path = require('path');
 const { BrowserWindow, screen } = require('electron');
 const { TYPES } = require('../shared/registry');
+const native = require('./native');
 
 const SNAP = 10;
 const GAP = 12;
@@ -38,7 +41,13 @@ class WidgetWindows {
   }
 
   get mode() {
-    return this.arranging && this.store.doc.settings.windowMode === 'desktop' ? 'normal' : this.store.doc.settings.windowMode;
+    const mode = this.store.doc.settings.windowMode;
+    if (mode === 'desktop' && !native.available) return this.arranging ? 'normal' : 'desktop-type';
+    return mode;
+  }
+
+  get needsArranging() {
+    return this.store.doc.settings.windowMode === 'desktop' && !native.available;
   }
 
   // Bring the visible set of windows in line with the active layout.
@@ -77,7 +86,7 @@ class WidgetWindows {
       fullscreenable: false,
       skipTaskbar: true,
       acceptFirstMouse: true,
-      type: mode === 'desktop' ? 'desktop' : undefined,
+      type: mode === 'desktop-type' ? 'desktop' : undefined,
       title: TYPES[widget.type].name,
       webPreferences: {
         preload: path.join(__dirname, '..', 'preload.js'),
@@ -91,10 +100,16 @@ class WidgetWindows {
     win.widgetMode = mode;
     if (mode === 'float') win.setAlwaysOnTop(true, 'floating');
     win.setVisibleOnAllWorkspaces(!!this.store.doc.settings.allSpaces, { visibleOnFullScreen: false, skipTransformProcessType: true });
+    if (mode === 'desktop') native.setDesktopLevel(win, true);
+    win.widgetRadius = null;
+    this.shape(win, widget);
     win.loadFile(path.join(__dirname, '..', 'renderer', 'widget.html'), { query: { id: widget.id } });
     win.once('ready-to-show', () => {
       if (fade) win.setOpacity(0);
       win.showInactive();
+      win.widgetRadius = null;
+      this.shape(win, this.store.widget(widget.id) || widget);
+      if (process.env.MORROW_CAPTURE) console.log('[native] shaped', widget.type, win.widgetRadius, 'level', mode);
       if (fade) this.fadeIn(win);
     });
     win.on('closed', () => {
@@ -137,7 +152,9 @@ class WidgetWindows {
     if (material !== win.widgetMaterial) {
       win.setVibrancy(material === 'none' ? null : material);
       win.widgetMaterial = material;
+      win.widgetRadius = null; // a new effect view needs its mask again
     }
+    this.shape(win, widget);
     win.setHasShadow(!!widget.appearance.shadow);
     if (!this.gesture || this.gesture.id !== widget.id) {
       const b = win.getBounds();
@@ -147,6 +164,13 @@ class WidgetWindows {
       }
     }
     win.webContents.send('morrow:widget', widget);
+  }
+
+  // Round the native blur to the widget's own corner radius.
+  shape(win, widget) {
+    const r = widget.appearance.radius;
+    if (widget.appearance.material === 'none' || win.widgetRadius === r) return;
+    if (native.setCornerRadius(win, r)) win.widgetRadius = r;
   }
 
   broadcast(channel, payload) {
