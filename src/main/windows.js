@@ -228,6 +228,7 @@ class WidgetWindows {
   stepGesture() {
     const g = this.gesture;
     if (!g || g.win.isDestroyed()) return this.endGesture();
+    if (native.mouseDown() === false) return this.endGesture();
     const c = screen.getCursorScreenPoint();
     const dx = c.x - g.cursor.x;
     const dy = c.y - g.cursor.y;

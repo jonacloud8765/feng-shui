@@ -111,13 +111,22 @@ static napi_value AppIcon(napi_env env, napi_callback_info info) {
   return result;
 }
 
+// Whether the left mouse button is held, so a drag can't get stuck if the
+// release happens somewhere the widget never hears about.
+static napi_value MouseDown(napi_env env, napi_callback_info info) {
+  napi_value result;
+  napi_get_boolean(env, ([NSEvent pressedMouseButtons] & 1) != 0, &result);
+  return result;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor props[] = {
     {"setCornerRadius", nullptr, SetCornerRadius, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"setDesktopLevel", nullptr, SetDesktopLevel, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"appIcon", nullptr, AppIcon, nullptr, nullptr, nullptr, napi_default, nullptr},
+    {"mouseDown", nullptr, MouseDown, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
-  napi_define_properties(env, exports, 3, props);
+  napi_define_properties(env, exports, 4, props);
   return exports;
 }
 

@@ -22,6 +22,10 @@ module.exports = {
     if (!native || !native.appIcon) return null;
     return native.appIcon(appPath, size);
   },
+  // null when unknown (no helper), otherwise whether the left button is held.
+  mouseDown() {
+    return native && native.mouseDown ? native.mouseDown() : null;
+  },
   setDesktopLevel(win, on) {
     if (!native || win.isDestroyed()) return false;
     return native.setDesktopLevel(win.getNativeWindowHandle(), on);
