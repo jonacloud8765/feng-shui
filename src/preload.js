@@ -41,5 +41,7 @@ contextBridge.exposeInMainWorld('morrow', {
   bundleId: (p) => ipcRenderer.invoke('morrow:bundle-id', p),
   resolveApps: (entries, size) => ipcRenderer.invoke('morrow:apps-resolve', entries, size),
   launch: (p) => ipcRenderer.invoke('morrow:launch', p),
+  weather: (loc, force) => ipcRenderer.invoke('morrow:weather', loc, force),
+  searchCities: (q) => ipcRenderer.invoke('morrow:city-search', q),
   timeZones: () => ipcRenderer.invoke('morrow:time-zones'),
 });

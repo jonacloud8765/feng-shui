@@ -7,6 +7,7 @@ const { WidgetWindows } = require('./windows');
 const { Runtime } = require('./runtime');
 const registry = require('../shared/registry');
 const apps = require('./apps');
+const weather = require('./weather').createWeatherService();
 
 app.setName('Morrow');
 // A separate data folder (used for development and tests) also gets its own
@@ -245,6 +246,10 @@ function registerIpc() {
     return out;
   });
   ipcMain.handle('morrow:launch', (e, p) => apps.launch(p));
+  // Results come back as { ok, data } or { ok: false, error } so widgets can show the reason.
+  const settle = (p) => p.then((data) => ({ ok: true, data }), (err) => ({ ok: false, error: err.message }));
+  ipcMain.handle('morrow:weather', (e, loc, force) => settle(weather.forecast(loc, { force })));
+  ipcMain.handle('morrow:city-search', (e, q) => settle(weather.searchCities(q)));
   ipcMain.handle('morrow:time-zones', () => Intl.supportedValuesOf('timeZone'));
 }
 

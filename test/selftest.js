@@ -36,7 +36,13 @@ module.exports = function selftest({ app, BrowserWindow, store, windows }) {
       { path: '/System/Applications/Notes.app', name: 'Notes', bundleId: 'com.apple.Notes' },
       { path: '/Applications/Gone Forever.app', name: 'Gone Forever', bundleId: 'com.example.gone' },
     ] } });
-    await wait(2500);
+    store.updateWidget(ids.weather, { config: { location: { name: 'Lisbon', lat: 38.72, lon: -9.15, timezone: 'Europe/Lisbon' } } });
+    store.updateWidget(ids.worldclock, { config: { cities: [
+      { name: 'Tokyo', lat: 35.69, lon: 139.69, timezone: 'Asia/Tokyo' },
+      { name: 'New York', lat: 40.71, lon: -74.01, timezone: 'America/New_York' },
+      { name: 'Kathmandu', lat: null, lon: null, timezone: 'Asia/Kathmandu' },
+    ] } });
+    await wait(4000);
     const results = {};
     results.clock = await run(ids.clock, `document.querySelector('.time').textContent`);
     results.countdown = await run(ids.countdown, `[...document.querySelectorAll('.unit .n')].map(e=>e.textContent).join(' ')`);
@@ -47,6 +53,8 @@ module.exports = function selftest({ app, BrowserWindow, store, windows }) {
     await run(ids.stopwatch, `document.querySelectorAll('.controls .icon-btn')[2].click()`);
     await wait(400);
     results.launcher = await run(ids.launcher, `[...document.querySelectorAll('.app')].map(b => b.getAttribute('aria-label') + (b.querySelector('img') ? ' [icon ' + b.querySelector('img').naturalWidth + 'px]' : ' [no icon]')).join(' | ')`);
+    results.weather = await run(ids.weather, `document.querySelector('.wx').innerText.replace(/\\n+/g, ' | ')`);
+    results.worldclock = await run(ids.worldclock, `document.querySelector('.wc').innerText.replace(/\\n+/g, ' | ')`);
     results.random = await run(ids.random, `document.querySelector('.value').textContent`);
     results.coin = await run(ids.coin, `document.querySelector('.result').textContent`);
     results.stopwatch = await run(ids.stopwatch, `document.querySelector('.time').textContent + ' laps=' + document.querySelectorAll('.lap').length`);

@@ -177,6 +177,8 @@ function summary(w) {
     case 'clock': return `${c.hour12 ? '12' : '24'}-hour${c.seconds ? ', seconds' : ''}`;
     case 'random': return `${c.min} – ${c.max}`;
     case 'coin': return `${c.heads} / ${c.tails}`;
+    case 'weather': return c.location ? c.location.name : 'No location chosen';
+    case 'worldclock': return c.cities.length ? c.cities.map((x) => x.name).join(', ') : 'No cities yet';
     case 'launcher': return c.apps.length ? c.apps.map((a) => a.name).slice(0, 3).join(', ') + (c.apps.length > 3 ? '…' : '') : 'No apps chosen';
     default: return registry.TYPES[w.type].description;
   }
@@ -240,6 +242,8 @@ function field(w, f) {
     case 'timezone': return row(f.label, timezone(v, set), 'Leave empty to use this Mac’s time zone.');
     case 'range': return row(f.label, slider(v, { min: f.min, max: f.max, step: f.step || 1 }, set, f.label));
     case 'apps': return appsEditor(w);
+    case 'city': return cityEditor(w, f, false);
+    case 'cities': return cityEditor(w, f, true);
     default: return row(f.label, text(v, set, { placeholder: f.placeholder || '', label: f.label }));
   }
 }
@@ -306,6 +310,74 @@ function appsEditor(w) {
     h('div.row', {}, h('div.k', {}, 'Add applications', h('small', {}, 'From /Applications, /System/Applications and ~/Applications.')),
       h('div.v', {}, search, h('button.link', { title: 'Rescan', onclick: async () => { installed = await api.listApps(true); paintList(); } }, '↻'))),
     listBox);
+}
+
+// City search for weather and world clocks. Online results come from the
+// weather provider's geocoder (with coordinates, so weather works); time-zone
+// names are offered too, which work offline but have no weather.
+let cityQuery = '';
+let cityResults = [];
+let citySearchError = '';
+
+function cityLabel(c) {
+  return [c.name, c.region && c.region !== c.name ? c.region : '', c.country].filter(Boolean).join(', ');
+}
+
+function cityEditor(w, f, multi) {
+  const current = multi ? w.config[f.key] : (w.config[f.key] ? [w.config[f.key]] : []);
+  const save = (list) => { editWidget(w.id, { config: { [f.key]: multi ? list : list[0] || null } }); render(); };
+  const chosen = current.length
+    ? current.map((c, i) => h('div.row', {},
+        h('div.k', {}, c.name, h('small', {}, [cityLabel(c) !== c.name ? cityLabel(c) : '', c.timezone, Number.isFinite(c.lat) ? '' : 'no weather (time zone only)'].filter(Boolean).join(' · '))),
+        h('div.v', {},
+          multi ? h('button.link', { title: 'Move up', disabled: i === 0, onclick: () => { const a = current.slice(); [a[i - 1], a[i]] = [a[i], a[i - 1]]; save(a); } }, '↑') : null,
+          h('button.link', { title: 'Remove', 'aria-label': `Remove ${c.name}`, onclick: () => save(current.filter((_, j) => j !== i)) }, '×'))))
+    : [h('div.row', {}, h('div.k', {}, h('small', {}, multi ? 'No cities yet. Search below.' : 'No location yet. Search for a city below.')))];
+
+  const results = h('div');
+  const status = h('small', { style: { color: 'var(--muted)' } }, citySearchError);
+  const paintResults = () => {
+    const q = cityQuery.trim().toLowerCase();
+    const tzMatches = multi && q.length >= 2
+      ? zones.filter((z) => z.toLowerCase().replace(/_/g, ' ').includes(q)).slice(0, 5).map((z) => ({ name: z.split('/').pop().replace(/_/g, ' '), region: z.split('/')[0], country: '', timezone: z, lat: null, lon: null }))
+      : [];
+    const all = [...cityResults, ...tzMatches.filter((t) => !cityResults.some((c) => c.timezone === t.timezone && c.name === t.name))];
+    results.replaceChildren(...all.map((c) => h('div.row', { style: { minHeight: '36px', padding: '6px 14px' } },
+      h('div.k', {}, cityLabel(c) || c.name, h('small', {}, c.timezone + (Number.isFinite(c.lat) ? '' : ' · time zone only'))),
+      h('div.v', {}, h('button.btn.primary', { onclick: () => {
+        cityQuery = ''; cityResults = [];
+        save(multi ? [...current, c] : [c]);
+      } }, multi ? 'Add' : 'Use')))));
+  };
+  let timer;
+  const search = h('input', { type: 'search', placeholder: 'Search cities', value: cityQuery, 'aria-label': 'Search cities' });
+  search.addEventListener('input', () => {
+    cityQuery = search.value;
+    clearTimeout(timer);
+    timer = setTimeout(async () => {
+      const r = await api.searchCities(cityQuery);
+      cityResults = r.ok ? r.data : [];
+      citySearchError = r.ok ? (cityQuery.trim().length >= 2 && !r.data.length ? 'No cities found.' : '') : `${r.error} Time zones are still listed.`;
+      status.textContent = citySearchError;
+      paintResults();
+    }, 280);
+    paintResults();
+  });
+  paintResults();
+
+  const here = !multi ? h('button.btn', { onclick: () => {
+    status.textContent = 'Finding your location…';
+    navigator.geolocation.getCurrentPosition(
+      (pos) => save([{ name: 'Current location', region: '', country: '', lat: pos.coords.latitude, lon: pos.coords.longitude, timezone: Intl.DateTimeFormat().resolvedOptions().timeZone }]),
+      (err) => { status.textContent = err.code === 1 ? 'Location access was denied. Allow it in System Settings › Privacy & Security › Location Services, or search for a city.' : 'Your location isn’t available right now. Search for a city instead.'; },
+      { timeout: 12000, maximumAge: 600000 },
+    );
+  } }, 'Use my location') : null;
+
+  return h('div', {},
+    ...chosen,
+    h('div.row', {}, h('div.k', {}, multi ? 'Add a city' : 'Change location', status), h('div.v', {}, search, here)),
+    results);
 }
 
 function presetSwatch(ap) {
