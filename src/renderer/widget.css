@@ -1,0 +1,219 @@
+:root {
+  --text: #f2ece0;
+  --accent: #d8c3a0;
+  --tint: rgba(13, 19, 34, 0.38);
+  --radius: 22px;
+  --pad: 18px;
+  --scale: 1;
+  --display: Didot, serif;
+  --info: system-ui, sans-serif;
+  --weight: 300;
+  --align: center;
+  --justify: center;
+  --highlight: 0.5;
+  --image-opacity: 0.5;
+  --ease: cubic-bezier(0.22, 0.8, 0.24, 1);
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--info);
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+/* The native vibrancy (real backdrop blur) is provided by the window itself.
+   These layers add tint, an optional image, a light-catching sheen and a
+   hairline border on top of it. */
+.glass {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius);
+  overflow: hidden;
+  transition: border-radius 0.35s var(--ease);
+}
+
+.layer { position: absolute; inset: 0; pointer-events: none; border-radius: inherit; }
+
+.tint {
+  background: var(--tint);
+  transition: background-color 0.45s var(--ease);
+}
+
+.image {
+  background-size: cover;
+  background-position: center;
+  opacity: var(--image-opacity);
+  transition: opacity 0.45s var(--ease);
+}
+.image::after {
+  /* A soft scrim keeps text legible over photographs. */
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.35));
+}
+
+.sheen {
+  background:
+    radial-gradient(120% 70% at 18% -10%, rgba(255,255,255, calc(0.16 * var(--highlight))), transparent 60%),
+    linear-gradient(180deg, rgba(255,255,255, calc(0.07 * var(--highlight))), transparent 40%);
+  box-shadow:
+    inset 0 0.5px 0 0 rgba(255,255,255, calc(0.55 * var(--highlight))),
+    inset 0 0 0 0.5px rgba(255,255,255, calc(0.22 * var(--highlight))),
+    inset 0 -0.5px 0 0 rgba(0,0,0, calc(0.25 * var(--highlight)));
+  transition: opacity 0.45s var(--ease);
+}
+
+.content {
+  position: absolute;
+  inset: 0;
+  padding: var(--pad);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: var(--justify);
+  text-align: var(--align);
+  container-type: size;
+  transition: padding 0.35s var(--ease);
+}
+
+/* Typography ------------------------------------------------------------- */
+
+.display {
+  font-family: var(--display);
+  font-weight: var(--weight);
+  font-variant-numeric: lining-nums tabular-nums;
+  letter-spacing: -0.01em;
+  line-height: 0.95;
+  white-space: nowrap;
+}
+
+.label {
+  font-family: var(--info);
+  font-size: calc(clamp(10px, 7cqmin, 15px) * var(--scale));
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  opacity: 0.62;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+.no-labels .label.optional { display: none; }
+
+.info {
+  font-family: var(--info);
+  font-size: calc(clamp(11px, 8cqmin, 17px) * var(--scale));
+  font-weight: 400;
+  opacity: 0.8;
+  white-space: nowrap;
+}
+
+.accent { color: var(--accent); }
+
+/* Controls ---------------------------------------------------------------- */
+
+button {
+  font: inherit;
+  color: inherit;
+  border: 0;
+  cursor: default;
+}
+
+.pill {
+  font-family: var(--info);
+  font-size: calc(clamp(11px, 7.5cqmin, 14px) * var(--scale));
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  padding: 0.45em 1.1em;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.1);
+  box-shadow: inset 0 0.5px 0 rgba(255,255,255,0.25), inset 0 0 0 0.5px rgba(255,255,255,0.12);
+  transition: background-color 0.2s var(--ease), transform 0.12s var(--ease), opacity 0.2s;
+}
+.pill:hover { background: rgba(255,255,255,0.16); }
+.pill:active { transform: scale(0.96); background: rgba(255,255,255,0.22); }
+.pill.primary { background: color-mix(in srgb, var(--accent) 30%, transparent); }
+.pill.primary:hover { background: color-mix(in srgb, var(--accent) 40%, transparent); }
+.pill:disabled { opacity: 0.35; }
+
+.icon-btn {
+  width: 2.1em;
+  height: 2.1em;
+  border-radius: 50%;
+  display: inline-grid;
+  place-items: center;
+  background: rgba(255,255,255,0.08);
+  font-size: calc(clamp(11px, 7cqmin, 14px) * var(--scale));
+  transition: background-color 0.2s var(--ease), transform 0.12s var(--ease);
+}
+.icon-btn:hover { background: rgba(255,255,255,0.15); }
+.icon-btn:active { transform: scale(0.92); }
+.icon-btn svg { width: 1em; height: 1em; }
+
+input.field {
+  font: inherit;
+  color: inherit;
+  background: rgba(0,0,0,0.18);
+  border: 0;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.14);
+  padding: 0.3em 0.5em;
+  outline: none;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  user-select: text;
+  transition: box-shadow 0.2s;
+}
+input.field:focus { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent); }
+input.field.invalid { box-shadow: inset 0 0 0 1px rgba(255, 120, 110, 0.8); }
+
+/* Resize handles appear on hover only ------------------------------------- */
+
+.handle { position: absolute; z-index: 5; }
+.handle.e, .handle.w { top: 14px; bottom: 14px; width: 7px; cursor: ew-resize; }
+.handle.n, .handle.s { left: 14px; right: 14px; height: 7px; cursor: ns-resize; }
+.handle.e { right: 0; } .handle.w { left: 0; }
+.handle.n { top: 0; } .handle.s { bottom: 0; }
+.handle.se, .handle.sw, .handle.ne, .handle.nw { width: 16px; height: 16px; }
+.handle.se { right: 0; bottom: 0; cursor: nwse-resize; }
+.handle.nw { left: 0; top: 0; cursor: nwse-resize; }
+.handle.ne { right: 0; top: 0; cursor: nesw-resize; }
+.handle.sw { left: 0; bottom: 0; cursor: nesw-resize; }
+.handle.se::after {
+  content: '';
+  position: absolute;
+  right: 6px;
+  bottom: 6px;
+  width: 7px;
+  height: 7px;
+  border-right: 1.5px solid rgba(255,255,255,0.45);
+  border-bottom: 1.5px solid rgba(255,255,255,0.45);
+  border-bottom-right-radius: 3px;
+  opacity: 0;
+  transition: opacity 0.25s var(--ease);
+}
+body:hover .handle.se::after { opacity: 1; }
+.locked .handle { display: none; }
+
+/* Gentle hover feedback: the glass brightens very slightly. */
+.sheen { opacity: 0.85; }
+body:hover .sheen { opacity: 1; }
+
+/* Entry transition */
+.content > * { animation: rise 0.5s var(--ease) both; }
+@keyframes rise { from { opacity: 0; transform: translateY(4px); } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}

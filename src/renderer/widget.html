@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; img-src 'self' file: data:; style-src 'self' 'unsafe-inline'; connect-src https://api.open-meteo.com https://geocoding-api.open-meteo.com">
+  <title>Morrow widget</title>
+  <link rel="stylesheet" href="widget.css">
+</head>
+<body>
+  <div class="glass" id="glass">
+    <div class="layer tint"></div>
+    <div class="layer image"></div>
+    <div class="layer sheen"></div>
+    <div class="content" id="content"></div>
+    <div class="handle e" data-edge="e"></div>
+    <div class="handle s" data-edge="s"></div>
+    <div class="handle w" data-edge="w"></div>
+    <div class="handle n" data-edge="n"></div>
+    <div class="handle se" data-edge="se"></div>
+    <div class="handle sw" data-edge="sw"></div>
+    <div class="handle ne" data-edge="ne"></div>
+    <div class="handle nw" data-edge="nw"></div>
+  </div>
+  <script type="module" src="widget.js"></script>
+</body>
+</html>

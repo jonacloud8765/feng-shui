@@ -1,0 +1,11 @@
+.build/
+build/
+dist/
+*.xcuserstate
+xcuserdata/
+DerivedData/
+.swiftpm/
+.DS_Store
+Secrets.xcconfig
+node_modules/
+.devdata/
