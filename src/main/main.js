@@ -293,7 +293,14 @@ app.whenReady().then(() => {
   });
 
   windows.sync();
-  if (process.env.MORROW_SELFTEST) return require('../../test/selftest')({ app, BrowserWindow, store, windows });
+  if (process.env.MORROW_SELFTEST) {
+    try {
+      return require('../../test/selftest')({ app, BrowserWindow, store, windows });
+    } catch (err) {
+      console.error('Self test unavailable:', err.message);
+      return app.exit(2);
+    }
+  }
 
   // First launch: start with a calm, useful arrangement instead of an empty desktop.
   if (!store.widgets.length && !require('fs').existsSync(store.file)) {

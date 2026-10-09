@@ -9,7 +9,9 @@
     "native": "cd native && npx --yes node-gyp rebuild --target=$(node -p \"require('electron/package.json').version\") --dist-url=https://electronjs.org/headers",
     "postinstall": "npm run native || echo 'Morrow: native helper not built; the app still runs without it.'",
     "test": "node --test test/*.test.js test/*.test.mjs",
-    "selftest": "rm -rf .selftestdata && MORROW_DATA_DIR=./.selftestdata MORROW_SELFTEST=1 electron ."
+    "selftest": "rm -rf .selftestdata && MORROW_DATA_DIR=./.selftestdata MORROW_SELFTEST=1 electron .",
+    "package": "./scripts/package.sh",
+    "icon": "electron scripts/make-icon.js"
   },
   "author": "jonacloud8765",
   "license": "UNLICENSED",
