@@ -6,8 +6,12 @@ const { Store } = require('./store');
 const { WidgetWindows } = require('./windows');
 const { Runtime } = require('./runtime');
 const registry = require('../shared/registry');
+const apps = require('./apps');
 
 app.setName('Morrow');
+// A separate data folder (used for development and tests) also gets its own
+// single-instance lock, so it can run beside the everyday copy.
+if (process.env.MORROW_DATA_DIR) app.setPath('userData', path.resolve(process.env.MORROW_DATA_DIR));
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let store;
@@ -228,6 +232,19 @@ function registerIpc() {
     });
     return r.canceled ? null : r.filePaths[0];
   });
+  ipcMain.handle('morrow:apps-list', (e, refresh) => apps.listApps(refresh));
+  ipcMain.handle('morrow:app-icon', (e, p, size) => apps.icon(p, size));
+  ipcMain.handle('morrow:bundle-id', (e, p) => apps.bundleId(p));
+  ipcMain.handle('morrow:apps-resolve', async (e, entries, size) => {
+    const out = await apps.resolve(entries || [], size);
+    // Remember where moved apps went, so the next launch is instant.
+    const id = senderWidgetId(e);
+    if (id && out.some((a) => a.moved)) {
+      store.updateWidget(id, { config: { apps: out.map(({ path: p, name, bundleId }) => ({ path: p, name, bundleId })) } });
+    }
+    return out;
+  });
+  ipcMain.handle('morrow:launch', (e, p) => apps.launch(p));
   ipcMain.handle('morrow:time-zones', () => Intl.supportedValuesOf('timeZone'));
 }
 
@@ -247,7 +264,7 @@ function applySettings(prev) {
 }
 
 app.whenReady().then(() => {
-  store = new Store(process.env.MORROW_DATA_DIR ? path.resolve(process.env.MORROW_DATA_DIR) : app.getPath('userData'));
+  store = new Store(app.getPath('userData'));
   windows = new WidgetWindows(store);
   registerIpc();
   appMenu();

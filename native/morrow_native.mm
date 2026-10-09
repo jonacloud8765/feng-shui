@@ -2,9 +2,12 @@
 //   setCornerRadius - match the native blur's rounded mask to the widget's radius.
 //   setDesktopLevel - put a window just above the desktop icons, below all
 //                     app windows, while still receiving clicks.
+//   appIcon         - an application's real icon as PNG (Electron's own
+//                     icon API stops at 32px on macOS).
 // Both take the Buffer from BrowserWindow.getNativeWindowHandle() (an NSView*).
 #import <AppKit/AppKit.h>
 #include <node_api.h>
+#include <string>
 
 static NSView* ViewFromBuffer(napi_env env, napi_value value) {
   void* data = nullptr;
@@ -75,12 +78,46 @@ static napi_value SetDesktopLevel(napi_env env, napi_callback_info info) {
   return result;
 }
 
+// The app's real Finder icon as PNG data, rendered at `size` points @2x.
+static napi_value AppIcon(napi_env env, napi_callback_info info) {
+  size_t argc = 2;
+  napi_value args[2];
+  napi_get_cb_info(env, info, &argc, args, nullptr, nullptr);
+  napi_value result;
+  napi_get_null(env, &result);
+  if (argc < 2) return result;
+  size_t len = 0;
+  napi_get_value_string_utf8(env, args[0], nullptr, 0, &len);
+  std::string path(len, '\0');
+  napi_get_value_string_utf8(env, args[0], path.data(), len + 1, &len);
+  double size = 64;
+  napi_get_value_double(env, args[1], &size);
+  @autoreleasepool {
+    NSString* p = [NSString stringWithUTF8String:path.c_str()];
+    if (![[NSFileManager defaultManager] fileExistsAtPath:p]) return result;
+    NSImage* icon = [[NSWorkspace sharedWorkspace] iconForFile:p];
+    NSInteger px = (NSInteger)(size * 2);
+    NSBitmapImageRep* rep = [[NSBitmapImageRep alloc] initWithBitmapDataPlanes:NULL pixelsWide:px pixelsHigh:px
+        bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSDeviceRGBColorSpace bytesPerRow:0 bitsPerPixel:0];
+    rep.size = NSMakeSize(size, size);
+    [NSGraphicsContext saveGraphicsState];
+    NSGraphicsContext.currentContext = [NSGraphicsContext graphicsContextWithBitmapImageRep:rep];
+    [icon drawInRect:NSMakeRect(0, 0, size, size) fromRect:NSZeroRect operation:NSCompositingOperationCopy fraction:1.0];
+    [NSGraphicsContext restoreGraphicsState];
+    NSData* png = [rep representationUsingType:NSBitmapImageFileTypePNG properties:@{}];
+    void* out = nullptr;
+    napi_create_buffer_copy(env, png.length, png.bytes, &out, &result);
+  }
+  return result;
+}
+
 static napi_value Init(napi_env env, napi_value exports) {
   napi_property_descriptor props[] = {
     {"setCornerRadius", nullptr, SetCornerRadius, nullptr, nullptr, nullptr, napi_default, nullptr},
     {"setDesktopLevel", nullptr, SetDesktopLevel, nullptr, nullptr, nullptr, napi_default, nullptr},
+    {"appIcon", nullptr, AppIcon, nullptr, nullptr, nullptr, napi_default, nullptr},
   };
-  napi_define_properties(env, exports, 2, props);
+  napi_define_properties(env, exports, 3, props);
   return exports;
 }
 

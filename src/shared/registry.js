@@ -133,6 +133,21 @@ const TYPES = {
       { key: 'tails', label: 'Tails label', type: 'text' },
     ],
   },
+  launcher: {
+    name: 'App Launcher',
+    description: 'Your chosen apps as real icons. Click to open.',
+    size: { width: 300, height: 112 },
+    min: { width: 70, height: 70 },
+    max: { width: 1600, height: 1000 },
+    config: { apps: [], columns: 5, iconSize: 44, spacing: 14, labels: false },
+    fields: [
+      { key: 'apps', label: 'Apps', type: 'apps' },
+      { key: 'columns', label: 'Columns', type: 'range', min: 1, max: 14 },
+      { key: 'iconSize', label: 'Icon size', type: 'range', min: 20, max: 128 },
+      { key: 'spacing', label: 'Spacing', type: 'range', min: 0, max: 48 },
+      { key: 'labels', label: 'Show names', type: 'toggle' },
+    ],
+  },
   stopwatch: {
     name: 'Stopwatch',
     description: 'Start, pause, laps. Expands to show lap times.',

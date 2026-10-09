@@ -177,6 +177,7 @@ function summary(w) {
     case 'clock': return `${c.hour12 ? '12' : '24'}-hour${c.seconds ? ', seconds' : ''}`;
     case 'random': return `${c.min} – ${c.max}`;
     case 'coin': return `${c.heads} / ${c.tails}`;
+    case 'launcher': return c.apps.length ? c.apps.map((a) => a.name).slice(0, 3).join(', ') + (c.apps.length > 3 ? '…' : '') : 'No apps chosen';
     default: return registry.TYPES[w.type].description;
   }
 }
@@ -237,8 +238,74 @@ function field(w, f) {
     case 'number': return row(f.label, text(v, (n) => Number.isSafeInteger(n) ? set(n) : toast('Enter a whole number'), { type: 'number', label: f.label }));
     case 'datetime': return row(f.label, text(v, set, { type: 'datetime-local', label: f.label }), 'Local wall-clock time in the zone below.');
     case 'timezone': return row(f.label, timezone(v, set), 'Leave empty to use this Mac’s time zone.');
+    case 'range': return row(f.label, slider(v, { min: f.min, max: f.max, step: f.step || 1 }, set, f.label));
+    case 'apps': return appsEditor(w);
     default: return row(f.label, text(v, set, { placeholder: f.placeholder || '', label: f.label }));
   }
+}
+
+// Launcher: chosen apps, plus a searchable list of everything installed.
+let installed = null;
+let appQuery = '';
+const iconUrls = new Map();
+
+function appIconEl(p) {
+  const img = h('img', { alt: '', width: 22, height: 22, style: { width: '22px', height: '22px', flex: 'none' } });
+  const cached = iconUrls.get(p);
+  if (cached) img.src = cached;
+  else {
+    api.appIcon(p, 22).then((url) => { if (url) { iconUrls.set(p, url); img.src = url; } });
+  }
+  return img;
+}
+
+function appsEditor(w) {
+  const chosen = w.config.apps;
+  const setApps = (apps) => { editWidget(w.id, { config: { apps } }); render(); };
+  const move = (i, d) => {
+    const a = chosen.slice();
+    const [x] = a.splice(i, 1);
+    a.splice(Math.max(0, Math.min(a.length, i + d)), 0, x);
+    setApps(a);
+  };
+  const chosenRows = chosen.length
+    ? chosen.map((a, i) => h('div.row', {},
+        appIconEl(a.path),
+        h('div.k', {}, a.name),
+        h('div.v', {},
+          h('button.link', { title: 'Move up', 'aria-label': `Move ${a.name} up`, disabled: i === 0, onclick: () => move(i, -1) }, '↑'),
+          h('button.link', { title: 'Move down', 'aria-label': `Move ${a.name} down`, disabled: i === chosen.length - 1, onclick: () => move(i, 1) }, '↓'),
+          h('button.link', { title: 'Remove', 'aria-label': `Remove ${a.name}`, onclick: () => setApps(chosen.filter((_, j) => j !== i)) }, '×'))))
+    : [h('div.row', {}, h('div.k', {}, h('small', {}, 'No apps yet. Pick some below. You can also drag icons on the widget to reorder them.')))];
+
+  const listBox = h('div', { style: { maxHeight: '260px', overflowY: 'auto' } });
+  const search = h('input', { type: 'search', placeholder: 'Search applications', value: appQuery, 'aria-label': 'Search applications' });
+  const paintList = () => {
+    const q = appQuery.trim().toLowerCase();
+    const picked = new Set(chosen.map((a) => a.path));
+    const items = (installed || []).filter((a) => !q || a.name.toLowerCase().includes(q));
+    listBox.replaceChildren(...items.slice(0, 300).map((a) => {
+      const on = picked.has(a.path);
+      return h('div.row', { style: { minHeight: '36px', padding: '6px 14px' } },
+        appIconEl(a.path),
+        h('div.k', {}, a.name, h('small', {}, a.path.replace(/\/[^/]+\.app$/, ''))),
+        h('div.v', {}, h(`button.btn${on ? '' : '.primary'}`, { onclick: async () => {
+          if (on) return setApps(chosen.filter((x) => x.path !== a.path));
+          const bundleId = await api.bundleId(a.path);
+          setApps([...chosen, { path: a.path, name: a.name, bundleId }]);
+        } }, on ? 'Remove' : 'Add')));
+    }));
+    if (!items.length) listBox.append(h('div.empty', {}, installed ? 'No matching applications.' : 'Looking for applications…'));
+  };
+  search.addEventListener('input', () => { appQuery = search.value; paintList(); });
+  if (!installed) api.listApps().then((list) => { installed = list; paintList(); });
+  paintList();
+
+  return h('div', {},
+    ...chosenRows,
+    h('div.row', {}, h('div.k', {}, 'Add applications', h('small', {}, 'From /Applications, /System/Applications and ~/Applications.')),
+      h('div.v', {}, search, h('button.link', { title: 'Rescan', onclick: async () => { installed = await api.listApps(true); paintList(); } }, '↻'))),
+    listBox);
 }
 
 function presetSwatch(ap) {

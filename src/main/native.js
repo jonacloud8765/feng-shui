@@ -18,6 +18,10 @@ module.exports = {
     if (!native || win.isDestroyed()) return false;
     return native.setCornerRadius(win.getNativeWindowHandle(), radius);
   },
+  appIcon(appPath, size) {
+    if (!native || !native.appIcon) return null;
+    return native.appIcon(appPath, size);
+  },
   setDesktopLevel(win, on) {
     if (!native || win.isDestroyed()) return false;
     return native.setDesktopLevel(win.getNativeWindowHandle(), on);

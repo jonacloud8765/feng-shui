@@ -31,6 +31,11 @@ module.exports = function selftest({ app, BrowserWindow, store, windows }) {
       x += 40;
     }
     store.updateWidget(ids.countdown, { config: { title: 'Lisbon', target: '2027-06-01T09:30', timeZone: 'Europe/Lisbon', layout: 'live' } });
+    store.updateWidget(ids.launcher, { config: { labels: true, apps: [
+      { path: '/System/Applications/Calendar.app', name: 'Calendar', bundleId: 'com.apple.iCal' },
+      { path: '/System/Applications/Notes.app', name: 'Notes', bundleId: 'com.apple.Notes' },
+      { path: '/Applications/Gone Forever.app', name: 'Gone Forever', bundleId: 'com.example.gone' },
+    ] } });
     await wait(2500);
     const results = {};
     results.clock = await run(ids.clock, `document.querySelector('.time').textContent`);
@@ -41,6 +46,7 @@ module.exports = function selftest({ app, BrowserWindow, store, windows }) {
     await wait(1200);
     await run(ids.stopwatch, `document.querySelectorAll('.controls .icon-btn')[2].click()`);
     await wait(400);
+    results.launcher = await run(ids.launcher, `[...document.querySelectorAll('.app')].map(b => b.getAttribute('aria-label') + (b.querySelector('img') ? ' [icon ' + b.querySelector('img').naturalWidth + 'px]' : ' [no icon]')).join(' | ')`);
     results.random = await run(ids.random, `document.querySelector('.value').textContent`);
     results.coin = await run(ids.coin, `document.querySelector('.result').textContent`);
     results.stopwatch = await run(ids.stopwatch, `document.querySelector('.time').textContent + ' laps=' + document.querySelectorAll('.lap').length`);

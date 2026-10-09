@@ -36,5 +36,10 @@ contextBridge.exposeInMainWorld('morrow', {
   savePreset: (name, appearance) => ipcRenderer.invoke('morrow:save-preset', name, appearance),
   deletePreset: (id) => ipcRenderer.send('morrow:delete-preset', id),
   pickImage: () => ipcRenderer.invoke('morrow:pick-image'),
+  listApps: (refresh) => ipcRenderer.invoke('morrow:apps-list', refresh),
+  appIcon: (p, size) => ipcRenderer.invoke('morrow:app-icon', p, size),
+  bundleId: (p) => ipcRenderer.invoke('morrow:bundle-id', p),
+  resolveApps: (entries, size) => ipcRenderer.invoke('morrow:apps-resolve', entries, size),
+  launch: (p) => ipcRenderer.invoke('morrow:launch', p),
   timeZones: () => ipcRenderer.invoke('morrow:time-zones'),
 });
