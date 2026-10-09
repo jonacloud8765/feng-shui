@@ -98,6 +98,7 @@ function widgetContextMenu(id, extra = []) {
     { label: 'Duplicate', click: () => store.duplicateWidget(id) },
     { label: 'Hide', click: () => store.updateWidget(id, { visible: false }) },
     { type: 'separator' },
+    desktopToggle(),
     { label: 'Lock Positions', type: 'checkbox', checked: !!s.locked, click: () => store.updateSettings({ locked: !s.locked }) },
     { label: 'Snap to Edges', type: 'checkbox', checked: !!s.snapping, click: () => store.updateSettings({ snapping: !s.snapping }) },
     { label: 'Add Widget', submenu: addWidgetMenu() },
@@ -108,11 +109,23 @@ function widgetContextMenu(id, extra = []) {
   menu.popup(win ? { window: win } : {});
 }
 
+function desktopToggle() {
+  const on = store.doc.settings.windowMode === 'desktop';
+  return {
+    label: 'Keep Widgets on Desktop',
+    type: 'checkbox',
+    checked: on,
+    toolTip: 'Widgets stay below your app windows, on the wallpaper.',
+    click: () => store.updateSettings({ windowMode: on ? 'normal' : 'desktop' }),
+  };
+}
+
 function rebuildTray() {
   if (!tray) return;
   const s = store.doc.settings;
   const menu = Menu.buildFromTemplate([
     { label: s.widgetsVisible ? 'Hide Widgets' : 'Show Widgets', accelerator: 'Alt+Command+W', click: toggleWidgets },
+    desktopToggle(),
     ...(windows.needsArranging
       ? [{ label: 'Arrange Widgets', type: 'checkbox', checked: windows.arranging, click: () => windows.setArranging(!windows.arranging) }]
       : []),

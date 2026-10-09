@@ -10,7 +10,7 @@ const VERSION = 1;
 
 const DEFAULT_SETTINGS = {
   widgetsVisible: true,
-  windowMode: 'normal', // normal | desktop | float
+  windowMode: 'desktop', // desktop | normal | float
   allSpaces: true,
   snapping: true,
   locked: false,

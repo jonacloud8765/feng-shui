@@ -52,7 +52,7 @@ test('outdated or partial data is filled in, unknown widget types dropped', () =
   assert.equal(w.config.showDate, true);
   assert.equal(w.bounds.width, 340);
   assert.equal(typeof w.appearance.material, 'string');
-  assert.equal(s.doc.settings.windowMode, 'normal');
+  assert.equal(s.doc.settings.windowMode, 'desktop');
 });
 
 test('layouts keep separate widgets; duplicate copies with new ids', () => {

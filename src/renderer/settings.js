@@ -522,6 +522,8 @@ function generalPage() {
     h('p.subtitle', {}, 'How Morrow behaves on your Mac.'),
     h('h2', {}, 'Desktop'),
     h('div.group', {},
+      row('Keep widgets on the desktop', toggle(s.windowMode === 'desktop', (v) => { editSettings({ windowMode: v ? 'desktop' : 'normal' }); render(); }, 'Keep widgets on the desktop'),
+        'Widgets stay below your apps, on the wallpaper, and never cover your windows. Also in the menu bar icon’s menu.'),
       row('Widget placement', select(s.windowMode, modes, (v) => { editSettings({ windowMode: v }); render(); }, 'Widget placement'), modeHints[s.windowMode]),
       row('Show on all Spaces', toggle(s.allSpaces, (v) => editSettings({ allSpaces: v }), 'Show on all Spaces'), 'Widgets never appear over full-screen apps.'),
       row('Snap to edges and other widgets', toggle(s.snapping, (v) => editSettings({ snapping: v }), 'Snapping')),
