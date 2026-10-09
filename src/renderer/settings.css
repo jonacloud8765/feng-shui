@@ -329,3 +329,7 @@ input[type="time"]:disabled { opacity: 0.4; }
 .cd-style .art .ring { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; margin-top: -4px; box-shadow: inset 0 0 0 2px rgba(255,255,255,0.15); background: conic-gradient(#d8c3a0 0 62%, transparent 62%); -webkit-mask: radial-gradient(circle, transparent 20px, #000 21px); }
 .cd-style .art .ring + * { display: none; }
 .cd-style .lbl { padding: 7px 10px; font-size: 12px; text-align: left; }
+
+.paper-chip { padding: 3px 10px 3px 3px; font-size: 12px; }
+.paper-chip.on { box-shadow: inset 0 0 0 1.5px var(--accent); }
+.paper-chip .sw { font-family: Noteworthy, cursive; }

@@ -17,6 +17,10 @@ const FONTS = {
   optima: { label: 'Optima', stack: 'Optima, Candara, system-ui, sans-serif' },
   gill: { label: 'Gill Sans', stack: '"Gill Sans", "Gill Sans MT", system-ui, sans-serif' },
   mono: { label: 'SF Mono', stack: 'ui-monospace, "SF Mono", Menlo, monospace' },
+  noteworthy: { label: 'Noteworthy (handwritten)', stack: 'Noteworthy, "Bradley Hand", cursive' },
+  bradley: { label: 'Bradley Hand (handwritten)', stack: '"Bradley Hand", Noteworthy, cursive' },
+  marker: { label: 'Marker Felt', stack: '"Marker Felt", Noteworthy, cursive' },
+  snell: { label: 'Snell Roundhand (script)', stack: '"Snell Roundhand", "Savoye LET", cursive' },
 };
 
 // Native macOS vibrancy materials Electron exposes. "none" turns the native
@@ -169,6 +173,38 @@ const TYPES = {
       { key: 'showOffset', label: 'Show UTC offset', type: 'toggle' },
       { key: 'showWeather', label: 'Show weather', type: 'toggle' },
       { key: 'unit', label: 'Units', type: 'select', options: { C: 'Celsius', F: 'Fahrenheit' } },
+    ],
+  },
+  note: {
+    name: 'Sticky Note',
+    description: 'A note you type straight onto the desktop.',
+    size: { width: 240, height: 220 },
+    min: { width: 110, height: 90 },
+    max: { width: 1200, height: 1200 },
+    config: { text: '', paper: 'butter', font: 'noteworthy', size: 17, lined: false, tape: true },
+    appearance: { align: 'left' },
+    fields: [
+      { key: 'paper', label: 'Paper', type: 'paper' },
+      { key: 'font', label: 'Handwriting', type: 'font' },
+      { key: 'size', label: 'Text size', type: 'range', min: 10, max: 44 },
+      { key: 'lined', label: 'Ruled lines', type: 'toggle' },
+      { key: 'tape', label: 'Washi tape', type: 'toggle' },
+    ],
+  },
+  image: {
+    name: 'Photo',
+    description: 'A favourite photo, framed in glass.',
+    size: { width: 300, height: 220 },
+    min: { width: 80, height: 80 },
+    max: { width: 1800, height: 1400 },
+    config: { file: '', name: '', aspect: null, fit: 'cover', filter: 'none', caption: '', inset: 0 },
+    appearance: { radius: 18 },
+    fields: [
+      { key: 'file', label: 'Photo', type: 'image' },
+      { key: 'fit', label: 'Fit', type: 'select', options: { cover: 'Fill the frame', contain: 'Show the whole photo' } },
+      { key: 'filter', label: 'Tone', type: 'select', options: { none: 'Natural', mono: 'Black and white', warm: 'Warm', cool: 'Cool', fade: 'Faded film' } },
+      { key: 'inset', label: 'Frame', type: 'range', min: 0, max: 24 },
+      { key: 'caption', label: 'Caption', type: 'text', placeholder: 'Optional' },
     ],
   },
   stopwatch: {

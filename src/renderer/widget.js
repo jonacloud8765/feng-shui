@@ -28,6 +28,7 @@ const ctx = {
     window.morrow.updateWidget(id, { config: patch });
   },
   api: window.morrow,
+  get registry() { return registry; },
 };
 
 async function main() {

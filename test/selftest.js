@@ -42,8 +42,20 @@ module.exports = function selftest({ app, BrowserWindow, store, windows }) {
       { name: 'New York', lat: 40.71, lon: -74.01, timezone: 'America/New_York' },
       { name: 'Kathmandu', lat: null, lon: null, timezone: 'Asia/Kathmandu' },
     ] } });
-    await wait(4000);
     const results = {};
+    store.updateWidget(ids.note, { config: { text: 'Pick up tickets\nCall Mum on Sunday', paper: 'butter', lined: true } });
+    await wait(4000);
+    const heic = await run(ids.image, `window.morrow.importImage('/System/Library/Desktop Pictures/Mac Blue.heic')`);
+    if (heic.ok) store.updateWidget(ids.image, { config: { file: heic.data.file, name: heic.data.name, caption: 'Blue hour' } });
+    results.imageImport = heic;
+    await wait(2000);
+    results.imageLoaded = await run(ids.image, `(() => { const i = document.querySelector('.photo img'); return i.naturalWidth + 'x' + i.naturalHeight + ' visible=' + (getComputedStyle(i.parentElement).display !== 'none'); })()`);
+    results.imageAspect = store.widget(ids.image).config.aspect;
+    results.note = await run(ids.note, `document.querySelector('textarea').value`);
+    // Typing into the note saves it.
+    await run(ids.note, `(() => { const t = document.querySelector('textarea'); t.value += '\\nTyped by the self test'; t.dispatchEvent(new Event('input')); })()`);
+    await wait(900);
+    results.noteSaved = store.widget(ids.note).config.text.endsWith('Typed by the self test');
     results.clock = await run(ids.clock, `document.querySelector('.time').textContent`);
     results.countdown = await run(ids.countdown, `[...document.querySelectorAll('.tile .n')].map(e=>e.textContent).join(' ')`);
     await run(ids.random, `document.querySelectorAll('input.field')[0].value='-5'; document.querySelectorAll('input.field')[0].dispatchEvent(new Event('change')); document.querySelector('.pill.primary').click()`);

@@ -1,6 +1,6 @@
 'use strict';
 
-const { contextBridge, ipcRenderer } = require('electron');
+const { contextBridge, ipcRenderer, webUtils } = require('electron');
 
 const on = (channel) => (cb) => {
   const fn = (_e, ...args) => cb(...args);
@@ -43,5 +43,8 @@ contextBridge.exposeInMainWorld('morrow', {
   launch: (p) => ipcRenderer.invoke('morrow:launch', p),
   weather: (loc, force) => ipcRenderer.invoke('morrow:weather', loc, force),
   searchCities: (q) => ipcRenderer.invoke('morrow:city-search', q),
+  importImage: (p) => ipcRenderer.invoke('morrow:import-image', p),
+  pickPhoto: () => ipcRenderer.invoke('morrow:pick-photo'),
+  pathForFile: (file) => webUtils.getPathForFile(file),
   timeZones: () => ipcRenderer.invoke('morrow:time-zones'),
 });

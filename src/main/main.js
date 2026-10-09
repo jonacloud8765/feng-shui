@@ -19,6 +19,7 @@ let store;
 let windows;
 let tray;
 let settingsWin = null;
+let images;
 const runtime = new Runtime();
 
 // Settings window ----------------------------------------------------------
@@ -264,6 +265,16 @@ function registerIpc() {
   const settle = (p) => p.then((data) => ({ ok: true, data }), (err) => ({ ok: false, error: err.message }));
   ipcMain.handle('morrow:weather', (e, loc, force) => settle(weather.forecast(loc, { force })));
   ipcMain.handle('morrow:city-search', (e, q) => settle(weather.searchCities(q)));
+  ipcMain.handle('morrow:import-image', (e, p) => settle(images.importImage(p)));
+  ipcMain.handle('morrow:pick-photo', async () => {
+    app.focus({ steal: true });
+    const r = await dialog.showOpenDialog(settingsWin && !settingsWin.isDestroyed() ? settingsWin : undefined, {
+      properties: ['openFile'],
+      filters: [{ name: 'Photos', extensions: ['jpg', 'jpeg', 'png', 'heic', 'heif', 'webp', 'gif', 'tif', 'tiff', 'bmp', 'avif'] }],
+    });
+    if (r.canceled) return { ok: false, canceled: true };
+    return settle(images.importImage(r.filePaths[0]));
+  });
   ipcMain.handle('morrow:time-zones', () => Intl.supportedValuesOf('timeZone'));
 }
 
@@ -291,6 +302,8 @@ function applySettings(prev) {
 
 app.whenReady().then(() => {
   store = new Store(app.getPath('userData'));
+  images = require('./images').createImages(app.getPath('userData'));
+  images.cleanup(store.doc);
   windows = new WidgetWindows(store);
   registerIpc();
   appMenu();
@@ -309,6 +322,10 @@ app.whenReady().then(() => {
       windows.broadcast('morrow:settings', store.doc.settings);
     }
     windows.sync({ fade: kind === 'layout-switch' || kind === 'widgets' || kind === 'settings' });
+    if (kind === 'widgets' || kind === 'layouts' || kind === 'layout-switch') {
+      clearTimeout(images.timer);
+      images.timer = setTimeout(() => images.cleanup(store.doc), 5000);
+    }
     rebuildTray();
     sendDoc();
   });

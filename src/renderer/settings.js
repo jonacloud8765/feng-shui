@@ -1,4 +1,5 @@
 import { h } from './dom.js';
+import { PAPERS } from './widgets/note.js';
 
 const api = window.morrow;
 const nav = document.getElementById('nav');
@@ -13,7 +14,7 @@ let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
 
-const GLYPHS = { clock: '9:41', countdown: '12', random: '37', coin: '◐', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕' };
+const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', coin: '◐', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕' };
 const ART = {
   clock: ['10:42', 'Thursday · October 9'],
   countdown: ['48', 'days to go'],
@@ -23,6 +24,8 @@ const ART = {
   launcher: ['⌘', 'your apps'],
   weather: ['18°', 'partly cloudy'],
   worldclock: ['22:10', 'Tokyo · +7h'],
+  note: ['✎', 'remember the tickets'],
+  image: ['▣', 'your photo'],
 };
 
 const PAGES = [
@@ -183,6 +186,8 @@ function summary(w) {
     case 'coin': return `${c.heads} / ${c.tails}`;
     case 'weather': return c.location ? c.location.name : 'No location chosen';
     case 'worldclock': return c.cities.length ? c.cities.map((x) => x.name).join(', ') : 'No cities yet';
+    case 'note': return c.text ? c.text.split('\n')[0].slice(0, 40) : 'Empty note';
+    case 'image': return c.file ? (c.caption || c.name || 'Photo') : 'No photo yet';
     case 'launcher': return c.apps.length ? c.apps.map((a) => a.name).slice(0, 3).join(', ') + (c.apps.length > 3 ? '…' : '') : 'No apps chosen';
     default: return registry.TYPES[w.type].description;
   }
@@ -247,6 +252,11 @@ function field(w, f) {
     case 'range': return row(f.label, slider(v, { min: f.min, max: f.max, step: f.step || 1 }, set, f.label));
     case 'apps': return appsEditor(w);
     case 'countdown': return countdownEditor(w);
+    case 'paper': return row(f.label, h('div.chips', { style: { padding: 0, justifyContent: 'flex-end' } }, ...Object.entries(PAPERS).map(([k, p]) =>
+      h(`button.chip.paper-chip${v === k ? '.on' : ''}`, { title: p.label, 'aria-label': `${p.label} paper`, onclick: () => { set(k); render(); } },
+        h('span.sw', { style: { background: p.bg || 'linear-gradient(135deg, rgba(255,255,255,0.35), rgba(255,255,255,0.05))', color: p.ink || 'inherit' } }, 'a'), p.label))));
+    case 'font': return row(f.label, select(v, Object.fromEntries(Object.entries(registry.FONTS).map(([k, x]) => [k, x.label])), set, f.label));
+    case 'image': return photoField(w);
     case 'city': return cityEditor(w, f, false);
     case 'cities': return cityEditor(w, f, true);
     default: return row(f.label, text(v, set, { placeholder: f.placeholder || '', label: f.label }));
@@ -315,6 +325,27 @@ function appsEditor(w) {
     h('div.row', {}, h('div.k', {}, 'Add applications', h('small', {}, 'From /Applications, /System/Applications and ~/Applications.')),
       h('div.v', {}, search, h('button.link', { title: 'Rescan', onclick: async () => { installed = await api.listApps(true); paintList(); } }, '↻'))),
     listBox);
+}
+
+function photoField(w) {
+  const c = w.config;
+  const pick = async () => {
+    const r = await api.pickPhoto();
+    if (r.ok) { editWidget(w.id, { config: { file: r.data.file, name: r.data.name, aspect: null } }); render(); }
+    else if (!r.canceled) toast(r.error);
+  };
+  const match = () => {
+    if (!c.aspect) return toast('Open the photo on the desktop first.');
+    const height = Math.round(w.bounds.width / c.aspect);
+    editWidget(w.id, { bounds: { height } });
+    render();
+  };
+  return h('div', {},
+    row('Photo', h('span', { style: { display: 'flex', gap: '8px' } },
+      h('button.btn.primary', { onclick: pick }, c.file ? 'Change…' : 'Choose…'),
+      c.file ? h('button.btn', { onclick: () => { editWidget(w.id, { config: { file: '', name: '', aspect: null } }); render(); } }, 'Remove') : null),
+      c.file ? `${c.name || 'Photo'} · Morrow keeps its own copy, so moving the original is fine.` : 'Or drag a photo from Finder or Photos onto the widget.'),
+    ...(c.file ? [row('Match the photo’s shape', h('button.btn', { onclick: match }, 'Fit frame'), 'Sets the height so the whole photo fits without cropping.')] : []));
 }
 
 // Countdown: a focused editor for the event and how it's shown.

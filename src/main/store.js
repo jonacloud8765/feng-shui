@@ -159,7 +159,9 @@ class Store extends EventEmitter {
   }
 
   addWidget(type, bounds) {
-    const w = normalizeWidget({ type, bounds }, this.doc.settings.appearance);
+    // Some types start from their own appearance, e.g. notes are left-aligned.
+    const appearance = merge(this.doc.settings.appearance, TYPES[type]?.appearance || {});
+    const w = normalizeWidget({ type, bounds, appearance }, this.doc.settings.appearance);
     if (!w) return null;
     this.widgets.push(w);
     this.changed('widgets', { added: w.id });
