@@ -12,3 +12,11 @@ node_modules/
 native/build/
 .selftestdata/
 test/out/
+*.log
+npm-debug.log*
+.env
+.env.*
+*.local
+.vscode/
+.idea/
+coverage/

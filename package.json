@@ -14,7 +14,7 @@
     "icon": "electron scripts/make-icon.js"
   },
   "author": "jonacloud8765",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "commonjs",
   "devDependencies": {
     "electron": "^44.7.0"

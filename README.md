@@ -1,6 +1,14 @@
 # Morrow
 
-Glass desktop widgets for macOS. Each widget is its own native window with real
+Glass desktop widgets for macOS: clocks, countdowns, weather, world clocks, an
+app launcher, sticky notes, photos and a few small toys, each floating on the
+desktop with real macOS blur. Free and open source under the MIT license.
+
+Requires macOS and Node.js. No Xcode needed.
+
+## Overview
+
+Each widget is its own native window with real
 macOS blur behind it. You can move, resize and restyle every widget, and save
 different arrangements as layouts.
 
@@ -11,7 +19,8 @@ enough to build the helper.
 ## Run it
 
 ```sh
-cd ~/Documents/Morrow
+git clone https://github.com/jonacloud8765/morrow.git
+cd morrow
 npm install      # first time only; also builds the native helper
 npm start
 ```
@@ -40,7 +49,7 @@ show or hide all widgets (⌥⌘W), add widgets, switch layouts and open setting
 - **Layouts:** each layout keeps its own widgets, positions, sizes and styles.
 
 Widgets: Clock, Countdown, Random Number, Coin Flip, Stopwatch, App Launcher,
-Weather, World Clock.
+Weather, World Clock, Sticky Note, Photo.
 
 ## Where things are saved
 
@@ -106,3 +115,7 @@ npm run selftest # opens every widget, clicks its buttons, captures test/out/*.p
 
 The settings form is generated from `fields`, so most widgets need no settings
 code at all.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
