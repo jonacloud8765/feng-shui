@@ -356,21 +356,29 @@ function createMovies(dataDir, { openExternal } = {}) {
   // A watchlist film comes with its slug; a local film that isn't on the
   // watchlist is looked up on Letterboxd by its title and year.
   // Returns the local file, or null when there's no poster.
-  // Shows aren't on Letterboxd. Their artwork comes from TVmaze (free, no
-  // account): the season's poster when it has one, otherwise the show's.
-  async function showArtwork(show, season) {
+  // Shows aren't on Letterboxd. Their artwork comes from TVmaze's free API:
+  // the season's poster when it has one, otherwise the show's. A poster.jpg
+  // in the season's folder always wins.
+  async function getJson(url) {
     let res;
     try {
-      res = await fetch(`https://api.tvmaze.com/singlesearch/shows?${new URLSearchParams({ q: show, embed: 'seasons' })}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15000) });
+      res = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15000) });
     } catch {
-      throw new Error('No connection to TVmaze.');
+      throw new Error('No connection.');
     }
     if (res.status === 404) return null;
-    if (!res.ok) throw new Error(`TVmaze answered with an error (${res.status}).`);
-    const data = await res.json();
+    if (!res.ok) throw new Error(`The server answered with an error (${res.status}).`);
+    return res.json();
+  }
+
+  async function showArtwork(show, season) {
+    const data = await getJson(`https://api.tvmaze.com/singlesearch/shows?${new URLSearchParams({ q: show, embed: 'seasons' })}`);
     const seasons = data?._embedded?.seasons || [];
-    const url = seasons.find((x) => x.number === season)?.image?.medium || data?.image?.medium;
-    return typeof url === 'string' && url.startsWith('https://static.tvmaze.com/') ? download(url) : null;
+    const seasonImage = seasons.find((x) => x.number === season)?.image?.medium;
+    const ok = (u) => typeof u === 'string' && u.startsWith('https://static.tvmaze.com/');
+    let url = ok(seasonImage) ? seasonImage : null;
+    if (!ok(url)) url = data?.image?.medium;
+    return ok(url) ? download(url) : null;
   }
 
   function poster(film) {
@@ -379,7 +387,7 @@ function createMovies(dataDir, { openExternal } = {}) {
       const base = slugify(film.show);
       const season = Number(film.season);
       if (!base) return Promise.resolve(null);
-      return once(path.join(posterDir, `show-${base}-s${Number.isInteger(season) ? season : 0}.jpg`), () => showArtwork(film.show, season));
+      return once(path.join(posterDir, `season-${base}-s${Number.isInteger(season) ? season : 0}.jpg`), () => showArtwork(film.show, season));
     }
     if (typeof film.slug === 'string' && /^[\w-]+$/.test(film.slug)) {
       return once(path.join(posterDir, `${film.slug}.jpg`), async () => {
