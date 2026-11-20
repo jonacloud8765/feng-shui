@@ -8,6 +8,7 @@ const css = `
 .films { position: absolute; inset: 0; display: flex; flex-direction: column; font-family: var(--info); --poster: 96px; }
 .films header { display: flex; align-items: center; gap: 10px; padding: var(--pad) var(--pad) 8px; flex: none; }
 .films header .t { flex: 1; min-width: 0; text-align: left; }
+.films header .title { font: var(--weight) calc(22px * var(--scale)) / 1.1 var(--display); letter-spacing: 0.01em; margin-bottom: 4px; }
 .films header .sub { font-size: calc(11px * var(--scale)); opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .films .icon-btn svg { width: 1.05em; height: 1.05em; }
 .films .icon-btn.spin svg { animation: films-spin 0.9s linear infinite; }
@@ -92,6 +93,9 @@ const NEEDS_DETAILS = new Set(['popular', 'rating', 'rating-lowest', 'shortest',
 const ICON_REFRESH = '<svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M13.4 2.2v3.2h-3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_PLAY = '<svg viewBox="0 0 16 16"><path d="M4.5 2.8v10.4c0 .5.6.8 1 .5l8-5.2c.4-.2.4-.8 0-1l-8-5.2c-.4-.3-1 0-1 .5z" fill="currentColor"/></svg>';
 
+// Case- and accent-insensitive text for search: "Amélie" matches "amelie".
+const fold = (t) => String(t || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
 const posterCache = new Map(); // film slug -> Promise<local path | null>
 
 function ago(t) {
@@ -113,7 +117,8 @@ export function mount(root, ctx) {
 
   const refreshBtn = h('button.icon-btn', { title: 'Refresh', 'aria-label': 'Refresh', html: ICON_REFRESH, onclick: () => load(true) });
   const sub = h('div.sub');
-  const header = h('header', {}, h('div.t', {}, sub), refreshBtn);
+  const titleEl = h('div.title');
+  const header = h('header', {}, h('div.t', {}, titleEl, sub), refreshBtn);
   const scroll = h('div.scroll', { 'data-interactive': '' });
   const flashEl = h('div.flash', { role: 'status' });
   const wrap = h('div.films', {}, header, scroll, flashEl);
@@ -132,6 +137,8 @@ export function mount(root, ctx) {
 
   function style() {
     const c = ctx.config;
+    titleEl.textContent = c.title || '';
+    titleEl.style.display = c.title ? '' : 'none';
     wrap.classList.toggle('shelf', c.layout === 'shelf');
     wrap.classList.toggle('list', c.layout === 'list');
     wrap.style.setProperty('--poster', `${c.posterSize || 96}px`);
@@ -174,7 +181,7 @@ export function mount(root, ctx) {
     if (info.done < info.total) detailsTimer = setTimeout(pollDetails, 15000);
   }
 
-  const needsDetails = () => !!ctx.config.wlGenre || NEEDS_DETAILS.has(ctx.config.wlSort);
+  const needsDetails = () => !!ctx.config.wlGenre || NEEDS_DETAILS.has(ctx.config.wlSort) || !!search.trim();
 
   function paint() {
     if (!data) return;
@@ -183,16 +190,19 @@ export function mount(root, ctx) {
     observer = new IntersectionObserver(onVisible, { root: scroll, rootMargin: '300px' });
 
     const rest = data.watchlist.filter((f) => !f.downloaded);
-    const bits = [`${data.local.length} downloaded`];
+    const bits = c.showDownloads !== false ? [`${data.local.length} downloaded`] : [];
     if (data.user) bits.push(`${data.watchlist.length} on watchlist`);
     if (data.fetchedAt) bits.push(`updated ${ago(data.fetchedAt)}`);
     sub.textContent = bits.join(' · ');
 
     const out = [];
-    if (data.folderError) out.push(h('div.note.error', {}, data.folderError));
-    out.push(h('h2', {}, 'Already downloaded', h('span.n', {}, String(data.local.length))));
-    if (data.local.length) out.push(downloads());
-    else if (!data.folderError) out.push(h('div.note', {}, `No videos found in ${data.folder.split('/').pop() || data.folder}.`));
+    if (c.showDownloads !== false) {
+      if (data.folderError) out.push(h('div.note.error', {}, data.folderError));
+      // A panel titled by its owner and showing only downloads needs no second heading.
+      if (!(c.title && !c.showWatchlist)) out.push(h('h2', {}, 'Already downloaded', h('span.n', {}, String(data.local.length))));
+      if (data.local.length) out.push(downloads());
+      else if (!data.folderError) out.push(h('div.note', {}, `No videos found in ${data.folder.split('/').pop() || data.folder}.`));
+    }
 
     watchlistBox = null;
     if (c.showWatchlist) {
@@ -248,7 +258,7 @@ export function mount(root, ctx) {
     };
     const decades = { '': 'Any decade', ...Object.fromEntries(DECADES.map((d) => [d, d === 'upcoming' ? 'Upcoming' : d])) };
     const genres = { '': 'Any genre', ...Object.fromEntries(GENRES.map((g) => [g, g])) };
-    const input = h('input', { type: 'search', placeholder: 'Find a film', value: search, 'aria-label': 'Find a film on your watchlist' });
+    const input = h('input', { type: 'search', placeholder: 'Film, actor or director', value: search, 'aria-label': 'Search your watchlist by film, actor or director' });
     input.addEventListener('input', () => { search = input.value; paintWatchlist(); });
     return h('div', {},
       h('div.filters', {}, sel('wlDecade', c.wlDecade || '', decades, 'Decade'), sel('wlGenre', c.wlGenre || '', genres, 'Genre'), sel('wlSort', c.wlSort || 'added', SORTS, 'Sort by'), input),
@@ -295,7 +305,19 @@ export function mount(root, ctx) {
       list = list.filter((f) => f.year >= start && f.year < start + 10);
     }
     if (c.wlGenre) list = list.filter((f) => details[f.slug]?.genres?.includes(c.wlGenre));
-    if (q) list = list.filter((f) => f.title.toLowerCase().includes(q));
+    if (q) {
+      list = list.filter((f) => {
+        const d = details[f.slug] || {};
+        const hit = (names) => (names || []).find((n) => fold(n).includes(fold(q)));
+        f.why = null;
+        if (fold(f.title).includes(fold(q))) return true;
+        const dir = hit(d.directors);
+        if (dir) { f.why = `dir. ${dir}`; return true; }
+        const actor = hit(d.cast);
+        if (actor) { f.why = `with ${actor}`; return true; }
+        return false;
+      });
+    }
     const d = (f) => details[f.slug] || {};
     // Unknown values always sort last.
     const by = (get, dir) => (a, b) => {
@@ -383,6 +405,7 @@ export function mount(root, ctx) {
     const d = details[film.slug] || {};
     const sort = ctx.config.wlSort;
     const bits = [film.year];
+    if (film.why) bits.push(film.why);
     if ((sort === 'rating' || sort === 'rating-lowest') && d.rating) bits.push(`★ ${d.rating.toFixed(1)}`);
     if ((sort === 'shortest' || sort === 'longest') && d.runtime) bits.push(`${d.runtime} min`);
     if (ctx.config.wlGenre && d.genres) bits.push(d.genres.slice(0, 2).join(', '));

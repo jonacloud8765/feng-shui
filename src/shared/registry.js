@@ -63,6 +63,7 @@ const PRESETS = [
   { id: 'lavender', name: 'Lavender Mist', appearance: { material: 'under-window', tint: '#3b3354', tintOpacity: 0.34, text: '#f1ecfa', accent: '#c7b8ec', highlight: 0.55 } },
   { id: 'smoky-blue', name: 'Smoky Blue', appearance: { material: 'hud', tint: '#24364a', tintOpacity: 0.36, text: '#eaf0f5', accent: '#a9c1d6', highlight: 0.5 } },
   { id: 'sunset', name: 'Sunset', appearance: { material: 'under-window', tint: '#4a2a26', tintOpacity: 0.36, text: '#fbeee2', accent: '#f0a77e', highlight: 0.55 } },
+  { id: 'cinema', name: 'Cinema', appearance: { material: 'hud', tint: '#0a0a0c', tintOpacity: 0.72, text: '#f4ede1', accent: '#e6b45e', highlight: 0.4, font: 'didot', infoFont: 'avenir' } },
   { id: 'minimal', name: 'Minimal', appearance: { material: 'none', tint: '#000000', tintOpacity: 0, text: '#f5f1e8', accent: '#d8c3a0', highlight: 0, shadow: false } },
 ];
 
@@ -214,14 +215,16 @@ const TYPES = {
     min: { width: 200, height: 160 },
     max: { width: 1800, height: 1400 },
     // An empty folder means the Movies folder in your home folder.
-    config: { folder: '', username: '', layout: 'grid', posterSize: 96, showWatchlist: true, minSizeMB: 100, wlDecade: '', wlGenre: '', wlSort: 'added' },
+    config: { folder: '', username: '', layout: 'grid', posterSize: 96, showDownloads: true, showWatchlist: true, minSizeMB: 100, wlDecade: '', wlGenre: '', wlSort: 'added', title: '' },
     fields: [
-      { key: 'folder', label: 'Watch folder', type: 'folder' },
+      { key: 'showDownloads', label: 'Show downloads', type: 'toggle', hint: 'Films and shows in your watch folder. Click one to play it in VLC.' },
+      { key: 'showWatchlist', label: 'Show watchlist', type: 'toggle', hint: 'The rest of your Letterboxd watchlist, with filters.' },
+      { key: 'layout', label: 'Layout', type: 'choice', options: { grid: 'Grid', shelf: 'Shelves', list: 'List' } },
+      { key: 'posterSize', label: 'Posters', type: 'choice', options: { 72: 'Small', 96: 'Medium', 132: 'Large' } },
+      { key: 'title', label: 'Heading', type: 'text', placeholder: 'None', hint: 'Optional, like “Tonight” or “Ready to watch”.' },
       { key: 'username', label: 'Letterboxd username', type: 'text', placeholder: 'Your public username' },
-      { key: 'layout', label: 'Layout', type: 'select', options: { grid: 'Poster grid', shelf: 'Shelves (scroll sideways)', list: 'List' } },
-      { key: 'posterSize', label: 'Poster size', type: 'range', min: 56, max: 200 },
-      { key: 'showWatchlist', label: 'Show the rest of the watchlist', type: 'toggle' },
-      { key: 'minSizeMB', label: 'Ignore videos smaller than (MB)', type: 'range', min: 0, max: 1000, step: 10 },
+      { key: 'folder', label: 'Watch folder', type: 'folder' },
+      { key: 'minSizeMB', label: 'Hide short clips', type: 'flag', on: 100, off: 0, hint: 'Skips videos under 100 MB, like phone recordings.' },
     ],
   },
   watched: {
@@ -230,9 +233,10 @@ const TYPES = {
     size: { width: 220, height: 170 },
     min: { width: 120, height: 90 },
     max: { width: 900, height: 700 },
-    config: { username: '', label: 'films watched', showUser: true },
+    config: { username: '', label: 'films watched', showUser: true, goal: 0 },
     fields: [
       { key: 'username', label: 'Letterboxd username', type: 'text', placeholder: 'Your public username' },
+      { key: 'goal', label: 'Goal', type: 'number', placeholder: 'None', hint: 'A target count shows a progress bar. Leave at 0 for none.' },
       { key: 'label', label: 'Label', type: 'text', placeholder: 'films watched' },
       { key: 'showUser', label: 'Show username', type: 'toggle' },
     ],

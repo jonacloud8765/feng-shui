@@ -14,7 +14,7 @@ let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
 
-const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', coin: '◐', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕' };
+const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', coin: '◐', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#' };
 const ART = {
   clock: ['10:42', 'Thursday · October 9'],
   countdown: ['48', 'days to go'],
@@ -26,6 +26,8 @@ const ART = {
   worldclock: ['22:10', 'Tokyo · +7h'],
   note: ['✎', 'remember the tickets'],
   image: ['▣', 'your photo'],
+  films: ['▶', 'ready to watch'],
+  watched: ['1,040', 'films watched'],
 };
 
 const PAGES = [
@@ -107,6 +109,18 @@ function segmented(value, options, onChange) {
     wrap.append(b);
   }
   return wrap;
+}
+
+// Numeric choices (sizes, weights) light up the closest option, so values
+// set before these choices existed still show something sensible.
+function choice(value, options, onChange) {
+  const keys = Object.keys(options);
+  const numeric = keys.every((k) => k !== '' && !Number.isNaN(Number(k)));
+  let current = String(value);
+  if (numeric && !keys.includes(current)) {
+    current = keys.reduce((a, b) => (Math.abs(Number(b) - Number(value)) < Math.abs(Number(a) - Number(value)) ? b : a), keys[0]);
+  }
+  return segmented(current, options, (v) => onChange(numeric ? Number(v) : v));
 }
 
 function text(value, onChange, { placeholder = '', type = 'text', label } = {}) {
@@ -223,16 +237,22 @@ function inspector(w) {
 
   const content = t.fields.length ? [h('h2', {}, w.type === 'countdown' ? 'Event' : 'Content'), h('div.group', {}, ...t.fields.filter((f) => matches(f, w.config)).map((f) => field(w, f)))] : [];
 
+  // Three sizes to tap; dragging an edge on the desktop still gives any size.
+  const clampW = (v) => Math.round(Math.min(t.max.width, Math.max(t.min.width, v)));
+  const clampH = (v) => Math.round(Math.min(t.max.height, Math.max(t.min.height, v)));
+  const SIZES = { s: 0.75, m: 1, l: 1.4 };
+  const ratio = w.bounds.width / t.size.width;
+  const currentSize = Object.entries(SIZES).reduce((a, b) => (Math.abs(b[1] - ratio) < Math.abs(a[1] - ratio) ? b : a))[0];
   const size = [
     h('h2', {}, 'Size'),
     h('div.group', {},
-      row('Width', slider(w.bounds.width, { min: t.min.width, max: Math.min(t.max.width, 1200), format: (v) => `${v}` }, (v) => editWidget(w.id, { bounds: { width: v } }), 'Width')),
-      row('Height', slider(w.bounds.height, { min: t.min.height, max: Math.min(t.max.height, 900), format: (v) => `${v}` }, (v) => editWidget(w.id, { bounds: { height: v } }), 'Height')),
-      row('Reset to default size', h('button.btn', { onclick: () => { editWidget(w.id, { bounds: { ...t.size } }); render(); } }, 'Reset')),
+      row('Size', segmented(currentSize, { s: 'Small', m: 'Medium', l: 'Large' }, (k) => {
+        editWidget(w.id, { bounds: { width: clampW(t.size.width * SIZES[k]), height: clampH(t.size.height * SIZES[k]) } });
+      }), 'Or drag any edge of the widget on the desktop.'),
     ),
   ];
 
-  return h('div', {}, head, ...content, ...size, ...appearanceEditor(w.appearance, (patch) => editWidget(w.id, { appearance: patch }), { imageSupport: t.imageSupport, widget: w }));
+  return h('div', {}, head, ...content, ...appearanceEditor(w.appearance, (patch) => editWidget(w.id, { appearance: patch }), { imageSupport: t.imageSupport, widget: w, size }));
 }
 
 function matches(f, config) {
@@ -246,9 +266,11 @@ function field(w, f) {
     if (registry.TYPES[w.type].fields.some((x) => x.when && f.key in x.when)) render();
   };
   switch (f.type) {
-    case 'toggle': return row(f.label, toggle(v, set, f.label));
+    case 'toggle': return row(f.label, toggle(v, set, f.label), f.hint);
+    case 'choice': return row(f.label, choice(v, f.options, set), f.hint);
+    case 'flag': return row(f.label, toggle(v === f.on, (on) => set(on ? f.on : f.off), f.label), f.hint);
     case 'select': return row(f.label, select(v, f.options, set, f.label));
-    case 'number': return row(f.label, text(v, (n) => Number.isSafeInteger(n) ? set(n) : toast('Enter a whole number'), { type: 'number', label: f.label }));
+    case 'number': return row(f.label, text(v, (n) => Number.isSafeInteger(n) && n >= 0 ? set(n) : toast('Enter a whole number'), { type: 'number', label: f.label, placeholder: f.placeholder || '' }), f.hint);
     case 'datetime': return row(f.label, text(v, set, { type: 'datetime-local', label: f.label }), 'Local wall-clock time in the zone below.');
     case 'timezone': return row(f.label, timezone(v, set), 'Leave empty to use this Mac’s time zone.');
     case 'range': return row(f.label, slider(v, { min: f.min, max: f.max, step: f.step || 1 }, set, f.label));
@@ -262,7 +284,7 @@ function field(w, f) {
     case 'folder': return folderField(w, f);
     case 'city': return cityEditor(w, f, false);
     case 'cities': return cityEditor(w, f, true);
-    default: return row(f.label, text(v, set, { placeholder: f.placeholder || '', label: f.label }));
+    default: return row(f.label, text(v, set, { placeholder: f.placeholder || '', label: f.label }), f.hint);
   }
 }
 
@@ -493,22 +515,30 @@ function cityEditor(w, f, multi) {
     results);
 }
 
-function presetSwatch(ap) {
-  return h('span.sw', { style: { background: ap.tintOpacity > 0 ? ap.tint : 'transparent', color: ap.text, boxShadow: `inset 0 0 0 1px ${ap.accent}` } }, 'A');
-}
 
-function appearanceEditor(ap, set, { imageSupport, widget, global } = {}) {
+let fineOpen = false;
+
+function appearanceEditor(ap, set, { imageSupport, widget, global, size } = {}) {
   const F = registry.FONTS;
   const fonts = Object.fromEntries(Object.entries(F).map(([k, v]) => [k, v.label]));
   const applyPreset = (p) => { set(p.appearance); render(); };
-  const presets = [
-    ...registry.PRESETS.map((p) => h('button.chip', { onclick: () => applyPreset(p) }, presetSwatch({ ...ap, ...p.appearance }), p.name)),
-    ...doc.presets.map((p) => h('button.chip', { onclick: () => applyPreset(p) }, presetSwatch(p.appearance), p.name,
-      h('span.x', { title: 'Delete preset', onclick: (e) => { e.stopPropagation(); api.deletePreset(p.id); } }, '×'))),
-    h('button.chip', { onclick: (e) => {
+  const isOn = (p) => ['material', 'tint', 'text', 'accent'].every((k) => p.appearance[k] === undefined || p.appearance[k] === ap[k]);
+  const card = (p, extra) => {
+    const look = { ...ap, ...p.appearance };
+    const fontStack = (F[look.font] || F.didot).stack;
+    return h(`button.look${isOn(p) ? '.on' : ''}`, { onclick: () => applyPreset(p), title: `Use the ${p.name} look` },
+      h('span.swatch', { style: { background: look.tintOpacity > 0.02 ? look.tint : 'linear-gradient(135deg, #8a8f99, #3c4049)', color: look.text } },
+        h('span.aa', { style: { fontFamily: fontStack } }, 'Aa'),
+        h('span.dot', { style: { background: look.accent } })),
+      h('span.name', {}, p.name), extra || null);
+  };
+  const looks = [
+    ...registry.PRESETS.map((p) => card(p)),
+    ...doc.presets.map((p) => card(p, h('span.x', { title: 'Delete this look', onclick: (e) => { e.stopPropagation(); api.deletePreset(p.id); } }, '×'))),
+    h('button.look.add', { onclick: (e) => {
       // Electron has no prompt(), so the chip turns into a name field.
       const chip = e.currentTarget;
-      const input = h('input', { type: 'text', placeholder: 'Preset name', 'aria-label': 'Preset name', style: { width: '160px' } });
+      const input = h('input', { type: 'text', placeholder: 'Name this look', 'aria-label': 'Look name', style: { width: '160px' } });
       chip.replaceWith(input);
       input.focus();
       input.addEventListener('keydown', async (ev) => {
@@ -519,20 +549,20 @@ function appearanceEditor(ap, set, { imageSupport, widget, global } = {}) {
         if (name) { await api.savePreset(name, ap); toast(`Saved “${name}”`); } else render();
       });
       input.addEventListener('blur', () => setTimeout(render, 100));
-    } }, h('span.sw', {}, '+'), 'Save current…'),
+    } }, h('span.swatch', {}, h('span.aa', {}, '+')), h('span.name', {}, 'Save this look')),
   ];
 
   const pct = (v) => `${Math.round(v * 100)}%`;
-  const out = [
-    h('h2', {}, 'Style'),
-    h('div.group', {}, h('div.chips', {}, ...presets)),
+  const BLUR = { hud: 'Deep', 'under-window': 'Soft', popover: 'Bright', none: 'None' };
+  const fine = h('details.fine', { open: fineOpen },
+    h('summary', {}, 'Fine-tune', h('small', {}, 'Glass, type and color')),
     h('h2', {}, 'Glass'),
     h('div.group', {},
-      row('Material', select(ap.material, registry.MATERIALS, (v) => set({ material: v }), 'Material'), 'Native macOS blur behind the widget.'),
+      row('Blur', segmented(BLUR[ap.material] ? ap.material : '', BLUR, (v) => set({ material: v })), 'How much of the desktop shows through.'),
       row('Tint', h('span', { style: { display: 'flex', gap: '10px', alignItems: 'center' } }, color(ap.tint, (v) => set({ tint: v }), 'Tint color'),
-        slider(ap.tintOpacity, { min: 0, max: 0.95, step: 0.01, format: pct }, (v) => set({ tintOpacity: v }), 'Tint strength')), 'Raise the strength for legibility on busy wallpapers.'),
-      row('Highlight', slider(ap.highlight, { min: 0, max: 1, step: 0.05, format: pct }, (v) => set({ highlight: v }), 'Highlight'), 'Light-catching edge and sheen.'),
-      row('Corner radius', slider(ap.radius, { min: 0, max: 48, format: (v) => `${v}` }, (v) => set({ radius: v }), 'Corner radius')),
+        slider(ap.tintOpacity, { min: 0, max: 0.95, step: 0.01, format: pct }, (v) => set({ tintOpacity: v }), 'Tint strength')), 'Stronger tint reads better on busy wallpapers.'),
+      row('Corners', choice(ap.radius, { 6: 'Square', 18: 'Rounded', 30: 'Round' }, (v) => set({ radius: v }))),
+      row('Edge glow', choice(ap.highlight, { 0: 'Off', 0.4: 'Soft', 0.8: 'Bright' }, (v) => set({ highlight: v }))),
       row('Shadow', toggle(ap.shadow, (v) => set({ shadow: v }), 'Shadow')),
       ...(imageSupport ? [
         row('Background image', h('span', { style: { display: 'flex', gap: '8px' } },
@@ -543,19 +573,26 @@ function appearanceEditor(ap, set, { imageSupport, widget, global } = {}) {
     ),
     h('h2', {}, 'Type'),
     h('div.group', {},
-      row('Display typeface', select(ap.font, fonts, (v) => set({ font: v }), 'Display typeface'), 'Numerals and headlines.'),
-      row('Detail typeface', select(ap.infoFont, fonts, (v) => set({ infoFont: v }), 'Detail typeface'), 'Labels, dates and controls.'),
-      row('Weight', slider(ap.weight, { min: 100, max: 900, step: 100 }, (v) => set({ weight: v }), 'Weight')),
-      row('Size', slider(ap.scale, { min: 0.6, max: 1.6, step: 0.05, format: pct }, (v) => set({ scale: v }), 'Text size')),
+      row('Headline font', select(ap.font, fonts, (v) => set({ font: v }), 'Headline font'), 'Numbers and titles.'),
+      row('Detail font', select(ap.infoFont, fonts, (v) => set({ infoFont: v }), 'Detail font'), 'Labels, dates and buttons.'),
+      row('Weight', choice(ap.weight, { 300: 'Light', 400: 'Regular', 600: 'Bold' }, (v) => set({ weight: v }))),
+      row('Text size', choice(ap.scale, { 0.85: 'Small', 1: 'Medium', 1.2: 'Large', 1.4: 'Huge' }, (v) => set({ scale: v }))),
       row('Alignment', segmented(ap.align, { left: 'Left', center: 'Center', right: 'Right' }, (v) => set({ align: v }))),
-      row('Labels', toggle(ap.labels, (v) => set({ labels: v }), 'Show labels')),
-      row('Padding', slider(ap.padding, { min: 4, max: 48 }, (v) => set({ padding: v }), 'Padding')),
+      row('Spacing', choice(ap.padding, { 10: 'Snug', 18: 'Comfortable', 28: 'Airy' }, (v) => set({ padding: v }))),
+      row('Labels', toggle(ap.labels, (v) => set({ labels: v }), 'Show labels'), 'Small captions like dates and units.'),
     ),
     h('h2', {}, 'Color'),
     h('div.group', {},
       row('Text', color(ap.text, (v) => set({ text: v }), 'Text color')),
-      row('Accent', color(ap.accent, (v) => set({ accent: v }), 'Accent color')),
+      row('Accent', color(ap.accent, (v) => set({ accent: v }), 'Accent color'), 'Buttons, highlights and progress.'),
     ),
+  );
+  fine.addEventListener('toggle', () => { fineOpen = fine.open; });
+  const out = [
+    h('h2', {}, 'Look'),
+    h('div.looks', {}, ...looks),
+    ...(size || []),
+    fine,
   ];
   if (global) {
     out.push(h('div', { style: { marginTop: '16px', display: 'flex', gap: '8px' } },

@@ -210,6 +210,18 @@ function parseFilmPage(html) {
   const rating = /"ratingValue"\s*:\s*([\d.]+)/.exec(html);
   const count = /"ratingCount"\s*:\s*(\d+)/.exec(html);
   const runtime = /(\d+)(?:&nbsp;|\s)mins/.exec(html);
+  // Cast and directors from the page's structured data, in billing order.
+  let directors = [];
+  let cast = [];
+  const ld = /<script type="application\/ld\+json">\s*(?:\/\*.*?\*\/)?\s*(\{[\s\S]*?\})\s*(?:\/\*.*?\*\/)?\s*<\/script>/.exec(html);
+  if (ld) {
+    try {
+      const data = JSON.parse(ld[1]);
+      const names = (v) => (Array.isArray(v) ? v : v ? [v] : []).map((p) => p && p.name).filter((n) => typeof n === 'string');
+      directors = names(data.director);
+      cast = names(data.actor || data.actors).slice(0, 15);
+    } catch {}
+  }
   return {
     poster: img ? img[1].replace(/\\\//g, '/').replace(/-0-\d+-0-\d+-crop\./, '-0-230-0-345-crop.') : null,
     year: year ? Number(year[1]) : null,
@@ -217,6 +229,8 @@ function parseFilmPage(html) {
     rating: rating ? Number(rating[1]) : null,
     ratingCount: count ? Number(count[1]) : 0,
     runtime: runtime ? Number(runtime[1]) : null,
+    directors,
+    cast,
   };
 }
 
@@ -355,6 +369,8 @@ function createMovies(dataDir, { openExternal } = {}) {
   let detailsError = null;
   let detailsDirty = 0;
 
+  const complete = (d) => !!d && Array.isArray(d.cast);
+
   function loadDetails() {
     if (!detailsMap) {
       try { detailsMap = JSON.parse(fs.readFileSync(detailsFile, 'utf8')); } catch { detailsMap = {}; }
@@ -378,15 +394,15 @@ function createMovies(dataDir, { openExternal } = {}) {
       while (detailsQueue.length) {
         if (Date.now() < detailsPausedUntil) break;
         const slug = detailsQueue[0];
-        if (detailsMap[slug]) { detailsQueue.shift(); continue; }
+        if (complete(detailsMap[slug])) { detailsQueue.shift(); continue; }
         try {
           const d = await filmPage(slug);
-          detailsMap[slug] = { genres: d.genres, rating: d.rating, ratingCount: d.ratingCount, runtime: d.runtime, year: d.year };
+          detailsMap[slug] = { genres: d.genres, rating: d.rating, ratingCount: d.ratingCount, runtime: d.runtime, year: d.year, directors: d.directors, cast: d.cast };
           detailsError = null;
           detailsQueue.shift();
           if (++detailsDirty >= 10) saveDetails();
         } catch (err) {
-          if (err.notFound) { detailsMap[slug] = { genres: [], rating: null, ratingCount: 0, runtime: null }; detailsQueue.shift(); continue; }
+          if (err.notFound) { detailsMap[slug] = { genres: [], rating: null, ratingCount: 0, runtime: null, directors: [], cast: [] }; detailsQueue.shift(); continue; }
           // Blocked or offline: stop for a while and pick up where it left off.
           detailsError = err.message;
           detailsPausedUntil = Date.now() + 20 * 60 * 1000;
@@ -405,10 +421,10 @@ function createMovies(dataDir, { openExternal } = {}) {
   function details(slugs) {
     const map = loadDetails();
     const list = (Array.isArray(slugs) ? slugs : []).filter((x) => typeof x === 'string' && /^[\w-]+$/.test(x));
-    detailsQueue = list.filter((x) => !map[x]);
+    detailsQueue = list.filter((x) => !complete(map[x]));
     if (detailsQueue.length) runDetails();
     const known = {};
-    for (const x of list) if (map[x]) known[x] = map[x];
+    for (const x of list) if (map[x]) known[x] = map[x];  // older entries still help while they refresh
     return { details: known, total: list.length, done: list.length - detailsQueue.length, error: detailsError };
   }
 

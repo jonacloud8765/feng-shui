@@ -66,6 +66,8 @@ Letterboxd watchlist. Episodes are grouped into one entry per season.
 - **Play:** click a downloaded film to open it in [VLC](https://www.videolan.org/vlc/).
   A season opens as a playlist. If VLC isn't installed, the widget says so.
 - **Downloads:** films on the left, a divider, then shows.
+- **Sections:** show downloads, the watchlist, or both, with an optional heading,
+  so one widget can be a "Ready to watch" panel and another a watchlist shelf.
 - **Watchlist:** enter your Letterboxd username in the widget's settings. The
   watchlist is read from your public watchlist page, kept for 12 hours, and
   refreshed with the refresh button. If Letterboxd can't be reached, the last
@@ -74,7 +76,7 @@ Letterboxd watchlist. Episodes are grouped into one entry per season.
   watchlist in Chrome (or your default browser).
 - **Finding films:** filter the watchlist by decade and genre, sort it (when
   added, name, popularity, shuffle, release date, average rating, length) or
-  type part of a title. The total running time of the films shown appears
+  search by title, actor or director in the same box. The total running time of the films shown appears
   under the filters. Genres, ratings and lengths come from each film's public
   Letterboxd page, read slowly in the background once and then kept.
 - **Artwork:** a poster or thumbnail image next to a video (`<name>.jpg`,
@@ -88,8 +90,8 @@ Letterboxd watchlist. Episodes are grouped into one entry per season.
 ## Films Watched
 
 A single number: how many films a Letterboxd member has logged as watched,
-read from their public Films page and checked hourly. Click it to open that
-page.
+read from their public Films page and checked hourly. Set a goal to add a
+progress bar. Click the number to open that page.
 
 ## Weather
 
