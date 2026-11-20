@@ -164,10 +164,10 @@ export function mount(root, ctx) {
     for (const e of entries) {
       if (!e.isIntersecting) continue;
       observer.unobserve(e.target);
-      const { slug, poster, title, year } = e.target.film;
-      const key = slug || `${title}|${year}`;
+      const { slug, poster, title, year, show, season } = e.target.film;
+      const key = slug || (show ? `show|${show}|${season}` : `${title}|${year}`);
       const img = e.target.querySelector('img');
-      if (!posterCache.has(key)) posterCache.set(key, ctx.api.filmPoster(slug ? { slug, poster } : { title, year }));
+      if (!posterCache.has(key)) posterCache.set(key, ctx.api.filmPoster(slug ? { slug, poster } : show ? { show, season } : { title, year }));
       posterCache.get(key).then((p) => { if (p && img) img.src = fileUrl(p); else img?.remove(); });
     }
   }
@@ -178,7 +178,7 @@ export function mount(root, ctx) {
     const meta = item.kind === 'show'
       ? `${item.files.length} episode${item.files.length === 1 ? '' : 's'} · ${size(item.size)}`
       : [item.year, film ? 'on watchlist' : null, size(item.size)].filter(Boolean).join(' · ');
-    const box = art(label, { local: item.art, remote: film || (item.kind === 'film' && item.year ? { title: item.title, year: item.year } : null) });
+    const box = art(label, { local: item.art, remote: film || (item.kind === 'show' ? { show: item.title, season: item.season } : item.year ? { title: item.title, year: item.year } : null) });
     box.append(h('div.badge', { html: ICON_PLAY }));
     const btn = h('button.item', { title: `Play ${label} in VLC`, 'aria-label': `Play ${label} in VLC` },
       box, h('div.text', {}, h('div.name', {}, label), h('div.meta', {}, meta)));

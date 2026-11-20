@@ -356,8 +356,31 @@ function createMovies(dataDir, { openExternal } = {}) {
   // A watchlist film comes with its slug; a local film that isn't on the
   // watchlist is looked up on Letterboxd by its title and year.
   // Returns the local file, or null when there's no poster.
+  // Shows aren't on Letterboxd. Their artwork comes from TVmaze (free, no
+  // account): the season's poster when it has one, otherwise the show's.
+  async function showArtwork(show, season) {
+    let res;
+    try {
+      res = await fetch(`https://api.tvmaze.com/singlesearch/shows?${new URLSearchParams({ q: show, embed: 'seasons' })}`, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(15000) });
+    } catch {
+      throw new Error('No connection to TVmaze.');
+    }
+    if (res.status === 404) return null;
+    if (!res.ok) throw new Error(`TVmaze answered with an error (${res.status}).`);
+    const data = await res.json();
+    const seasons = data?._embedded?.seasons || [];
+    const url = seasons.find((x) => x.number === season)?.image?.medium || data?.image?.medium;
+    return typeof url === 'string' && url.startsWith('https://static.tvmaze.com/') ? download(url) : null;
+  }
+
   function poster(film) {
     if (!film || typeof film !== 'object') return Promise.resolve(null);
+    if (typeof film.show === 'string' && film.show.trim()) {
+      const base = slugify(film.show);
+      const season = Number(film.season);
+      if (!base) return Promise.resolve(null);
+      return once(path.join(posterDir, `show-${base}-s${Number.isInteger(season) ? season : 0}.jpg`), () => showArtwork(film.show, season));
+    }
     if (typeof film.slug === 'string' && /^[\w-]+$/.test(film.slug)) {
       return once(path.join(posterDir, `${film.slug}.jpg`), async () => {
         let buf = typeof film.poster === 'string' && film.poster.startsWith('https://a.ltrbxd.com/resized/film-poster/') ? await download(film.poster) : null;

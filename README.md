@@ -72,7 +72,8 @@ Letterboxd watchlist. Episodes are grouped into one entry per season.
   Letterboxd page.
 - **Artwork:** a poster or thumbnail image next to a video (`<name>.jpg`,
   `poster.jpg`, `folder.jpg`, `cover.jpg`) is used first. Otherwise the poster
-  comes from Letterboxd. Posters are saved in Morrow's data folder under `films/`.
+  comes from Letterboxd, or for shows from [TVmaze](https://www.tvmaze.com/)
+  (the season's poster when there is one). Posters are saved in Morrow's data folder under `films/`.
 - **Settings:** watch folder, username, layout (poster grid, shelves or list),
   poster size, whether to show the rest of the watchlist, and a size limit that
   skips small clips.
