@@ -47,4 +47,9 @@ contextBridge.exposeInMainWorld('morrow', {
   pickPhoto: () => ipcRenderer.invoke('morrow:pick-photo'),
   pathForFile: (file) => webUtils.getPathForFile(file),
   timeZones: () => ipcRenderer.invoke('morrow:time-zones'),
+  films: (opts) => ipcRenderer.invoke('morrow:films', opts),
+  filmPoster: (url) => ipcRenderer.invoke('morrow:film-poster', url),
+  playFilm: (files) => ipcRenderer.invoke('morrow:film-play', files),
+  openFilmPage: (link) => ipcRenderer.send('morrow:film-page', link),
+  pickFolder: (current) => ipcRenderer.invoke('morrow:pick-folder', current),
 });

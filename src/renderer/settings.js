@@ -187,6 +187,7 @@ function summary(w) {
     case 'weather': return c.location ? c.location.name : 'No location chosen';
     case 'worldclock': return c.cities.length ? c.cities.map((x) => x.name).join(', ') : 'No cities yet';
     case 'note': return c.text ? c.text.split('\n')[0].slice(0, 40) : 'Empty note';
+    case 'films': return [c.username ? `@${c.username}` : 'No Letterboxd user', c.folder ? c.folder.split('/').pop() : 'Movies'].join(' · ');
     case 'image': return c.file ? (c.caption || c.name || 'Photo') : 'No photo yet';
     case 'launcher': return c.apps.length ? c.apps.map((a) => a.name).slice(0, 3).join(', ') + (c.apps.length > 3 ? '…' : '') : 'No apps chosen';
     default: return registry.TYPES[w.type].description;
@@ -257,6 +258,7 @@ function field(w, f) {
         h('span.sw', { style: { background: p.bg || 'linear-gradient(135deg, rgba(255,255,255,0.35), rgba(255,255,255,0.05))', color: p.ink || 'inherit' } }, 'a'), p.label))));
     case 'font': return row(f.label, select(v, Object.fromEntries(Object.entries(registry.FONTS).map(([k, x]) => [k, x.label])), set, f.label));
     case 'image': return photoField(w);
+    case 'folder': return folderField(w, f);
     case 'city': return cityEditor(w, f, false);
     case 'cities': return cityEditor(w, f, true);
     default: return row(f.label, text(v, set, { placeholder: f.placeholder || '', label: f.label }));
@@ -325,6 +327,19 @@ function appsEditor(w) {
     h('div.row', {}, h('div.k', {}, 'Add applications', h('small', {}, 'From /Applications, /System/Applications and ~/Applications.')),
       h('div.v', {}, search, h('button.link', { title: 'Rescan', onclick: async () => { installed = await api.listApps(true); paintList(); } }, '↻'))),
     listBox);
+}
+
+function folderField(w, f) {
+  const current = w.config[f.key] || '';
+  const pick = async () => {
+    const p = await api.pickFolder(current);
+    if (p) { editWidget(w.id, { config: { [f.key]: p } }); render(); }
+  };
+  const reset = () => { editWidget(w.id, { config: { [f.key]: '' } }); render(); };
+  return row(f.label, h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', minWidth: 0 } },
+    h('span', { title: current || 'Movies', style: { opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px', direction: 'rtl' } }, current || 'Movies (default)'),
+    current ? h('button.btn', { onclick: reset }, 'Use Movies') : null,
+    h('button.btn', { onclick: pick }, 'Choose…')));
 }
 
 function photoField(w) {

@@ -20,6 +20,7 @@ let windows;
 let tray;
 let settingsWin = null;
 let images;
+let movies;
 const runtime = new Runtime();
 
 // Settings window ----------------------------------------------------------
@@ -276,6 +277,18 @@ function registerIpc() {
     return settle(images.importImage(r.filePaths[0]));
   });
   ipcMain.handle('morrow:time-zones', () => Intl.supportedValuesOf('timeZone'));
+  ipcMain.handle('morrow:films', (e, opts) => settle(movies.library(opts || {})));
+  ipcMain.handle('morrow:film-poster', (e, url) => movies.poster(url));
+  ipcMain.handle('morrow:film-play', (e, files) => movies.play(files));
+  ipcMain.on('morrow:film-page', (e, link) => movies.openFilm(link));
+  ipcMain.handle('morrow:pick-folder', async (e, current) => {
+    app.focus({ steal: true });
+    const r = await dialog.showOpenDialog(settingsWin && !settingsWin.isDestroyed() ? settingsWin : undefined, {
+      properties: ['openDirectory'],
+      defaultPath: current || require('./movies').defaultFolder(),
+    });
+    return r.canceled ? null : r.filePaths[0];
+  });
 }
 
 // Settings that need native side effects.
@@ -304,6 +317,7 @@ app.whenReady().then(() => {
   store = new Store(app.getPath('userData'));
   images = require('./images').createImages(app.getPath('userData'));
   images.cleanup(store.doc);
+  movies = require('./movies').createMovies(app.getPath('userData'), { openExternal: (u) => shell.openExternal(u) });
   windows = new WidgetWindows(store);
   registerIpc();
   appMenu();

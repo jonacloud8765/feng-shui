@@ -49,13 +49,33 @@ show or hide all widgets (⌥⌘W), add widgets, switch layouts and open setting
 - **Layouts:** each layout keeps its own widgets, positions, sizes and styles.
 
 Widgets: Clock, Countdown, Random Number, Coin Flip, Stopwatch, App Launcher,
-Weather, World Clock, Sticky Note, Photo.
+Weather, World Clock, Sticky Note, Photo, Films.
 
 ## Where things are saved
 
 `~/Library/Application Support/Morrow/morrow-config.json`. Changes are written
 within a moment. If the file is damaged, Morrow keeps the damaged copy next to
 it (`morrow-config.corrupt-<time>.json`), starts fresh and tells you.
+
+## Films
+
+The Films widget shows the videos in a folder (your Movies folder unless you
+choose another) under **Already downloaded**, then the rest of a public
+Letterboxd watchlist. Episodes are grouped into one entry per season.
+
+- **Play:** click a downloaded film to open it in [VLC](https://www.videolan.org/vlc/).
+  A season opens as a playlist. If VLC isn't installed, the widget says so.
+- **Watchlist:** enter your Letterboxd username in the widget's settings. The
+  watchlist is read from your public watchlist page, kept for 12 hours, and
+  refreshed with the refresh button. If Letterboxd can't be reached, the last
+  copy stays on screen with the reason. Click a watchlist film to open its
+  Letterboxd page.
+- **Artwork:** a poster or thumbnail image next to a video (`<name>.jpg`,
+  `poster.jpg`, `folder.jpg`, `cover.jpg`) is used first. Otherwise the poster
+  comes from Letterboxd. Posters are saved in Morrow's data folder under `films/`.
+- **Settings:** watch folder, username, layout (poster grid, shelves or list),
+  poster size, whether to show the rest of the watchlist, and a size limit that
+  skips small clips.
 
 ## Weather
 

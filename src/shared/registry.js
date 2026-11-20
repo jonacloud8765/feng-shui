@@ -207,6 +207,23 @@ const TYPES = {
       { key: 'caption', label: 'Caption', type: 'text', placeholder: 'Optional' },
     ],
   },
+  films: {
+    name: 'Films',
+    description: 'Films in your Movies folder, then the rest of your Letterboxd watchlist.',
+    size: { width: 420, height: 460 },
+    min: { width: 200, height: 160 },
+    max: { width: 1800, height: 1400 },
+    // An empty folder means the Movies folder in your home folder.
+    config: { folder: '', username: '', layout: 'grid', posterSize: 96, showWatchlist: true, minSizeMB: 100 },
+    fields: [
+      { key: 'folder', label: 'Watch folder', type: 'folder' },
+      { key: 'username', label: 'Letterboxd username', type: 'text', placeholder: 'Your public username' },
+      { key: 'layout', label: 'Layout', type: 'select', options: { grid: 'Poster grid', shelf: 'Shelves (scroll sideways)', list: 'List' } },
+      { key: 'posterSize', label: 'Poster size', type: 'range', min: 56, max: 200 },
+      { key: 'showWatchlist', label: 'Show the rest of the watchlist', type: 'toggle' },
+      { key: 'minSizeMB', label: 'Ignore videos smaller than (MB)', type: 'range', min: 0, max: 1000, step: 10 },
+    ],
+  },
   stopwatch: {
     name: 'Stopwatch',
     description: 'Start, pause, laps. Expands to show lap times.',
