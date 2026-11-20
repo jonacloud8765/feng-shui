@@ -188,6 +188,7 @@ function summary(w) {
     case 'worldclock': return c.cities.length ? c.cities.map((x) => x.name).join(', ') : 'No cities yet';
     case 'note': return c.text ? c.text.split('\n')[0].slice(0, 40) : 'Empty note';
     case 'films': return [c.username ? `@${c.username}` : 'No Letterboxd user', c.folder ? c.folder.split('/').pop() : 'Movies'].join(' · ');
+    case 'watched': return c.username ? `@${c.username}` : 'No Letterboxd user';
     case 'image': return c.file ? (c.caption || c.name || 'Photo') : 'No photo yet';
     case 'launcher': return c.apps.length ? c.apps.map((a) => a.name).slice(0, 3).join(', ') + (c.apps.length > 3 ? '…' : '') : 'No apps chosen';
     default: return registry.TYPES[w.type].description;

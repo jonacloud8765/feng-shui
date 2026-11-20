@@ -281,6 +281,10 @@ function registerIpc() {
   ipcMain.handle('morrow:film-poster', (e, url) => movies.poster(url));
   ipcMain.handle('morrow:film-play', (e, files) => movies.play(files));
   ipcMain.on('morrow:film-page', (e, link) => movies.openFilm(link));
+  ipcMain.on('morrow:open-watchlist', (e, user) => movies.openWatchlist(user));
+  ipcMain.on('morrow:open-profile', (e, user) => movies.openProfile(user));
+  ipcMain.handle('morrow:watched', (e, user, force) => movies.watched(user, { force }));
+  ipcMain.handle('morrow:film-details', (e, slugs) => movies.details(slugs));
   ipcMain.handle('morrow:pick-folder', async (e, current) => {
     app.focus({ steal: true });
     const r = await dialog.showOpenDialog(settingsWin && !settingsWin.isDestroyed() ? settingsWin : undefined, {

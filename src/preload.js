@@ -51,5 +51,9 @@ contextBridge.exposeInMainWorld('morrow', {
   filmPoster: (url) => ipcRenderer.invoke('morrow:film-poster', url),
   playFilm: (files) => ipcRenderer.invoke('morrow:film-play', files),
   openFilmPage: (link) => ipcRenderer.send('morrow:film-page', link),
+  openWatchlist: (user) => ipcRenderer.send('morrow:open-watchlist', user),
+  filmDetails: (slugs) => ipcRenderer.invoke('morrow:film-details', slugs),
+  watched: (user, force) => ipcRenderer.invoke('morrow:watched', user, force),
+  openProfile: (user) => ipcRenderer.send('morrow:open-profile', user),
   pickFolder: (current) => ipcRenderer.invoke('morrow:pick-folder', current),
 });

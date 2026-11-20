@@ -214,7 +214,7 @@ const TYPES = {
     min: { width: 200, height: 160 },
     max: { width: 1800, height: 1400 },
     // An empty folder means the Movies folder in your home folder.
-    config: { folder: '', username: '', layout: 'grid', posterSize: 96, showWatchlist: true, minSizeMB: 100 },
+    config: { folder: '', username: '', layout: 'grid', posterSize: 96, showWatchlist: true, minSizeMB: 100, wlDecade: '', wlGenre: '', wlSort: 'added' },
     fields: [
       { key: 'folder', label: 'Watch folder', type: 'folder' },
       { key: 'username', label: 'Letterboxd username', type: 'text', placeholder: 'Your public username' },
@@ -222,6 +222,19 @@ const TYPES = {
       { key: 'posterSize', label: 'Poster size', type: 'range', min: 56, max: 200 },
       { key: 'showWatchlist', label: 'Show the rest of the watchlist', type: 'toggle' },
       { key: 'minSizeMB', label: 'Ignore videos smaller than (MB)', type: 'range', min: 0, max: 1000, step: 10 },
+    ],
+  },
+  watched: {
+    name: 'Films Watched',
+    description: 'How many films you’ve watched, from your Letterboxd profile.',
+    size: { width: 220, height: 170 },
+    min: { width: 120, height: 90 },
+    max: { width: 900, height: 700 },
+    config: { username: '', label: 'films watched', showUser: true },
+    fields: [
+      { key: 'username', label: 'Letterboxd username', type: 'text', placeholder: 'Your public username' },
+      { key: 'label', label: 'Label', type: 'text', placeholder: 'films watched' },
+      { key: 'showUser', label: 'Show username', type: 'toggle' },
     ],
   },
   stopwatch: {

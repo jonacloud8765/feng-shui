@@ -49,7 +49,7 @@ show or hide all widgets (⌥⌘W), add widgets, switch layouts and open setting
 - **Layouts:** each layout keeps its own widgets, positions, sizes and styles.
 
 Widgets: Clock, Countdown, Random Number, Coin Flip, Stopwatch, App Launcher,
-Weather, World Clock, Sticky Note, Photo, Films.
+Weather, World Clock, Sticky Note, Photo, Films, Films Watched.
 
 ## Where things are saved
 
@@ -65,11 +65,18 @@ Letterboxd watchlist. Episodes are grouped into one entry per season.
 
 - **Play:** click a downloaded film to open it in [VLC](https://www.videolan.org/vlc/).
   A season opens as a playlist. If VLC isn't installed, the widget says so.
+- **Downloads:** films on the left, a divider, then shows.
 - **Watchlist:** enter your Letterboxd username in the widget's settings. The
   watchlist is read from your public watchlist page, kept for 12 hours, and
   refreshed with the refresh button. If Letterboxd can't be reached, the last
   copy stays on screen with the reason. Click a watchlist film to open its
-  Letterboxd page.
+  Letterboxd page, or the "On your watchlist" heading to open the whole
+  watchlist in Chrome (or your default browser).
+- **Finding films:** filter the watchlist by decade and genre, sort it (when
+  added, name, popularity, shuffle, release date, average rating, length) or
+  type part of a title. The total running time of the films shown appears
+  under the filters. Genres, ratings and lengths come from each film's public
+  Letterboxd page, read slowly in the background once and then kept.
 - **Artwork:** a poster or thumbnail image next to a video (`<name>.jpg`,
   `poster.jpg`, `folder.jpg`, `cover.jpg`) is used first. Otherwise the poster
   comes from Letterboxd, or for shows from [TVmaze](https://www.tvmaze.com/)
@@ -77,6 +84,12 @@ Letterboxd watchlist. Episodes are grouped into one entry per season.
 - **Settings:** watch folder, username, layout (poster grid, shelves or list),
   poster size, whether to show the rest of the watchlist, and a size limit that
   skips small clips.
+
+## Films Watched
+
+A single number: how many films a Letterboxd member has logged as watched,
+read from their public Films page and checked hourly. Click it to open that
+page.
 
 ## Weather
 

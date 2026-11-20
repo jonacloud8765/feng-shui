@@ -200,6 +200,32 @@ function attr(tag, name) {
   return m ? decode(m[1] ?? m[2]) : null;
 }
 
+// A film page's details: poster, year, genres, Letterboxd average, how many
+// people rated it (used as popularity) and running time in minutes.
+function parseFilmPage(html) {
+  const img = /"image"\s*:\s*"(https:\/\/a\.ltrbxd\.com\/resized\/[^"]+)"/.exec(html);
+  const year = /<meta property="og:title" content="[^"]*\((\d{4})\)"/.exec(html);
+  let genres = [];
+  try { genres = JSON.parse((/"genre"\s*:\s*(\[[^\]]*\])/.exec(html) || [])[1] || '[]').filter((g) => typeof g === 'string'); } catch {}
+  const rating = /"ratingValue"\s*:\s*([\d.]+)/.exec(html);
+  const count = /"ratingCount"\s*:\s*(\d+)/.exec(html);
+  const runtime = /(\d+)(?:&nbsp;|\s)mins/.exec(html);
+  return {
+    poster: img ? img[1].replace(/\\\//g, '/').replace(/-0-\d+-0-\d+-crop\./, '-0-230-0-345-crop.') : null,
+    year: year ? Number(year[1]) : null,
+    genres,
+    rating: rating ? Number(rating[1]) : null,
+    ratingCount: count ? Number(count[1]) : 0,
+    runtime: runtime ? Number(runtime[1]) : null,
+  };
+}
+
+// "Watched" heading on a member's Films page: title="1,040&nbsp;films"
+function parseWatchedCount(html) {
+  const m = /title="([\d,]+)(?:&nbsp;|\s)films?"[^>]*>\s*Watched/.exec(html) || /title="([\d,]+)(?:&nbsp;|\s)films?"/.exec(html);
+  return m ? Number(m[1].replace(/,/g, '')) : null;
+}
+
 // Letterboxd's poster CDN path is built from the film's numeric id.
 function posterUrl(filmId, slug, cacheKey, w = 230, h = 345) {
   if (!/^\d+$/.test(filmId) || !/^[\w-]+$/.test(slug)) return null;
@@ -314,13 +340,76 @@ function createMovies(dataDir, { openExternal } = {}) {
   // Some films' posters live under a different name than the one the
   // watchlist page implies. Their film page names the real one.
   async function filmPage(slug) {
-    const html = await getText(`https://letterboxd.com/film/${slug}/`, 'No such film on Letterboxd.');
-    const img = /"image"\s*:\s*"(https:\/\/a\.ltrbxd\.com\/resized\/[^"]+)"/.exec(html);
-    const year = /<meta property="og:title" content="[^"]*\((\d{4})\)"/.exec(html);
-    return {
-      poster: img ? img[1].replace(/\\\//g, '/').replace(/-0-\d+-0-\d+-crop\./, '-0-230-0-345-crop.') : null,
-      year: year ? Number(year[1]) : null,
-    };
+    return parseFilmPage(await getText(`https://letterboxd.com/film/${slug}/`, 'No such film on Letterboxd.'));
+  }
+
+  // Film details (genres, ratings, length) for filtering and sorting the
+  // watchlist. Letterboxd's filtered watchlist pages sit behind a browser
+  // check, so each film's public page is read once, slowly, in the
+  // background, and kept in films/details.json.
+  const detailsFile = path.join(dir, 'details.json');
+  let detailsMap = null;
+  let detailsQueue = [];
+  let detailsRunning = false;
+  let detailsPausedUntil = 0;
+  let detailsError = null;
+  let detailsDirty = 0;
+
+  function loadDetails() {
+    if (!detailsMap) {
+      try { detailsMap = JSON.parse(fs.readFileSync(detailsFile, 'utf8')); } catch { detailsMap = {}; }
+    }
+    return detailsMap;
+  }
+
+  function saveDetails() {
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(detailsFile + '.part', JSON.stringify(detailsMap));
+      fs.renameSync(detailsFile + '.part', detailsFile);
+      detailsDirty = 0;
+    } catch {}
+  }
+
+  async function runDetails() {
+    if (detailsRunning) return;
+    detailsRunning = true;
+    try {
+      while (detailsQueue.length) {
+        if (Date.now() < detailsPausedUntil) break;
+        const slug = detailsQueue[0];
+        if (detailsMap[slug]) { detailsQueue.shift(); continue; }
+        try {
+          const d = await filmPage(slug);
+          detailsMap[slug] = { genres: d.genres, rating: d.rating, ratingCount: d.ratingCount, runtime: d.runtime, year: d.year };
+          detailsError = null;
+          detailsQueue.shift();
+          if (++detailsDirty >= 10) saveDetails();
+        } catch (err) {
+          if (err.notFound) { detailsMap[slug] = { genres: [], rating: null, ratingCount: 0, runtime: null }; detailsQueue.shift(); continue; }
+          // Blocked or offline: stop for a while and pick up where it left off.
+          detailsError = err.message;
+          detailsPausedUntil = Date.now() + 20 * 60 * 1000;
+          setTimeout(runDetails, 20 * 60 * 1000 + 1000);
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 1200));
+      }
+    } finally {
+      if (detailsDirty) saveDetails();
+      detailsRunning = false;
+    }
+  }
+
+  // Returns what's known so far and starts reading any missing films.
+  function details(slugs) {
+    const map = loadDetails();
+    const list = (Array.isArray(slugs) ? slugs : []).filter((x) => typeof x === 'string' && /^[\w-]+$/.test(x));
+    detailsQueue = list.filter((x) => !map[x]);
+    if (detailsQueue.length) runDetails();
+    const known = {};
+    for (const x of list) if (map[x]) known[x] = map[x];
+    return { details: known, total: list.length, done: list.length - detailsQueue.length, error: detailsError };
   }
 
   async function save(file, buf) {
@@ -471,7 +560,41 @@ function createMovies(dataDir, { openExternal } = {}) {
     if (typeof link === 'string' && /^https:\/\/letterboxd\.com\/film\/[\w-]+\/$/.test(link) && openExternal) openExternal(link);
   }
 
-  return { library, watchlist, poster, play, openFilm, dir };
+  // How many films a member has watched, from their public Films page.
+  const WATCHED_TTL = 60 * 60 * 1000;
+  async function watched(user, { force = false } = {}) {
+    user = String(user || '').trim().replace(/^@/, '');
+    if (!user) return { count: null, user, error: null };
+    if (!/^[A-Za-z0-9_]{1,40}$/.test(user)) return { count: null, user, error: 'That doesn’t look like a Letterboxd username.' };
+    const file = path.join(dir, `watched-${user.toLowerCase()}.json`);
+    let cached = null;
+    try { cached = JSON.parse(fs.readFileSync(file, 'utf8')); } catch {}
+    if (!force && cached && Date.now() - cached.fetchedAt < WATCHED_TTL) return { ...cached, user, error: null };
+    try {
+      const html = await getText(`https://letterboxd.com/${user}/films/`, 'Letterboxd has no member with that username.');
+      const count = parseWatchedCount(html);
+      if (count == null) throw new Error('Letterboxd’s page didn’t include a film count.');
+      const doc = { count, fetchedAt: Date.now() };
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(file, JSON.stringify(doc));
+      return { ...doc, user, error: null };
+    } catch (err) {
+      return { count: cached?.count ?? null, fetchedAt: cached?.fetchedAt ?? null, user, error: err.message };
+    }
+  }
+
+  function openWatchlist(user) {
+    if (typeof user !== 'string' || !/^[A-Za-z0-9_]{1,40}$/.test(user)) return;
+    const url = `https://letterboxd.com/${user}/watchlist/`;
+    // Chrome if it's installed, otherwise the default browser.
+    execFile('/usr/bin/open', ['-a', 'Google Chrome', url], { timeout: 10000 }, (err) => { if (err && openExternal) openExternal(url); });
+  }
+
+  function openProfile(user) {
+    if (typeof user === 'string' && /^[A-Za-z0-9_]{1,40}$/.test(user) && openExternal) openExternal(`https://letterboxd.com/${user}/films/`);
+  }
+
+  return { library, watchlist, poster, play, openFilm, openWatchlist, openProfile, details, watched, dir };
 }
 
-module.exports = { createMovies, parseTitle, normalize, slugify, parseWatchlistPage, splitDisplayName, posterUrl, scanFolder, defaultFolder };
+module.exports = { createMovies, parseTitle, normalize, slugify, parseFilmPage, parseWatchedCount, parseWatchlistPage, splitDisplayName, posterUrl, scanFolder, defaultFolder };

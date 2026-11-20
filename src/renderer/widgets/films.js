@@ -7,9 +7,8 @@ import { fileUrl } from '../appearance.js';
 const css = `
 .films { position: absolute; inset: 0; display: flex; flex-direction: column; font-family: var(--info); --poster: 96px; }
 .films header { display: flex; align-items: center; gap: 10px; padding: var(--pad) var(--pad) 8px; flex: none; }
-.films header .t { flex: 1; min-width: 0; }
-.films header h1 { margin: 0; font: var(--weight) calc(20px * var(--scale)) / 1.1 var(--display); letter-spacing: 0.01em; }
-.films header .sub { font-size: calc(11px * var(--scale)); opacity: 0.6; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.films header .t { flex: 1; min-width: 0; text-align: left; }
+.films header .sub { font-size: calc(11px * var(--scale)); opacity: 0.6; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .films .icon-btn svg { width: 1.05em; height: 1.05em; }
 .films .icon-btn.spin svg { animation: films-spin 0.9s linear infinite; }
 @keyframes films-spin { to { transform: rotate(360deg); } }
@@ -48,7 +47,47 @@ const css = `
 .films .empty span { opacity: 0.65; }
 .films .flash { position: absolute; left: 12px; right: 12px; bottom: 12px; padding: 8px 12px; border-radius: 10px; background: rgba(20,12,10,0.78); color: #ffd7cf; font-size: 12px; text-align: center; opacity: 0; transform: translateY(6px); transition: opacity 0.25s, transform 0.25s var(--ease); pointer-events: none; }
 .films .flash.show { opacity: 1; transform: none; }
+.films h2 .link { background: none; padding: 0; font: inherit; letter-spacing: inherit; text-transform: inherit; color: inherit; display: inline-flex; align-items: center; gap: 4px; border-bottom: 1px solid transparent; }
+.films h2 .link:hover { border-bottom-color: currentColor; }
+.films h2 .link svg { width: 9px; height: 9px; opacity: 0.8; }
+.films .split { display: flex; gap: 14px; align-items: stretch; }
+.films .split .col { min-width: calc(var(--poster) + 4px); display: flex; flex-direction: column; gap: 6px; }
+.films .split .col h3 { margin: 0; font-size: calc(10px * var(--scale)); font-weight: 500; letter-spacing: 0.06em; text-transform: uppercase; opacity: 0.5; }
+.films .split .divider { flex: none; width: 1px; background: linear-gradient(180deg, transparent, rgba(255,255,255,0.28) 12%, rgba(255,255,255,0.28) 88%, transparent); }
+.films.list .split .col { min-width: 0; flex: 1 1 0 !important; }
+.films .filters { display: flex; flex-wrap: wrap; gap: 6px; margin: -2px 0 10px; }
+.films .filters select, .films .filters input {
+  font: 500 calc(11px * var(--scale)) var(--info); color: inherit; background: rgba(255,255,255,0.09);
+  border: 0; border-radius: 999px; padding: 4px 10px; outline: none; min-width: 0;
+  box-shadow: inset 0 0 0 0.5px rgba(255,255,255,0.14);
+}
+.films .filters select { appearance: none; padding-right: 20px; background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%); background-position: calc(100% - 11px) 52%, calc(100% - 7px) 52%; background-size: 4px 4px; background-repeat: no-repeat; }
+.films .filters select.on { background-color: color-mix(in srgb, var(--accent) 32%, transparent); }
+.films .filters input { flex: 1 1 90px; }
+.films .filters input::placeholder { color: inherit; opacity: 0.5; }
+.films .filters option { color: #111; }
+.films .progress { font-size: calc(10.5px * var(--scale)); opacity: 0.6; margin: -4px 0 8px; text-align: left; line-height: 1.4; }
 `;
+
+const ICON_LINK = '<svg viewBox="0 0 16 16"><path d="M6 3h7v7M13 3 4 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+const DECADES = ['upcoming', ...Array.from({ length: 16 }, (_, i) => `${2020 - i * 10}s`)];
+const GENRES = ['Action', 'Adventure', 'Animation', 'Comedy', 'Crime', 'Documentary', 'Drama', 'Family', 'Fantasy', 'History', 'Horror', 'Music', 'Mystery', 'Romance', 'Science Fiction', 'Thriller', 'TV Movie', 'War', 'Western'];
+const SORTS = {
+  added: 'When added (newest)',
+  'added-earliest': 'When added (earliest)',
+  name: 'Film name',
+  popular: 'Popularity',
+  shuffle: 'Shuffle',
+  release: 'Release date (newest)',
+  'release-earliest': 'Release date (earliest)',
+  rating: 'Average rating (highest)',
+  'rating-lowest': 'Average rating (lowest)',
+  shortest: 'Film length (shortest)',
+  longest: 'Film length (longest)',
+};
+// Sorts and filters that need each film's page read first.
+const NEEDS_DETAILS = new Set(['popular', 'rating', 'rating-lowest', 'shortest', 'longest']);
 
 const ICON_REFRESH = '<svg viewBox="0 0 16 16"><path d="M13 8a5 5 0 1 1-1.6-3.7" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><path d="M13.4 2.2v3.2h-3.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 const ICON_PLAY = '<svg viewBox="0 0 16 16"><path d="M4.5 2.8v10.4c0 .5.6.8 1 .5l8-5.2c.4-.2.4-.8 0-1l-8-5.2c-.4-.3-1 0-1 .5z" fill="currentColor"/></svg>';
@@ -74,7 +113,7 @@ export function mount(root, ctx) {
 
   const refreshBtn = h('button.icon-btn', { title: 'Refresh', 'aria-label': 'Refresh', html: ICON_REFRESH, onclick: () => load(true) });
   const sub = h('div.sub');
-  const header = h('header', {}, h('div.t', {}, h('h1', {}, 'Films'), sub), refreshBtn);
+  const header = h('header', {}, h('div.t', {}, sub), refreshBtn);
   const scroll = h('div.scroll', { 'data-interactive': '' });
   const flashEl = h('div.flash', { role: 'status' });
   const wrap = h('div.films', {}, header, scroll, flashEl);
@@ -83,6 +122,13 @@ export function mount(root, ctx) {
   let data = null;
   let token = 0;
   let observer = null;
+  let details = {};
+  let detailsInfo = null;
+  let detailsTimer = null;
+  let search = '';
+  let shuffleSeed = Math.random();
+  let watchlistBox = null;
+  let lastList = null;
 
   function style() {
     const c = ctx.config;
@@ -109,9 +155,26 @@ export function mount(root, ctx) {
       return;
     }
     data = r.data;
+    if (force) shuffleSeed = Math.random();
     if (force && data.watchlistError) flash(`Couldn’t refresh the watchlist. ${data.watchlistError}`);
     paint();
+    pollDetails();
   }
+
+  // Genres, ratings and lengths arrive in the background, a film at a time.
+  async function pollDetails() {
+    clearTimeout(detailsTimer);
+    if (!data || !data.watchlist.length || !ctx.config.showWatchlist) return;
+    const info = await ctx.api.filmDetails(data.watchlist.map((f) => f.slug));
+    const grew = Object.keys(info.details).length !== Object.keys(details).length;
+    details = info.details;
+    detailsInfo = info;
+    if (grew && needsDetails()) paintWatchlist();
+    else updateProgress();
+    if (info.done < info.total) detailsTimer = setTimeout(pollDetails, 15000);
+  }
+
+  const needsDetails = () => !!ctx.config.wlGenre || NEEDS_DETAILS.has(ctx.config.wlSort);
 
   function paint() {
     if (!data) return;
@@ -128,25 +191,152 @@ export function mount(root, ctx) {
     const out = [];
     if (data.folderError) out.push(h('div.note.error', {}, data.folderError));
     out.push(h('h2', {}, 'Already downloaded', h('span.n', {}, String(data.local.length))));
-    if (data.local.length) out.push(h('div.items.local', {}, ...data.local.map(localItem)));
+    if (data.local.length) out.push(downloads());
     else if (!data.folderError) out.push(h('div.note', {}, `No videos found in ${data.folder.split('/').pop() || data.folder}.`));
 
+    watchlistBox = null;
     if (c.showWatchlist) {
-      out.push(h('h2', {}, 'On your watchlist', data.user ? h('span.n', {}, String(rest.length)) : null));
+      const title = data.user
+        ? h('button.link', { title: `Open @${data.user}’s watchlist in Chrome`, onclick: () => ctx.api.openWatchlist(data.user) }, 'On your watchlist', h('span', { html: ICON_LINK }))
+        : 'On your watchlist';
+      out.push(h('h2', {}, title, data.user ? h('span.n', {}, String(rest.length)) : null));
       if (!data.user) {
         out.push(h('div.note', {}, 'Add your Letterboxd username to see your watchlist. ',
           h('button.pill', { onclick: () => ctx.api.openSettings(ctx.widget.id) }, 'Add username')));
-      } else if (data.watchlistError) {
-        out.push(h('div.note.error', {}, data.watchlist.length
-          ? `Showing the copy from ${ago(data.fetchedAt)}. ${data.watchlistError}`
-          : `Couldn’t load @${data.user}’s watchlist. ${data.watchlistError}`));
+      } else {
+        if (data.watchlistError) {
+          out.push(h('div.note.error', {}, data.watchlist.length
+            ? `Showing the copy from ${ago(data.fetchedAt)}. ${data.watchlistError}`
+            : `Couldn’t load @${data.user}’s watchlist. ${data.watchlistError}`));
+        }
+        if (rest.length) {
+          out.push(filters());
+          watchlistBox = h('div');
+          out.push(watchlistBox);
+        } else if (!data.watchlistError) out.push(h('div.note', {}, data.watchlist.length ? 'You have everything on your watchlist.' : 'The watchlist is empty.'));
       }
-      if (rest.length) out.push(h('div.items.remote', {}, ...rest.map(remoteItem)));
-      else if (data.user && !data.watchlistError) out.push(h('div.note', {}, data.watchlist.length ? 'You have everything on your watchlist.' : 'The watchlist is empty.'));
     }
     const top = scroll.scrollTop;
     scroll.replaceChildren(...out);
+    if (watchlistBox) paintWatchlist();
     scroll.scrollTop = top;
+  }
+
+  // Movies on the left, a divider, then shows.
+  function downloads() {
+    const movies = data.local.filter((x) => x.kind !== 'show');
+    const shows = data.local.filter((x) => x.kind === 'show');
+    const col = (label, list) => h('div.col', { style: { flex: `${Math.max(1, list.length)} 1 0` } },
+      h('h3', {}, label), h('div.items.local', {}, ...list.map(localItem)));
+    if (!movies.length || !shows.length) return h('div.items.local', {}, ...data.local.map(localItem));
+    return h('div.split', {}, col('Movies', movies), h('div.divider'), col('Shows', shows));
+  }
+
+  function filters() {
+    const c = ctx.config;
+    const sel = (key, value, options, label) => {
+      const el = h('select', { 'aria-label': label, title: label },
+        ...Object.entries(options).map(([v, t]) => h('option', { value: v, selected: v === value }, t)));
+      el.classList.toggle('on', key === 'wlSort' ? value !== 'added' : !!value);
+      el.addEventListener('change', () => {
+        if (key === 'wlSort' && el.value === 'shuffle') shuffleSeed = Math.random();
+        ctx.setConfig({ [key]: el.value });
+        el.classList.toggle('on', key === 'wlSort' ? el.value !== 'added' : !!el.value);
+        paintWatchlist();
+      });
+      return el;
+    };
+    const decades = { '': 'Any decade', ...Object.fromEntries(DECADES.map((d) => [d, d === 'upcoming' ? 'Upcoming' : d])) };
+    const genres = { '': 'Any genre', ...Object.fromEntries(GENRES.map((g) => [g, g])) };
+    const input = h('input', { type: 'search', placeholder: 'Find a film', value: search, 'aria-label': 'Find a film on your watchlist' });
+    input.addEventListener('input', () => { search = input.value; paintWatchlist(); });
+    return h('div', {},
+      h('div.filters', {}, sel('wlDecade', c.wlDecade || '', decades, 'Decade'), sel('wlGenre', c.wlGenre || '', genres, 'Genre'), sel('wlSort', c.wlSort || 'added', SORTS, 'Sort by'), input),
+      h('div.progress'));
+  }
+
+  // Total running time of the films shown, plus progress while details load.
+  function updateProgress(list = lastList) {
+    const el = scroll.querySelector('.progress');
+    if (!el || !list) return;
+    const i = detailsInfo;
+    let minutes = 0;
+    let timed = 0;
+    for (const f of list) {
+      const m = details[f.slug]?.runtime;
+      if (m) { minutes += m; timed++; }
+    }
+    const parts = [];
+    if (timed) {
+      const hrs = Math.floor(minutes / 60);
+      const total = `${hrs.toLocaleString()} h ${minutes % 60} min`;
+      const days = minutes >= 2880 ? ` (about ${Math.round(minutes / 1440)} days)` : '';
+      parts.push(timed === list.length
+        ? `${total} to watch${days}`
+        : `At least ${total} to watch${days}, from ${timed} of ${list.length} films timed so far`);
+    }
+    if (i && i.done < i.total) {
+      parts.push(i.error
+        ? `Film details paused (${i.error}), ${i.done} of ${i.total} read`
+        : `Reading film details: ${i.done} of ${i.total}${needsDetails() ? '. Films not read yet are left out or listed last' : ''}`);
+    }
+    el.textContent = parts.join('. ');
+    el.style.display = parts.length ? '' : 'none';
+  }
+
+  function filtered() {
+    const c = ctx.config;
+    const year = new Date().getFullYear();
+    const q = search.trim().toLowerCase();
+    let list = data.watchlist.map((f, i) => ({ ...f, order: i })).filter((f) => !f.downloaded);
+    if (c.wlDecade === 'upcoming') list = list.filter((f) => !f.year || f.year > year);
+    else if (c.wlDecade) {
+      const start = Number(c.wlDecade.slice(0, 4));
+      list = list.filter((f) => f.year >= start && f.year < start + 10);
+    }
+    if (c.wlGenre) list = list.filter((f) => details[f.slug]?.genres?.includes(c.wlGenre));
+    if (q) list = list.filter((f) => f.title.toLowerCase().includes(q));
+    const d = (f) => details[f.slug] || {};
+    // Unknown values always sort last.
+    const by = (get, dir) => (a, b) => {
+      const x = get(a);
+      const y = get(b);
+      if (x == null && y == null) return a.order - b.order;
+      if (x == null) return 1;
+      if (y == null) return -1;
+      return (x < y ? -1 : x > y ? 1 : 0) * dir || a.order - b.order;
+    };
+    const hash = (str) => { let n = Math.floor(shuffleSeed * 2 ** 31); for (const ch of str) n = (n * 31 + ch.charCodeAt(0)) | 0; return n; };
+    const sorts = {
+      added: (a, b) => a.order - b.order,
+      'added-earliest': (a, b) => b.order - a.order,
+      name: (a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base', ignorePunctuation: true }),
+      popular: by((f) => d(f).ratingCount ?? null, -1),
+      shuffle: (a, b) => hash(a.slug) - hash(b.slug),
+      release: by((f) => f.year ?? null, -1),
+      'release-earliest': by((f) => f.year ?? null, 1),
+      rating: by((f) => d(f).rating ?? null, -1),
+      'rating-lowest': by((f) => d(f).rating ?? null, 1),
+      shortest: by((f) => d(f).runtime ?? null, 1),
+      longest: by((f) => d(f).runtime ?? null, -1),
+    };
+    return list.sort(sorts[c.wlSort] || sorts.added);
+  }
+
+  function paintWatchlist() {
+    if (!watchlistBox) return;
+    observer?.disconnect();
+    observer = new IntersectionObserver(onVisible, { root: scroll, rootMargin: '300px' });
+    // Downloaded entries that still need their poster.
+    scroll.querySelectorAll('.local .art').forEach((el) => { if (el.film && !el.querySelector('img.ready')) observer.observe(el); });
+    const list = filtered();
+    lastList = list;
+    const n = scroll.querySelector('h2 .link + .n');
+    if (n) n.textContent = String(list.length);
+    watchlistBox.replaceChildren(list.length
+      ? h('div.items.remote', {}, ...list.map(remoteItem))
+      : h('div.note', {}, needsDetails() && detailsInfo && detailsInfo.done < detailsInfo.total ? 'No matches among the films read so far.' : 'No films match.'));
+    updateProgress();
   }
 
   function art(title, { local, remote }) {
@@ -189,10 +379,20 @@ export function mount(root, ctx) {
     return btn;
   }
 
+  function meta(film) {
+    const d = details[film.slug] || {};
+    const sort = ctx.config.wlSort;
+    const bits = [film.year];
+    if ((sort === 'rating' || sort === 'rating-lowest') && d.rating) bits.push(`★ ${d.rating.toFixed(1)}`);
+    if ((sort === 'shortest' || sort === 'longest') && d.runtime) bits.push(`${d.runtime} min`);
+    if (ctx.config.wlGenre && d.genres) bits.push(d.genres.slice(0, 2).join(', '));
+    return bits.filter(Boolean).join(' · ');
+  }
+
   function remoteItem(film) {
     const btn = h('button.item', { title: `${film.title}${film.year ? ` (${film.year})` : ''} on Letterboxd`, 'aria-label': `Open ${film.title} on Letterboxd` },
       art(film.title, { remote: film }),
-      h('div.text', {}, h('div.name', {}, film.title), h('div.meta', {}, film.year ? String(film.year) : '')));
+      h('div.text', {}, h('div.name', {}, film.title), h('div.meta', {}, meta(film))));
     btn.addEventListener('click', () => ctx.api.openFilmPage(film.link));
     return btn;
   }
@@ -221,7 +421,12 @@ export function mount(root, ctx) {
         // The username field saves on each keystroke; wait until typing stops.
         clearTimeout(debounce);
         debounce = setTimeout(() => load(false), 800);
-      } else paint();
+      } else if (p.wlDecade !== c.wlDecade || p.wlGenre !== c.wlGenre || p.wlSort !== c.wlSort) {
+        paintWatchlist();
+      } else {
+        paint();
+        if (!p.showWatchlist && c.showWatchlist) pollDetails();
+      }
     },
     resume: () => load(false),
     menu: () => [{ label: 'Refresh Films', action: 'refresh' }],

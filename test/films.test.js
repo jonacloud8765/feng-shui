@@ -35,3 +35,14 @@ test('watchlist pages yield titles, years and poster URLs', () => {
   });
   assert.strictEqual(posterUrl('12a', 'x', null), null);
 });
+
+test('film pages yield genres, rating, popularity and length', () => {
+  const { parseFilmPage, parseWatchedCount } = require('../src/main/movies');
+  const html = '<meta property="og:title" content="Gandhi (1982)" /> {"genre":["Drama","History"],"image":"https://a.ltrbxd.com/resized/sm/upload/x-0-600-0-900-crop.jpg?v=1","aggregateRating":{"ratingValue":3.75,"ratingCount":87695}} <p>192&nbsp;mins</p>';
+  assert.deepStrictEqual(parseFilmPage(html), {
+    poster: 'https://a.ltrbxd.com/resized/sm/upload/x-0-230-0-345-crop.jpg?v=1',
+    year: 1982, genres: ['Drama', 'History'], rating: 3.75, ratingCount: 87695, runtime: 192,
+  });
+  assert.strictEqual(parseWatchedCount('<h1 class="section-heading"><span class="tooltip" title="1,040&nbsp;films">Watched</span></h1>'), 1040);
+  assert.strictEqual(parseWatchedCount('<p>nothing</p>'), null);
+});
