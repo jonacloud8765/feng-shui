@@ -49,7 +49,7 @@ show or hide all widgets (⌥⌘W), add widgets, switch layouts and open setting
 - **Layouts:** each layout keeps its own widgets, positions, sizes and styles.
 
 Widgets: Clock, Countdown, Random Number, Coin Flip, Stopwatch, App Launcher,
-Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Page.
+Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget.
 
 ## Where things are saved
 
@@ -93,7 +93,7 @@ A single number: how many films a Letterboxd member has logged as watched,
 read from their public Films page and checked hourly. Set a goal to add a
 progress bar. Click the number to open that page.
 
-## Custom Page
+## Custom Widget
 
 Turns any self-contained HTML file into a widget. Morrow copies the file into
 its own data folder, so the original can move or be deleted. The page keeps
