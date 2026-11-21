@@ -68,9 +68,9 @@ body { display: flex; }
   gap: 10px;
 }
 .brand .mark {
-  width: 18px; height: 18px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff8e8, var(--accent) 60%, #8a6d45);
-  box-shadow: 0 0 0 0.5px rgba(255,255,255,0.4), 0 2px 8px rgba(216,195,160,0.35);
+  width: 20px; height: 20px; border-radius: 50%;
+  background: url("brand/mark-small.svg") center / contain no-repeat;
+  box-shadow: 0 0 0 1px rgba(201,162,39,0.55), 0 2px 8px rgba(0,0,0,0.25);
 }
 nav { display: flex; flex-direction: column; gap: 2px; -webkit-app-region: no-drag; }
 nav button {

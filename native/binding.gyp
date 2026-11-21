@@ -1,8 +1,8 @@
 {
   "targets": [
     {
-      "target_name": "morrow_native",
-      "sources": ["morrow_native.mm"],
+      "target_name": "fengshui_native",
+      "sources": ["fengshui_native.mm"],
       "xcode_settings": {
         "OTHER_CFLAGS": ["-fobjc-arc"],
         "MACOSX_DEPLOYMENT_TARGET": "12.0"

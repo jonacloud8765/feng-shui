@@ -19,7 +19,7 @@ function applyLook() {
   const img = registry.TYPES[widget.type].imageSupport && ap.image;
   imageLayer.style.backgroundImage = img ? `url("${fileUrl(ap.image)}")` : '';
   imageLayer.style.display = img ? '' : 'none';
-  applySkin(widget, { id, api: window.morrow });
+  applySkin(widget, { id, api: window.fengshui });
   trackSkin(widget);
 }
 
@@ -28,14 +28,14 @@ const ctx = {
   get config() { return widget.config; },
   setConfig(patch) {
     widget = { ...widget, config: { ...widget.config, ...patch } };
-    window.morrow.updateWidget(id, { config: patch });
+    window.fengshui.updateWidget(id, { config: patch });
   },
-  api: window.morrow,
+  api: window.fengshui,
   get registry() { return registry; },
 };
 
 async function main() {
-  const init = await window.morrow.init(id);
+  const init = await window.fengshui.init(id);
   widget = init.widget;
   registry = init.registry;
   settings = init.settings;
@@ -46,18 +46,18 @@ async function main() {
   const mod = await import(`./widgets/${widget.type}.js`);
   instance = mod.mount(content, ctx) || {};
 
-  window.morrow.onWidget((w) => {
+  window.fengshui.onWidget((w) => {
     const prev = widget;
     widget = w;
     applyLook();
     if (JSON.stringify(prev.config) !== JSON.stringify(w.config)) instance.update?.(w);
   });
-  window.morrow.onSettings((s) => {
+  window.fengshui.onSettings((s) => {
     settings = s;
     document.body.classList.toggle('locked', !!s.locked);
   });
-  window.morrow.onResume(() => instance.resume?.());
-  window.morrow.onMenuAction((action) => instance.menuAction?.(action));
+  window.fengshui.onResume(() => instance.resume?.());
+  window.fengshui.onMenuAction((action) => instance.menuAction?.(action));
 }
 
 // Moving and resizing. The main process follows the cursor between these two
@@ -67,22 +67,22 @@ glass.addEventListener('mousedown', (e) => {
   const handle = e.target.closest('.handle');
   if (handle) {
     e.preventDefault();
-    window.morrow.gestureStart('resize', handle.dataset.edge);
+    window.fengshui.gestureStart('resize', handle.dataset.edge);
   } else if (!e.target.closest(interactive)) {
-    window.morrow.gestureStart('move');
+    window.fengshui.gestureStart('move');
   }
 });
-window.addEventListener('mouseup', () => window.morrow.gestureEnd());
-window.addEventListener('blur', () => window.morrow.gestureEnd());
+window.addEventListener('mouseup', () => window.fengshui.gestureEnd());
+window.addEventListener('blur', () => window.fengshui.gestureEnd());
 
 window.addEventListener('contextmenu', (e) => {
   e.preventDefault();
-  window.morrow.contextMenu(instance?.menu?.() || []);
+  window.fengshui.contextMenu(instance?.menu?.() || []);
 });
 
 window.addEventListener('dblclick', (e) => {
   // Some widgets (the Sticky Note) are typed in, so a double-click there is just text selection.
-  if (!e.target.closest(interactive) && !instance?.noDoubleClickSettings) window.morrow.openSettings(id);
+  if (!e.target.closest(interactive) && !instance?.noDoubleClickSettings) window.fengshui.openSettings(id);
 });
 
 main();

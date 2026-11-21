@@ -20,7 +20,7 @@ const SKIP_DIRS = /^(featurettes?|extras?|bonus|special features|behind the scen
 const SKIP_FILES = /(^|[\s._-])(sample|trailer|featurette)([\s._-]|$)/i;
 const MAX_DEPTH = 6;
 const WATCHLIST_TTL = 12 * 60 * 60 * 1000;
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Morrow';
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) FengShui';
 
 // Titles ----------------------------------------------------------------------
 

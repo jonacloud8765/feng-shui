@@ -45,7 +45,7 @@ module.exports = function selftest({ app, BrowserWindow, store, windows }) {
     const results = {};
     store.updateWidget(ids.note, { config: { text: 'Pick up tickets\nCall Mum on Sunday', paper: 'butter', lined: true } });
     await wait(4000);
-    const heic = await run(ids.image, `window.morrow.importImage('/System/Library/Desktop Pictures/Mac Blue.heic')`);
+    const heic = await run(ids.image, `window.fengshui.importImage('/System/Library/Desktop Pictures/Mac Blue.heic')`);
     if (heic.ok) store.updateWidget(ids.image, { config: { file: heic.data.file, name: heic.data.name, caption: 'Blue hour' } });
     results.imageImport = heic;
     await wait(2000);

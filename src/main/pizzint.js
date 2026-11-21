@@ -15,7 +15,7 @@ const path = require('path');
 const BASE = 'https://www.pizzint.watch';
 const TTL = 5 * 60 * 1000; // automatic refreshes reuse a reading this fresh
 const MIN_GAP = 20 * 1000; // a forced refresh never hits the site more often than this
-const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Morrow';
+const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) FengShui';
 
 // The Nothing Ever Happens classifications, as the site defines them.
 const NEH_BANDS = [

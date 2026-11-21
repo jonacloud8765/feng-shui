@@ -2,17 +2,14 @@
   <img src="docs/screenshots/icon.png" width="128" alt="Feng Shui icon: a yin-yang on rice paper">
 </p>
 
-<h1 align="center">Feng Shui <sub>(aka Morrow)</sub></h1>
+<h1 align="center">Feng Shui</h1>
 
 <p align="center">Calm desktop widgets for macOS.<br>
 Clocks, weather, films, notes, a corkboard and a few small toys, each a window of its own, arranged so the desktop feels balanced.</p>
 
 <p align="center"><img src="docs/screenshots/feng-shui-layout.jpg" alt="The Feng Shui layout: liquid glass widgets in three balanced columns over ink mountains at dusk"></p>
 
-Feng Shui is the new name for Morrow. The app, the menus and the About window
-say Feng Shui; the data folder, the bundle id and the source keep the Morrow
-name, so an existing install upgrades in place with nothing lost. Free and open
-source under the MIT licence.
+Free and open source under the MIT licence.
 
 | | |
 | --- | --- |
@@ -31,8 +28,8 @@ Requires macOS and Node.js. No Xcode needed: the Command Line Tools that come
 with macOS are enough to build the small native helper.
 
 ```sh
-git clone https://github.com/jonacloud8765/morrow.git
-cd morrow
+git clone https://github.com/jonacloud8765/feng-shui.git
+cd feng-shui
 npm install      # first time only; also builds the native helper
 npm start
 ```
@@ -89,9 +86,9 @@ Whiteboard, DEFCON and Nothing Ever Happens.
 
 ## Where things are saved
 
-`~/Library/Application Support/Morrow/morrow-config.json`. Changes are written
+`~/Library/Application Support/Feng Shui/fengshui-config.json`. Changes are written
 within a moment. If the file is damaged, Feng Shui keeps the damaged copy next to
-it (`morrow-config.corrupt-<time>.json`), starts fresh and tells you.
+it (`fengshui-config.corrupt-<time>.json`), starts fresh and tells you.
 
 ## Films
 
@@ -270,7 +267,7 @@ screen.
 
 ## The native helper
 
-`native/morrow_native.mm` is about 150 lines of Objective-C++ that does three
+`native/fengshui_native.mm` is about 150 lines of Objective-C++ that does three
 things Electron can't:
 
 1. Rounds the native blur to each widget's own corner radius. Electron fixes

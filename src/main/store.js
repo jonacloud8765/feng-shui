@@ -110,7 +110,7 @@ function normalizeDocument(raw) {
 class Store extends EventEmitter {
   constructor(dir) {
     super();
-    this.file = path.join(dir, 'morrow-config.json');
+    this.file = path.join(dir, 'fengshui-config.json');
     this.notice = null;
     this.doc = this.load();
     this.saveTimer = null;

@@ -12,15 +12,14 @@ const weather = require('./weather').createWeatherService();
 let pizzintService;
 const pizzint = () => pizzintService || (pizzintService = require('./pizzint').createPizzint(app.getPath('userData')));
 
-// The app is called Feng Shui (it was Morrow). Its data stays where Morrow
-// kept it, so nothing set up before the rename is lost.
+// The app keeps its data in Application Support/Feng Shui.
 app.setName(brand.name);
-if (!process.env.MORROW_DATA_DIR) app.setPath('userData', path.join(app.getPath('appData'), 'Morrow'));
+if (!process.env.FENGSHUI_DATA_DIR) app.setPath('userData', path.join(app.getPath('appData'), 'Feng Shui'));
 // A separate data folder (used for development and tests) also gets its own
 // single-instance lock, so it can run beside the everyday copy.
-if (process.env.MORROW_DATA_DIR) {
-  app.setName('Morrow Dev'); // the lock follows the app name, so a dev copy never wakes the everyday one
-  app.setPath('userData', path.resolve(process.env.MORROW_DATA_DIR));
+if (process.env.FENGSHUI_DATA_DIR) {
+  app.setName('Feng Shui Dev'); // the lock follows the app name, so a dev copy never wakes the everyday one
+  app.setPath('userData', path.resolve(process.env.FENGSHUI_DATA_DIR));
 }
 if (!app.requestSingleInstanceLock()) app.quit();
 
@@ -37,7 +36,7 @@ const runtime = new Runtime();
 
 function openSettings(focusWidgetId) {
   if (settingsWin && !settingsWin.isDestroyed()) {
-    if (focusWidgetId) settingsWin.webContents.send('morrow:focus-widget', focusWidgetId);
+    if (focusWidgetId) settingsWin.webContents.send('fengshui:focus-widget', focusWidgetId);
     settingsWin.show();
     settingsWin.focus();
     app.focus({ steal: true });
@@ -154,7 +153,7 @@ function saveLayout(name) {
 }
 
 function sendDoc() {
-  if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('morrow:doc', store.doc);
+  if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('fengshui:doc', store.doc);
 }
 
 // Adding widgets -----------------------------------------------------------
@@ -204,7 +203,7 @@ function layoutKeys(on) {
   if (!on || !win || win.isDestroyed()) return;
   app.focus({ steal: true });
   win.focus();
-  win.webContents.send('morrow:bar-keys', true);
+  win.webContents.send('fengshui:bar-keys', true);
 }
 
 function stepLayout(dir) {
@@ -262,7 +261,7 @@ function visibleApps() {
     require('child_process').execFile('/usr/bin/lsappinfo', ['visibleProcessList'], { timeout: 3000 }, (err, out) => {
       if (err) return resolve([]);
       const names = [...String(out).matchAll(/"([^"]+)"/g)].map((m) => m[1].replace(/_/g, ' ').replace(/[‎‏]/g, '').trim());
-      resolve([...new Set(names)].filter((n) => n && !/^(Electron|Morrow|Morrow Dev|Feng Shui)$/.test(n)).sort((a, b) => a.localeCompare(b)));
+      resolve([...new Set(names)].filter((n) => n && !/^(Electron|Feng Shui|Feng Shui Dev)$/.test(n)).sort((a, b) => a.localeCompare(b)));
     });
   });
 }
@@ -384,23 +383,31 @@ function toggleWidgets() {
   store.updateSettings({ widgetsVisible: !store.doc.settings.widgetsVisible });
 }
 
-// A small template image for the menu bar: a sun resting on the horizon.
-// While the Mac is kept awake the sun is filled in.
+// A small template image for the menu bar: a yin-yang in a fine ring.
+// While the Mac is kept awake a small dot sits at its upper right.
 function trayIcon(awake = false) {
   const size = 36; // drawn at 2x for an 18pt icon
   const buf = Buffer.alloc(size * size * 4);
-  const cx = size / 2;
-  const cy = size * 0.64;
-  const r = size * 0.3;
+  const cx = 18, cy = 18.5, R = 13.5; // the symbol
+  const ring = 1.7; // outline width in pixels
+  const inside = (x, y) => {
+    const d = Math.hypot(x - cx, y - cy);
+    if (d > R + ring / 2) return awake && Math.hypot(x - 32, y - 4.5) < 3.2; // the awake dot
+    if (d > R - ring / 2) return true; // the ring
+    const top = Math.hypot(x - cx, y - (cy - R / 2));
+    const bottom = Math.hypot(x - cx, y - (cy + R / 2));
+    if (top < R / 7) return true; // the dark seed in the light half
+    if (bottom < R / 7) return false; // the light seed in the dark half
+    if (top < R / 2) return false; // the light head
+    if (bottom < R / 2) return true; // the dark head
+    return x > cx; // dark on the right
+  };
+  const S = 4; // 4x4 supersampling for smooth edges
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
-      const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
-      let a = 0;
-      if (y + 0.5 < cy) a = Math.max(0, Math.min(1, 1.6 - Math.abs(d - r) * 0.9)); // arc
-      if (awake && y + 0.5 < cy && d < r) a = 1; // a risen, solid sun
-      if (Math.abs(y + 0.5 - (cy + 2)) < 1.4 && Math.abs(x + 0.5 - cx) < size * 0.42) a = 1; // horizon
-      const i = (y * size + x) * 4;
-      buf[i + 3] = Math.round(a * 255);
+      let n = 0;
+      for (let sy = 0; sy < S; sy++) for (let sx = 0; sx < S; sx++) if (inside(x + (sx + 0.5) / S, y + (sy + 0.5) / S)) n++;
+      buf[(y * size + x) * 4 + 3] = Math.round((n / (S * S)) * 255);
     }
   }
   const img = nativeImage.createFromBitmap(buf, { width: size, height: size, scaleFactor: 2 });
@@ -447,7 +454,7 @@ function senderWidgetId(e) {
 }
 
 function registerIpc() {
-  ipcMain.handle('morrow:init', (e, id) => ({
+  ipcMain.handle('fengshui:init', (e, id) => ({
     widget: id && store.widget(id) ? windows.payload(store.widget(id)) : null,
     settings: store.doc.settings,
     doc: id ? null : store.doc,
@@ -456,57 +463,57 @@ function registerIpc() {
     nativeAvailable: require('./native').available,
   }));
 
-  ipcMain.handle('morrow:about', () => ({ ...brand, version: app.getVersion(), electron: process.versions.electron }));
-  ipcMain.on('morrow:open-repo', () => shell.openExternal(brand.repo));
-  ipcMain.on('morrow:update-widget', (e, id, patch) => store.updateWidget(id || senderWidgetId(e), patch));
-  ipcMain.on('morrow:gesture-start', (e, kind, edge) => windows.startGesture(senderWidgetId(e), kind, edge));
-  ipcMain.on('morrow:gesture-end', () => windows.endGesture());
-  ipcMain.on('morrow:context-menu', (e, extra) => {
+  ipcMain.handle('fengshui:about', () => ({ ...brand, version: app.getVersion(), electron: process.versions.electron }));
+  ipcMain.on('fengshui:open-repo', () => shell.openExternal(brand.repo));
+  ipcMain.on('fengshui:update-widget', (e, id, patch) => store.updateWidget(id || senderWidgetId(e), patch));
+  ipcMain.on('fengshui:gesture-start', (e, kind, edge) => windows.startGesture(senderWidgetId(e), kind, edge));
+  ipcMain.on('fengshui:gesture-end', () => windows.endGesture());
+  ipcMain.on('fengshui:context-menu', (e, extra) => {
     const id = senderWidgetId(e);
     // Widget-specific items come over as labels plus an action key.
     const items = (extra || []).map((x) => (x.type === 'separator' ? { type: 'separator' }
-      : { label: x.label, ...(x.type === 'checkbox' || x.type === 'radio' ? { type: x.type, checked: !!x.checked } : {}), click: () => e.sender.send('morrow:menu-action', x.action) }));
+      : { label: x.label, ...(x.type === 'checkbox' || x.type === 'radio' ? { type: x.type, checked: !!x.checked } : {}), click: () => e.sender.send('fengshui:menu-action', x.action) }));
     widgetContextMenu(id, items);
   });
-  ipcMain.on('morrow:open-settings', (e, id) => openSettings(id));
-  ipcMain.on('morrow:feng-shui', () => fengShui());
-  ipcMain.on('morrow:bar-size', (e, w) => windows.sizeBar(w));
-  ipcMain.on('morrow:bar-focus', () => { app.focus({ steal: true }); windows.barWin?.focus(); });
+  ipcMain.on('fengshui:open-settings', (e, id) => openSettings(id));
+  ipcMain.on('fengshui:feng-shui', () => fengShui());
+  ipcMain.on('fengshui:bar-size', (e, w) => windows.sizeBar(w));
+  ipcMain.on('fengshui:bar-focus', () => { app.focus({ steal: true }); windows.barWin?.focus(); });
   // Only the bar on screen may end the mode (an old bar being replaced blurs as it goes).
-  ipcMain.on('morrow:bar-keys', (e, on) => { if (BrowserWindow.fromWebContents(e.sender) === windows.barWin) layoutKeys(on); });
-  ipcMain.on('morrow:bar-step', (e, dir) => stepLayout(dir > 0 ? 1 : -1));
-  ipcMain.on('morrow:save-layout', (e, name) => saveLayout(name));
+  ipcMain.on('fengshui:bar-keys', (e, on) => { if (BrowserWindow.fromWebContents(e.sender) === windows.barWin) layoutKeys(on); });
+  ipcMain.on('fengshui:bar-step', (e, dir) => stepLayout(dir > 0 ? 1 : -1));
+  ipcMain.on('fengshui:save-layout', (e, name) => saveLayout(name));
   // The bar's save button: keep this layout exactly as it is and lock it.
-  ipcMain.on('morrow:lock-layout', (e, on) => { store.updateSettings({ locked: !!on }); store.flush(); });
-  ipcMain.on('morrow:nuke-open', (e) => openNuke(BrowserWindow.fromWebContents(e.sender)));
-  ipcMain.on('morrow:copy', (e, text) => clipboard.writeText(String(text)));
-  ipcMain.handle('morrow:stopwatch', (e, action) => {
+  ipcMain.on('fengshui:lock-layout', (e, on) => { store.updateSettings({ locked: !!on }); store.flush(); });
+  ipcMain.on('fengshui:nuke-open', (e) => openNuke(BrowserWindow.fromWebContents(e.sender)));
+  ipcMain.on('fengshui:copy', (e, text) => clipboard.writeText(String(text)));
+  ipcMain.handle('fengshui:stopwatch', (e, action) => {
     const id = senderWidgetId(e);
     return action === 'get' ? runtime.snapshot(id) : runtime.stopwatchAction(id, action);
   });
 
   // Settings window operations.
-  ipcMain.handle('morrow:add-widget', (e, type) => addWidget(type));
-  ipcMain.on('morrow:duplicate-widget', (e, id) => store.duplicateWidget(id));
-  ipcMain.on('morrow:remove-widget', (e, id) => { runtime.forget(id); store.removeWidget(id); });
-  ipcMain.on('morrow:update-settings', (e, patch) => store.updateSettings(patch));
-  ipcMain.handle('morrow:create-layout', (e, name, fromId) => store.createLayout(name, fromId));
-  ipcMain.on('morrow:rename-layout', (e, id, name) => store.renameLayout(id, name));
-  ipcMain.on('morrow:delete-layout', (e, id) => store.deleteLayout(id));
-  ipcMain.on('morrow:switch-layout', (e, id) => store.switchLayout(id));
-  ipcMain.handle('morrow:save-preset', (e, name, appearance) => store.savePreset(name, appearance));
-  ipcMain.on('morrow:delete-preset', (e, id) => store.deletePreset(id));
-  ipcMain.handle('morrow:pick-image', async () => {
+  ipcMain.handle('fengshui:add-widget', (e, type) => addWidget(type));
+  ipcMain.on('fengshui:duplicate-widget', (e, id) => store.duplicateWidget(id));
+  ipcMain.on('fengshui:remove-widget', (e, id) => { runtime.forget(id); store.removeWidget(id); });
+  ipcMain.on('fengshui:update-settings', (e, patch) => store.updateSettings(patch));
+  ipcMain.handle('fengshui:create-layout', (e, name, fromId) => store.createLayout(name, fromId));
+  ipcMain.on('fengshui:rename-layout', (e, id, name) => store.renameLayout(id, name));
+  ipcMain.on('fengshui:delete-layout', (e, id) => store.deleteLayout(id));
+  ipcMain.on('fengshui:switch-layout', (e, id) => store.switchLayout(id));
+  ipcMain.handle('fengshui:save-preset', (e, name, appearance) => store.savePreset(name, appearance));
+  ipcMain.on('fengshui:delete-preset', (e, id) => store.deletePreset(id));
+  ipcMain.handle('fengshui:pick-image', async () => {
     const r = await dialog.showOpenDialog(settingsWin, {
       properties: ['openFile'],
       filters: [{ name: 'Images', extensions: ['jpg', 'jpeg', 'png', 'heic', 'webp', 'gif'] }],
     });
     return r.canceled ? null : r.filePaths[0];
   });
-  ipcMain.handle('morrow:apps-list', (e, refresh) => apps.listApps(refresh));
-  ipcMain.handle('morrow:app-icon', (e, p, size) => apps.icon(p, size));
-  ipcMain.handle('morrow:bundle-id', (e, p) => apps.bundleId(p));
-  ipcMain.handle('morrow:apps-resolve', async (e, entries, size) => {
+  ipcMain.handle('fengshui:apps-list', (e, refresh) => apps.listApps(refresh));
+  ipcMain.handle('fengshui:app-icon', (e, p, size) => apps.icon(p, size));
+  ipcMain.handle('fengshui:bundle-id', (e, p) => apps.bundleId(p));
+  ipcMain.handle('fengshui:apps-resolve', async (e, entries, size) => {
     const out = await apps.resolve(entries || [], size);
     // Remember where moved apps went, so the next launch is instant.
     const id = senderWidgetId(e);
@@ -515,15 +522,15 @@ function registerIpc() {
     }
     return out;
   });
-  ipcMain.handle('morrow:launch', (e, p) => apps.launch(p));
+  ipcMain.handle('fengshui:launch', (e, p) => apps.launch(p));
   // Results come back as { ok, data } or { ok: false, error } so widgets can show the reason.
   const settle = (p) => p.then((data) => ({ ok: true, data }), (err) => ({ ok: false, error: err.message }));
-  ipcMain.handle('morrow:weather', (e, loc, force) => settle(weather.forecast(loc, { force })));
-  ipcMain.handle('morrow:pizzint', (e, kind, force) => settle(pizzint().get(kind, { force })));
-  ipcMain.on('morrow:pizzint-open', (e, kind) => shell.openExternal(kind === 'neh' ? 'https://www.pizzint.watch/nothingeverhappens' : 'https://www.pizzint.watch/'));
-  ipcMain.handle('morrow:city-search', (e, q) => settle(weather.searchCities(q)));
-  ipcMain.handle('morrow:import-image', (e, p) => settle(images.importImage(p)));
-  ipcMain.handle('morrow:pick-photo', async () => {
+  ipcMain.handle('fengshui:weather', (e, loc, force) => settle(weather.forecast(loc, { force })));
+  ipcMain.handle('fengshui:pizzint', (e, kind, force) => settle(pizzint().get(kind, { force })));
+  ipcMain.on('fengshui:pizzint-open', (e, kind) => shell.openExternal(kind === 'neh' ? 'https://www.pizzint.watch/nothingeverhappens' : 'https://www.pizzint.watch/'));
+  ipcMain.handle('fengshui:city-search', (e, q) => settle(weather.searchCities(q)));
+  ipcMain.handle('fengshui:import-image', (e, p) => settle(images.importImage(p)));
+  ipcMain.handle('fengshui:pick-photo', async () => {
     app.focus({ steal: true });
     const r = await dialog.showOpenDialog(settingsWin && !settingsWin.isDestroyed() ? settingsWin : undefined, {
       properties: ['openFile'],
@@ -532,12 +539,12 @@ function registerIpc() {
     if (r.canceled) return { ok: false, canceled: true };
     return settle(images.importImage(r.filePaths[0]));
   });
-  ipcMain.handle('morrow:time-zones', () => Intl.supportedValuesOf('timeZone'));
-  ipcMain.handle('morrow:films', (e, opts) => settle(movies.library(opts || {})));
-  ipcMain.handle('morrow:film-poster', (e, url) => movies.poster(url));
-  ipcMain.handle('morrow:film-play', (e, files) => movies.play(files));
-  ipcMain.on('morrow:film-page', (e, link) => movies.openFilm(link));
-  ipcMain.handle('morrow:pick-page', async () => {
+  ipcMain.handle('fengshui:time-zones', () => Intl.supportedValuesOf('timeZone'));
+  ipcMain.handle('fengshui:films', (e, opts) => settle(movies.library(opts || {})));
+  ipcMain.handle('fengshui:film-poster', (e, url) => movies.poster(url));
+  ipcMain.handle('fengshui:film-play', (e, files) => movies.play(files));
+  ipcMain.on('fengshui:film-page', (e, link) => movies.openFilm(link));
+  ipcMain.handle('fengshui:pick-page', async () => {
     app.focus({ steal: true });
     const r = await dialog.showOpenDialog(settingsWin && !settingsWin.isDestroyed() ? settingsWin : undefined, {
       properties: ['openFile'],
@@ -546,11 +553,11 @@ function registerIpc() {
     if (r.canceled) return { ok: false, canceled: true };
     return settle(pages.importPage(r.filePaths[0]));
   });
-  ipcMain.on('morrow:open-watchlist', (e, user) => movies.openWatchlist(user));
-  ipcMain.on('morrow:open-profile', (e, user) => movies.openProfile(user));
-  ipcMain.handle('morrow:watched', (e, user, force) => movies.watched(user, { force }));
-  ipcMain.handle('morrow:film-details', (e, slugs) => movies.details(slugs));
-  ipcMain.handle('morrow:cabinet', async (e, op, ...args) => {
+  ipcMain.on('fengshui:open-watchlist', (e, user) => movies.openWatchlist(user));
+  ipcMain.on('fengshui:open-profile', (e, user) => movies.openProfile(user));
+  ipcMain.handle('fengshui:watched', (e, user, force) => movies.watched(user, { force }));
+  ipcMain.handle('fengshui:film-details', (e, slugs) => movies.details(slugs));
+  ipcMain.handle('fengshui:cabinet', async (e, op, ...args) => {
     const cab = require('./cabinet');
     const wid = senderWidgetId(e);
     const w = store.widgets.find((x) => x.id === wid);
@@ -565,7 +572,7 @@ function registerIpc() {
         case 'open': return { ok: !(await cab.open(root, args[0])) };
         case 'reveal': cab.reveal(root, args[0]); return { ok: true };
         case 'cancel': cab.cancelScan(args[0]); return { ok: true };
-        case 'scan': return await cab.scan(root, args[0], (p) => { if (!e.sender.isDestroyed()) e.sender.send('morrow:cabinet-progress', { id: args[0], ...p }); });
+        case 'scan': return await cab.scan(root, args[0], (p) => { if (!e.sender.isDestroyed()) e.sender.send('fengshui:cabinet-progress', { id: args[0], ...p }); });
         case 'pick': {
           app.focus({ steal: true });
           const r = await dialog.showOpenDialog({ properties: ['openDirectory'], defaultPath: root, message: 'Choose a folder for File Cabinet' });
@@ -579,7 +586,7 @@ function registerIpc() {
       return { ok: false, error: String(err.message || err) };
     }
   });
-  ipcMain.handle('morrow:pick-folder', async (e, current) => {
+  ipcMain.handle('fengshui:pick-folder', async (e, current) => {
     app.focus({ steal: true });
     const r = await dialog.showOpenDialog(settingsWin && !settingsWin.isDestroyed() ? settingsWin : undefined, {
       properties: ['openDirectory'],
@@ -627,7 +634,7 @@ app.whenReady().then(() => {
   const refreshApps = async () => { const list = await visibleApps(); if (JSON.stringify(list) !== JSON.stringify(runningApps)) { runningApps = list; rebuildTray(); } };
   refreshApps();
   setInterval(refreshApps, 60000);
-  tray.setToolTip(`${brand.name} (aka ${brand.aka})`);
+  tray.setToolTip(brand.name);
   rebuildTray();
 
   let prevSettings = JSON.parse(JSON.stringify(store.doc.settings));
@@ -637,7 +644,7 @@ app.whenReady().then(() => {
     if (kind === 'settings') {
       applySettings(prevSettings);
       prevSettings = JSON.parse(JSON.stringify(store.doc.settings));
-      windows.broadcast('morrow:settings', store.doc.settings);
+      windows.broadcast('fengshui:settings', store.doc.settings);
     }
     windows.sync({ fade: kind === 'layout-switch' || kind === 'widgets' || kind === 'settings' });
     if (kind === 'layout-switch' && windows.skin && store.layout.fsArranged !== BAGUA_VERSION) setTimeout(baguaArrange, 350);
@@ -651,9 +658,9 @@ app.whenReady().then(() => {
 
   windows.sync();
   if (windows.skin && store.layout.fsArranged !== BAGUA_VERSION) setTimeout(baguaArrange, 1500);
-  // Development aid: MORROW_FENG_TEST=ms runs Feng Shui once after launch.
-  if (process.env.MORROW_FENG_TEST) setTimeout(fengShui, Number(process.env.MORROW_FENG_TEST));
-  if (process.env.MORROW_SELFTEST) {
+  // Development aid: FENGSHUI_FENG_TEST=ms runs Feng Shui once after launch.
+  if (process.env.FENGSHUI_FENG_TEST) setTimeout(fengShui, Number(process.env.FENGSHUI_FENG_TEST));
+  if (process.env.FENGSHUI_SELFTEST) {
     try {
       return require('../../test/selftest')({ app, BrowserWindow, store, windows });
     } catch (err) {
@@ -673,20 +680,20 @@ app.whenReady().then(() => {
     openSettings();
   }
 
-  if (process.env.MORROW_OPEN_SETTINGS) openSettings(process.env.MORROW_OPEN_SETTINGS);
-  if (process.env.MORROW_OPEN_ABOUT) openAbout();
+  if (process.env.FENGSHUI_OPEN_SETTINGS) openSettings(process.env.FENGSHUI_OPEN_SETTINGS);
+  if (process.env.FENGSHUI_OPEN_ABOUT) openAbout();
   if (store.notice) dialog.showMessageBox({ type: 'warning', message: 'Configuration reset', detail: store.notice });
 
   screen.on('display-removed', () => windows.revalidateScreens());
   screen.on('display-metrics-changed', () => windows.revalidateScreens());
-  powerMonitor.on('resume', () => windows.broadcast('morrow:resume'));
+  powerMonitor.on('resume', () => windows.broadcast('fengshui:resume'));
 
   app.on('activate', () => openSettings());
 });
 
-// Development aid: MORROW_CAPTURE=<dir> saves a PNG of every window's page
+// Development aid: FENGSHUI_CAPTURE=<dir> saves a PNG of every window's page
 // content after a few seconds, and renderer console output goes to stdout.
-if (process.env.MORROW_CAPTURE) {
+if (process.env.FENGSHUI_CAPTURE) {
   const fs = require('fs');
   app.on('web-contents-created', (_e, wc) => {
     wc.on('console-message', (ev) => console.log(`[renderer] ${ev.level}: ${ev.message} (${ev.sourceId}:${ev.lineNumber})`));
@@ -694,7 +701,7 @@ if (process.env.MORROW_CAPTURE) {
     wc.on('render-process-gone', (_ev, d) => console.log('[gone]', d));
   });
   app.whenReady().then(() => setTimeout(async () => {
-    const dir = path.resolve(process.env.MORROW_CAPTURE);
+    const dir = path.resolve(process.env.FENGSHUI_CAPTURE);
     fs.mkdirSync(dir, { recursive: true });
     let i = 0;
     for (const win of BrowserWindow.getAllWindows()) {
@@ -704,7 +711,7 @@ if (process.env.MORROW_CAPTURE) {
       console.log('[capture]', name, JSON.stringify(win.getBounds()));
     }
     console.log('[capture] done');
-  }, Number(process.env.MORROW_CAPTURE_DELAY || 4000)));
+  }, Number(process.env.FENGSHUI_CAPTURE_DELAY || 4000)));
 }
 
 app.on('second-instance', () => openSettings());

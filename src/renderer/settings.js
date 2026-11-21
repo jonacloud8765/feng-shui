@@ -1,7 +1,7 @@
 import { h } from './dom.js';
 import { PAPERS, PINS } from './widgets/note.js';
 
-const api = window.morrow;
+const api = window.fengshui;
 const nav = document.getElementById('nav');
 const main = document.getElementById('main');
 const foot = document.getElementById('foot');
@@ -40,7 +40,7 @@ const PAGES = [
   ['widgets', 'Widgets', '<svg viewBox="0 0 16 16"><rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="9" y="1.5" width="5.5" height="5.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/><rect x="1.5" y="9" width="13" height="5.5" rx="1.6" fill="none" stroke="currentColor" stroke-width="1.3"/></svg>'],
   ['gallery', 'Gallery', '<svg viewBox="0 0 16 16"><path d="M8 3v10M3 8h10" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"/></svg>'],
   ['layouts', 'Layouts', '<svg viewBox="0 0 16 16"><rect x="1.5" y="2.5" width="13" height="11" rx="2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M6 2.5v11" stroke="currentColor" stroke-width="1.3"/></svg>'],
-  ['appearance', 'Appearance', '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.2" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.8a6.2 6.2 0 0 0 0 12.4z" fill="currentColor"/></svg>'],
+  ['appearance', 'Appearance', '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.3" fill="none" stroke="currentColor" stroke-width="1.2"/><path fill-rule="evenodd" d="M8 1.7a6.3 6.3 0 0 1 0 12.6a3.15 3.15 0 0 1 0-6.3a3.15 3.15 0 0 0 0-6.3zM8 10.25a.9 .9 0 1 0 0 1.8a.9 .9 0 1 0 0-1.8z" fill="currentColor"/><circle cx="8" cy="4.85" r="0.9" fill="currentColor"/></svg>'],
   ['general', 'General', '<svg viewBox="0 0 16 16"><circle cx="8" cy="8" r="2.3" fill="none" stroke="currentColor" stroke-width="1.3"/><path d="M8 1.5v2M8 12.5v2M1.5 8h2M12.5 8h2M3.4 3.4l1.4 1.4M11.2 11.2l1.4 1.4M3.4 12.6l1.4-1.4M11.2 4.8l1.4-1.4" stroke="currentColor" stroke-width="1.3" stroke-linecap="round"/></svg>'],
 ];
 
@@ -733,7 +733,7 @@ function generalPage() {
   };
   return [
     h('h1', {}, 'General'),
-    h('p.subtitle', {}, 'How Feng Shui (aka Morrow) behaves on your Mac.'),
+    h('p.subtitle', {}, 'How Feng Shui behaves on your Mac.'),
     h('h2', {}, 'Desktop'),
     h('div.group', {},
       row('Keep widgets on the desktop', toggle(s.windowMode === 'desktop', (v) => { editSettings({ windowMode: v ? 'desktop' : 'normal' }); render(); }, 'Keep widgets on the desktop'),

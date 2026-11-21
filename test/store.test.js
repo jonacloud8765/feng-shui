@@ -7,7 +7,7 @@ const os = require('os');
 const path = require('path');
 const { Store } = require('../src/main/store');
 
-const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'morrow-test-'));
+const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'fengshui-test-'));
 
 test('widgets, bounds and config survive a reload', () => {
   const dir = tmp();
@@ -31,7 +31,7 @@ test('size limits are enforced', () => {
 
 test('corrupt file is kept as a backup and the app starts fresh', () => {
   const dir = tmp();
-  fs.writeFileSync(path.join(dir, 'morrow-config.json'), '{ not json');
+  fs.writeFileSync(path.join(dir, 'fengshui-config.json'), '{ not json');
   const s = new Store(dir);
   assert.equal(s.widgets.length, 0);
   assert.ok(s.notice);
@@ -40,7 +40,7 @@ test('corrupt file is kept as a backup and the app starts fresh', () => {
 
 test('outdated or partial data is filled in, unknown widget types dropped', () => {
   const dir = tmp();
-  fs.writeFileSync(path.join(dir, 'morrow-config.json'), JSON.stringify({
+  fs.writeFileSync(path.join(dir, 'fengshui-config.json'), JSON.stringify({
     layouts: [{ id: 'L', name: 'Old', widgets: [
       { id: 'a', type: 'clock', bounds: { x: 5, y: 6 } },
       { id: 'b', type: 'hologram' },
@@ -71,7 +71,7 @@ test('layouts keep separate widgets; duplicate copies with new ids', () => {
 
 test('old countdown layouts map onto the new styles', () => {
   const dir = tmp();
-  fs.writeFileSync(path.join(dir, 'morrow-config.json'), JSON.stringify({
+  fs.writeFileSync(path.join(dir, 'fengshui-config.json'), JSON.stringify({
     layouts: [{ id: 'L', name: 'Old', widgets: [
       { id: 'a', type: 'countdown', config: { title: 'Trip', target: '2027-05-01T10:00', layout: 'live' } },
       { id: 'b', type: 'countdown', config: { title: 'Exam', target: '2027-06-01T09:00', layout: 'days' } },

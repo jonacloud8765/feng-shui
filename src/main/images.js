@@ -1,6 +1,6 @@
 'use strict';
 
-// Photos for the Photo widget are copied into Morrow's own data folder, so a
+// Photos for the Photo widget are copied into Feng Shui's own data folder, so a
 // widget keeps working if the original is moved, renamed or deleted.
 // Formats Chromium can't display (HEIC, TIFF) are converted to JPEG with
 // macOS's built-in `sips`.

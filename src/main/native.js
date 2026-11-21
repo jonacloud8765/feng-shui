@@ -1,12 +1,12 @@
 'use strict';
 
-// Optional AppKit bridge (native/morrow_native.mm). Morrow works without it,
+// Optional AppKit bridge (native/fengshui_native.mm). Feng Shui works without it,
 // with two differences: the native blur keeps Electron's fixed corner radius,
 // and "On the desktop layer" falls back to a display-only window type.
 let native = null;
 let loadError = null;
 try {
-  native = require('../../native/build/Release/morrow_native.node');
+  native = require('../../native/build/Release/fengshui_native.node');
 } catch (err) {
   loadError = err.message;
 }

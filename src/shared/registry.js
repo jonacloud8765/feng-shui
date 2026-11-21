@@ -21,7 +21,7 @@ const FONTS = {
   bradley: { label: 'Bradley Hand (handwritten)', stack: '"Bradley Hand", Noteworthy, cursive' },
   marker: { label: 'Marker Felt', stack: '"Marker Felt", Noteworthy, cursive' },
   snell: { label: 'Snell Roundhand (script)', stack: '"Snell Roundhand", "Savoye LET", cursive' },
-  // Bundled with Morrow (open licenses, see src/renderer/fonts).
+  // Bundled with Feng Shui (open licenses, see src/renderer/fonts).
   signature: { label: 'Homemade Apple (brush script)', stack: '"Homemade Apple", "Bradley Hand", cursive' },
   scrawl: { label: 'Nothing You Could Do (quick pen)', stack: '"Nothing You Could Do", "Bradley Hand", cursive' },
   brush: { label: 'Caveat Brush (marker)', stack: '"Caveat Brush", "Marker Felt", cursive' },
@@ -354,7 +354,7 @@ const TYPES = {
     min: { width: 120, height: 80 },
     max: { width: 1800, height: 1400 },
     config: { file: '', name: '' },
-    // The page draws its own card; Morrow adds only the native blur behind it.
+    // The page draws its own card; Feng Shui adds only the native blur behind it.
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 30, padding: 0 },
     fields: [{ key: 'file', label: 'HTML file', type: 'page' }],
   },

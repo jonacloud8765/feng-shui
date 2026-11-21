@@ -62,7 +62,7 @@ export function mount(root, ctx) {
   const img = h('img', { alt: '' });
   const frame = h('div.frame', {}, img);
   const mat = h('div.mat');
-  const tagline = h('div.tagline', {}, 'A Morrow Picture');
+  const tagline = h('div.tagline', {}, 'A Feng Shui Picture');
   const credits = h('div.credits', {}, 'Directed by you · Starring the people in this photo · Music by the moment · Coming soon to your desktop');
   const caption = h('div.caption');
   const empty = h('div.empty', {},

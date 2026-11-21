@@ -3,7 +3,7 @@ import { fileUrl } from '../appearance.js';
 
 // Custom Widget: shows a single HTML file in a frame that fills the widget.
 // Clicks go to the page, so a small grip at the top moves the widget, and
-// right-clicking the grip opens Morrow's widget menu.
+// right-clicking the grip opens Feng Shui's widget menu.
 
 const css = `
 .page { position: absolute; inset: 0; border-radius: inherit; overflow: hidden; }

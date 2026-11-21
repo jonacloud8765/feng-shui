@@ -44,7 +44,7 @@ const el = (tag, props = {}, ...kids) => {
 function fit() {
   requestAnimationFrame(() => {
     const last = bar.lastElementChild;
-    window.morrow.barSize(Math.ceil((last ? last.getBoundingClientRect().right : 0) + 4));
+    window.fengshui.barSize(Math.ceil((last ? last.getBoundingClientRect().right : 0) + 4));
   });
 }
 
@@ -55,14 +55,14 @@ function render() {
     const done = (ok) => {
       const name = input.value.trim();
       naming = false;
-      if (ok && name) { window.morrow.saveLayout(name); flash = `Saved “${name}”`; setTimeout(() => { flash = ''; render(); }, 1800); }
+      if (ok && name) { window.fengshui.saveLayout(name); flash = `Saved “${name}”`; setTimeout(() => { flash = ''; render(); }, 1800); }
       render();
     };
     input.addEventListener('keydown', (e) => { if (e.key === 'Enter') done(true); if (e.key === 'Escape') done(false); });
     input.addEventListener('blur', () => naming && done(false));
     bar.append(el('span', { className: 'note', textContent: 'Save as' }), input);
     fit();
-    setTimeout(() => { window.morrow.barFocus(); input.focus(); }, 30);
+    setTimeout(() => { window.fengshui.barFocus(); input.focus(); }, 30);
     return;
   }
   document.body.classList.toggle('fs', state.skin === 'fengshui');
@@ -75,8 +75,8 @@ function render() {
     b.setAttribute('aria-pressed', String(l.id === state.active));
     b.addEventListener('click', () => {
       // A click also hands the bar the keyboard, so ← → can carry on from here.
-      if (!keys) window.morrow.barKeys(true);
-      if (l.id !== state.active) { state.active = l.id; render(); window.morrow.switchLayout(l.id); }
+      if (!keys) window.fengshui.barKeys(true);
+      if (l.id !== state.active) { state.active = l.id; render(); window.fengshui.switchLayout(l.id); }
     });
     bar.append(b);
   }
@@ -90,7 +90,7 @@ function render() {
   });
   save.innerHTML = locked ? ICONS.locked : ICONS.save;
   save.addEventListener('click', () => {
-    window.morrow.lockLayout(!locked);
+    window.fengshui.lockLayout(!locked);
     flash = locked ? 'Unlocked' : 'Saved and locked';
     setTimeout(() => { flash = ''; render(); }, 1600);
     state.locked = !locked;
@@ -100,7 +100,7 @@ function render() {
   fit();
 }
 
-window.morrow.onBar((s) => { state = s; if (!naming) render(); });
+window.fengshui.onBar((s) => { state = s; if (!naming) render(); });
 // The menu bar's Save Layout As New… asks for a name here.
 window.startNaming = () => { naming = true; render(); };
 
@@ -112,9 +112,9 @@ function setKeys(on) {
   document.body.classList.toggle('keys', on);
   if (!naming) render();
 }
-window.morrow.onBarKeys(() => setKeys(true));
+window.fengshui.onBarKeys(() => setKeys(true));
 window.addEventListener('focus', () => { if (document.body.classList.contains('keys')) keys = true; });
-window.addEventListener('blur', () => { if (keys) { setKeys(false); window.morrow.barKeys(false); } });
+window.addEventListener('blur', () => { if (keys) { setKeys(false); window.fengshui.barKeys(false); } });
 window.addEventListener('keydown', (e) => {
   if (naming) return;
   if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
@@ -124,11 +124,11 @@ window.addEventListener('keydown', (e) => {
     const next = state.layouts[(i + dir + state.layouts.length) % state.layouts.length];
     if (next) { state.active = next.id; render(); }
     setKeys(true);
-    window.morrow.barStep(dir);
+    window.fengshui.barStep(dir);
   } else if (e.key === 'Escape' || e.key === 'Enter') {
     setKeys(false);
-    window.morrow.barKeys(false);
+    window.fengshui.barKeys(false);
   }
 });
-window.addEventListener('contextmenu', (e) => { e.preventDefault(); window.morrow.openSettings(); });
+window.addEventListener('contextmenu', (e) => { e.preventDefault(); window.fengshui.openSettings(); });
 render();

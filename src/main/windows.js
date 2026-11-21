@@ -20,7 +20,7 @@
 // Spaces: with "Show on all Spaces" on, widgets follow you to every desktop
 // Space. They are never shown over full-screen apps, which get their own
 // Space on macOS. Stage Manager treats normal-mode widgets as windows of the
-// Morrow app, so they may be grouped into a Morrow stage; desktop mode avoids
+// Feng Shui app, so they may be grouped into a Feng Shui stage; desktop mode avoids
 // that.
 
 const path = require('path');
@@ -144,7 +144,7 @@ class WidgetWindows {
       win.showInactive();
       win.widgetRadius = null;
       this.shape(win, this.store.widget(widget.id) || widget);
-      if (process.env.MORROW_CAPTURE) console.log('[native] shaped', widget.type, win.widgetRadius, 'level', mode);
+      if (process.env.FENGSHUI_CAPTURE) console.log('[native] shaped', widget.type, win.widgetRadius, 'level', mode);
       if (fade) this.fadeIn(win);
     });
     win.on('closed', () => {
@@ -198,7 +198,7 @@ class WidgetWindows {
         win.setBounds(t, true);
       }
     }
-    win.webContents.send('morrow:widget', this.payload(widget));
+    win.webContents.send('fengshui:widget', this.payload(widget));
   }
 
   // Round the native blur to the widget's own corner radius.
@@ -278,7 +278,7 @@ class WidgetWindows {
     if (win && !win.isDestroyed() && (!want || win.barMode !== mode || win.barSkin !== skin)) { win.destroy(); win = this.barWin = null; }
     if (!want) return;
     const state = { layouts: layouts.map((l) => ({ id: l.id, name: l.name })), active: activeLayoutId, skin, locked: !!settings.locked };
-    if (win && !win.isDestroyed()) { win.webContents.send('morrow:bar', state); return; }
+    if (win && !win.isDestroyed()) { win.webContents.send('fengshui:bar', state); return; }
     const a = screen.getPrimaryDisplay().workArea;
     const H = 34;
     win = this.barWin = new BrowserWindow({
@@ -297,11 +297,11 @@ class WidgetWindows {
     if (mode === 'desktop') native.setDesktopLevel(win, true);
     native.setCornerRadius(win, H / 2);
     win.loadFile(path.join(__dirname, '..', 'renderer', 'bar.html'));
-    win.webContents.once('did-finish-load', () => win.webContents.send('morrow:bar', this.store.doc && { layouts: this.store.doc.layouts.map((l) => ({ id: l.id, name: l.name })), active: this.store.doc.activeLayoutId, skin: this.skin, locked: !!this.store.doc.settings.locked }));
+    win.webContents.once('did-finish-load', () => win.webContents.send('fengshui:bar', this.store.doc && { layouts: this.store.doc.layouts.map((l) => ({ id: l.id, name: l.name })), active: this.store.doc.activeLayoutId, skin: this.skin, locked: !!this.store.doc.settings.locked }));
     win.once('ready-to-show', () => {
       // A bar rebuilt mid-way through keyboard switching (the Feng Shui skin
       // comes and goes with its layout) picks the keyboard straight back up.
-      if (this.barKeys) { win.show(); win.focus(); win.webContents.send('morrow:bar-keys', true); } else win.showInactive();
+      if (this.barKeys) { win.show(); win.focus(); win.webContents.send('fengshui:bar-keys', true); } else win.showInactive();
       native.setCornerRadius(win, H / 2);
       if (mode === 'desktop') native.setDesktopLevel(win, true);
     });

@@ -60,6 +60,6 @@ btn.addEventListener('click', () => {
   btn.classList.remove('spin');
   void btn.offsetWidth;
   btn.classList.add('spin');
-  window.morrow.fengShui();
+  window.fengshui.fengShui();
 });
-window.addEventListener('contextmenu', (e) => { e.preventDefault(); window.morrow.openSettings(); });
+window.addEventListener('contextmenu', (e) => { e.preventDefault(); window.fengshui.openSettings(); });

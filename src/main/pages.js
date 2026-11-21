@@ -1,8 +1,8 @@
 'use strict';
 
-// Custom Widget pages are copied into Morrow's data folder, like photos, so
+// Custom Widget pages are copied into Feng Shui's data folder, like photos, so
 // a widget keeps working if the original file moves. Pages run in their own
-// frame inside the widget and can't reach Morrow's settings or the network
+// frame inside the widget and can't reach Feng Shui's settings or the network
 // rules of the widget itself.
 
 const fs = require('fs');
