@@ -48,7 +48,7 @@ show or hide all widgets (⌥⌘W), add widgets, switch layouts and open setting
 - **Gallery:** add as many of each widget as you like.
 - **Layouts:** each layout keeps its own widgets, positions, sizes and styles.
 
-Widgets: Clock, Countdown, Random Number, Coin Flip, Stopwatch, App Launcher,
+Widgets: Clock, Countdown, Random Number, Stopwatch, App Launcher,
 Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget, Corkboard.
 
 ## Where things are saved
@@ -115,7 +115,25 @@ A framed cork board. Right-click to pin a note or a photo. Drag an item by its
 paper to move it and click its text to write. Click a pushpin to change its
 color, drag from a pushpin to another item to run a red string between them,
 and click a string to cut it. Hover the top-right corner to switch between
-portrait and landscape; everything on the board moves with it.
+portrait and landscape; everything on the board moves with it. Resizing the
+board scales everything pinned to it, so a smaller board keeps the whole case.
+
+## Styles
+
+Weather, App Launcher, World Clock, Photo, Films Watched and Stopwatch come
+with a few curated looks instead of a wall of options: pick one under Style in
+the widget's settings. The Photo looks are frames: Glass, Polaroid, Gallery
+Frame, Film Poster (the caption becomes the title) and Borderless.
+
+## Feng Shui
+
+The yin-yang in the lower-right corner of the desktop rebalances the current
+layout: the widget nearest the middle stays the heart, wide low widgets rest
+beneath it, small wide ones crown it, and the rest are shared between the
+left and right so both sides carry the same weight, with even spacing and
+nothing overlapping. Right-click it for settings. In General settings you can
+hide it, or swap the yin-yang for an ink dragon. The tray menu has the same
+action as Feng Shui This Layout.
 
 ## Custom Widget
 

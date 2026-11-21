@@ -59,7 +59,6 @@ module.exports = function selftest({ app, BrowserWindow, store, windows }) {
     results.clock = await run(ids.clock, `document.querySelector('.time').textContent`);
     results.countdown = await run(ids.countdown, `[...document.querySelectorAll('.tile .n')].map(e=>e.textContent).join(' ')`);
     await run(ids.random, `document.querySelectorAll('input.field')[0].value='-5'; document.querySelectorAll('input.field')[0].dispatchEvent(new Event('change')); document.querySelector('.pill.primary').click()`);
-    await run(ids.coin, `document.querySelector('.pill').click()`);
     await run(ids.stopwatch, `document.querySelectorAll('.controls .icon-btn')[1].click()`);
     await wait(1200);
     await run(ids.stopwatch, `document.querySelectorAll('.controls .icon-btn')[2].click()`);
@@ -68,11 +67,9 @@ module.exports = function selftest({ app, BrowserWindow, store, windows }) {
     results.weather = await run(ids.weather, `document.querySelector('.wx').innerText.replace(/\\n+/g, ' | ')`);
     results.worldclock = await run(ids.worldclock, `document.querySelector('.wc').innerText.replace(/\\n+/g, ' | ')`);
     results.random = await run(ids.random, `document.querySelector('.value').textContent`);
-    results.coin = await run(ids.coin, `document.querySelector('.result').textContent`);
     results.stopwatch = await run(ids.stopwatch, `document.querySelector('.time').textContent + ' laps=' + document.querySelectorAll('.lap').length`);
     results.saved = {
       random: store.widget(ids.random).config,
-      coin: store.widget(ids.coin).config.last,
     };
     // Resize through the store, as the settings sliders do, then check the window followed.
     store.updateWidget(ids.clock, { bounds: { width: 520, height: 240 } });

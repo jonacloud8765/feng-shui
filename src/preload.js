@@ -22,6 +22,7 @@ contextBridge.exposeInMainWorld('morrow', {
   gestureEnd: () => ipcRenderer.send('morrow:gesture-end'),
   contextMenu: (extra) => ipcRenderer.send('morrow:context-menu', extra),
   openSettings: (id) => ipcRenderer.send('morrow:open-settings', id),
+  fengShui: () => ipcRenderer.send('morrow:feng-shui'),
   copy: (text) => ipcRenderer.send('morrow:copy', text),
   stopwatch: (action) => ipcRenderer.invoke('morrow:stopwatch', action),
 

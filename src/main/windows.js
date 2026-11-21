@@ -35,6 +35,7 @@ const GAP = 12;
 // desktop showing around it. Such windows get no native blur or shadow.
 function paperNote(widget) {
   if (widget.type === 'cork') return true;
+  if (widget.type === 'image' && widget.config.frame && widget.config.frame !== 'glass') return true;
   return widget.type === 'note' && (widget.config.paper || 'butter') !== 'glass';
 }
 const materialOf = (widget) => (paperNote(widget) ? 'none' : widget.appearance.material);
@@ -62,6 +63,7 @@ class WidgetWindows {
   // Bring the visible set of windows in line with the active layout.
   sync({ fade = false } = {}) {
     const { settings } = this.store.doc;
+    this.syncFengShui();
     const wanted = new Map(this.store.widgets.filter((w) => w.visible).map((w) => [w.id, w]));
     for (const [id, win] of this.windows) {
       if (!wanted.has(id) || !settings.widgetsVisible) this.close(id, fade);
@@ -180,6 +182,35 @@ class WidgetWindows {
     const r = widget.appearance.radius;
     if (materialOf(widget) === 'none' || win.widgetRadius === r) return;
     if (native.setCornerRadius(win, r)) win.widgetRadius = r;
+  }
+
+  // The Feng Shui button: a small round window in the lower-right corner of
+  // the main display, on the same layer as the widgets.
+  syncFengShui() {
+    const { settings } = this.store.doc;
+    const fs = settings.fengShui || {};
+    const want = settings.widgetsVisible && fs.show !== false;
+    const icon = fs.icon === 'dragon' ? 'dragon' : 'yinyang';
+    const mode = this.mode;
+    let win = this.fengWin;
+    if (win && !win.isDestroyed() && (!want || win.fengIcon !== icon || win.fengMode !== mode)) { win.destroy(); win = this.fengWin = null; }
+    if (!want || (win && !win.isDestroyed())) return;
+    const a = screen.getPrimaryDisplay().workArea;
+    const size = 64;
+    win = this.fengWin = new BrowserWindow({
+      x: a.x + a.width - size - 14, y: a.y + a.height - size - 14, width: size, height: size,
+      show: false, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: false,
+      resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
+      skipTaskbar: true, acceptFirstMouse: true, type: mode === 'desktop-type' ? 'desktop' : undefined, title: 'Feng Shui',
+      webPreferences: { preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, sandbox: true },
+    });
+    win.fengIcon = icon;
+    win.fengMode = mode;
+    if (mode === 'float') win.setAlwaysOnTop(true, 'floating');
+    win.setVisibleOnAllWorkspaces(!!settings.allSpaces, { visibleOnFullScreen: false, skipTransformProcessType: true });
+    if (mode === 'desktop') native.setDesktopLevel(win, true);
+    win.loadFile(path.join(__dirname, '..', 'renderer', 'fengshui.html'), { query: { icon } });
+    win.once('ready-to-show', () => win.showInactive());
   }
 
   broadcast(channel, payload) {

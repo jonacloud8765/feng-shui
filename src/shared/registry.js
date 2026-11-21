@@ -74,6 +74,55 @@ const PRESETS = [
   { id: 'minimal', name: 'Minimal', appearance: { material: 'none', tint: '#000000', tintOpacity: 0, text: '#f5f1e8', accent: '#d8c3a0', highlight: 0, shadow: false } },
 ];
 
+// Curated looks for widgets that offer a few beautiful styles instead of
+// dozens of knobs. Each style sets the whole appearance (and sometimes a few
+// content options); the widget remembers which one is in use as config.style.
+const look = (material, tint, tintOpacity, text, accent, more = {}) => ({
+  material, tint, tintOpacity, text, accent, font: 'sf', infoFont: 'sf', weight: 300, scale: 1, align: 'center',
+  radius: 24, padding: 18, highlight: material === 'none' ? 0 : 0.5, shadow: material !== 'none', labels: true, ...more,
+});
+const CLEAR = (more) => look('none', '#000000', 0, '#ffffff', '#ffffff', { ...more });
+
+const STYLES = {
+  weather: [
+    { id: 'daylight', name: 'Daylight', appearance: look('popover', '#e8f1fa', 0.35, '#1c2a3a', '#3b7fc4', { highlight: 0.75, radius: 26 }) },
+    { id: 'nightfall', name: 'Nightfall', appearance: look('hud', '#0f1b33', 0.55, '#eef3fb', '#8fb8ff', { weight: 200, radius: 26 }) },
+    { id: 'dusk', name: 'Dusk', appearance: look('under-window', '#3a2238', 0.42, '#fbeee8', '#f3a37f', { font: 'didot', infoFont: 'avenir', radius: 26 }) },
+    { id: 'clear', name: 'Clear', appearance: CLEAR({ weight: 200 }) },
+  ],
+  launcher: [
+    { id: 'dock', name: 'Dock', appearance: look('under-window', '#d9dde5', 0.1, '#ffffff', '#ffffff', { highlight: 0.75, radius: 26 }), config: { iconSize: 48, spacing: 14, labels: false } },
+    { id: 'shelf', name: 'Shelf', appearance: look('popover', '#f4f1ea', 0.5, '#2a2620', '#9c7a46', { radius: 20, highlight: 0.8 }), config: { iconSize: 44, spacing: 18, labels: true } },
+    { id: 'floating', name: 'Floating', appearance: CLEAR(), config: { iconSize: 56, spacing: 22, labels: false } },
+    { id: 'tiles', name: 'Night Tiles', appearance: look('hud', '#15161a', 0.55, '#eeeeee', '#c9c9cf', { radius: 18 }), config: { iconSize: 40, spacing: 12, labels: true } },
+  ],
+  worldclock: [
+    { id: 'departures', name: 'Departures', appearance: look('hud', '#0b0b0c', 0.72, '#f3f0e6', '#f2c14e', { infoFont: 'mono', radius: 16 }) },
+    { id: 'atlas', name: 'Atlas', appearance: look('popover', '#f3ede1', 0.55, '#2b2620', '#9c7a46', { font: 'iowan', infoFont: 'avenir', highlight: 0.8 }) },
+    { id: 'midnight', name: 'Midnight', appearance: look('hud', '#0d1322', 0.38, '#f2ece0', '#d8c3a0', { font: 'didot' }) },
+    { id: 'clear', name: 'Clear', appearance: CLEAR({ weight: 200 }) },
+  ],
+  image: [
+    { id: 'glass', name: 'Glass', appearance: look('hud', '#0d1322', 0.2, '#fbf7ef', '#d8c3a0', { radius: 18, font: 'didot' }), config: { frame: 'glass' } },
+    { id: 'polaroid', name: 'Polaroid', appearance: CLEAR({ radius: 2 }), config: { frame: 'polaroid' } },
+    { id: 'gallery', name: 'Gallery Frame', appearance: CLEAR({ radius: 2 }), config: { frame: 'gallery' } },
+    { id: 'poster', name: 'Film Poster', appearance: CLEAR({ radius: 3 }), config: { frame: 'poster' } },
+    { id: 'bare', name: 'Borderless', appearance: CLEAR({ radius: 14 }), config: { frame: 'bare' } },
+  ],
+  watched: [
+    { id: 'letterboxd', name: 'Letterboxd', appearance: look('hud', '#14181c', 0.82, '#ffffff', '#00e054', { weight: 600, infoFont: 'sf' }) },
+    { id: 'marquee', name: 'Marquee', appearance: look('hud', '#0a0a0c', 0.72, '#f4ede1', '#e6b45e', { font: 'didot', infoFont: 'avenir' }) },
+    { id: 'ticket', name: 'Ticket Stub', appearance: look('popover', '#f4ead8', 0.78, '#3a2a1a', '#c0392b', { font: 'futura', infoFont: 'futura', weight: 400, radius: 10, highlight: 0.3 }) },
+    { id: 'clear', name: 'Clear', appearance: CLEAR({ weight: 200 }) },
+  ],
+  stopwatch: [
+    { id: 'chrono', name: 'Chrono', appearance: look('hud', '#101114', 0.7, '#f2f2f2', '#ff9f0a', { weight: 200 }) },
+    { id: 'lab', name: 'Lab', appearance: look('popover', '#f5f5f2', 0.6, '#1c1c1e', '#ff3b30', { highlight: 0.8 }) },
+    { id: 'neon', name: 'Neon', appearance: look('hud', '#07120c', 0.75, '#3dff7a', '#3dff7a', { infoFont: 'mono', font: 'mono' }) },
+    { id: 'clear', name: 'Clear', appearance: CLEAR({ weight: 200 }) },
+  ],
+};
+
 const TYPES = {
   clock: {
     name: 'Clock',
@@ -128,18 +177,6 @@ const TYPES = {
       { key: 'max', label: 'Maximum', type: 'number' },
     ],
   },
-  coin: {
-    name: 'Coin Flip',
-    description: 'Heads or tails, with a short honest flip.',
-    size: { width: 180, height: 200 },
-    min: { width: 110, height: 120 },
-    max: { width: 600, height: 600 },
-    config: { heads: 'Heads', tails: 'Tails', last: null },
-    fields: [
-      { key: 'heads', label: 'Heads label', type: 'text' },
-      { key: 'tails', label: 'Tails label', type: 'text' },
-    ],
-  },
   launcher: {
     name: 'App Launcher',
     description: 'Your chosen apps as real icons. Click to open.',
@@ -149,10 +186,6 @@ const TYPES = {
     config: { apps: [], columns: 5, iconSize: 44, spacing: 14, labels: false },
     fields: [
       { key: 'apps', label: 'Apps', type: 'apps' },
-      { key: 'columns', label: 'Columns', type: 'range', min: 1, max: 14 },
-      { key: 'iconSize', label: 'Icon size', type: 'range', min: 20, max: 128 },
-      { key: 'spacing', label: 'Spacing', type: 'range', min: 0, max: 48 },
-      { key: 'labels', label: 'Show names', type: 'toggle' },
     ],
   },
   weather: {
@@ -165,7 +198,6 @@ const TYPES = {
     fields: [
       { key: 'location', label: 'Location', type: 'city' },
       { key: 'unit', label: 'Units', type: 'select', options: { C: 'Celsius', F: 'Fahrenheit' } },
-      { key: 'hourly', label: 'Hourly forecast when there’s room', type: 'toggle' },
     ],
   },
   worldclock: {
@@ -178,9 +210,6 @@ const TYPES = {
     fields: [
       { key: 'cities', label: 'Cities', type: 'cities' },
       { key: 'hour12', label: '12-hour time', type: 'toggle' },
-      { key: 'showOffset', label: 'Show UTC offset', type: 'toggle' },
-      { key: 'showWeather', label: 'Show weather', type: 'toggle' },
-      { key: 'unit', label: 'Units', type: 'select', options: { C: 'Celsius', F: 'Fahrenheit' } },
     ],
   },
   note: {
@@ -208,14 +237,12 @@ const TYPES = {
     size: { width: 300, height: 220 },
     min: { width: 80, height: 80 },
     max: { width: 1800, height: 1400 },
-    config: { file: '', name: '', aspect: null, fit: 'cover', filter: 'none', caption: '', inset: 0 },
+    config: { file: '', name: '', aspect: null, fit: 'cover', filter: 'none', caption: '', inset: 0, frame: 'glass' },
     appearance: { radius: 18 },
     fields: [
       { key: 'file', label: 'Photo', type: 'image' },
-      { key: 'fit', label: 'Fit', type: 'select', options: { cover: 'Fill the frame', contain: 'Show the whole photo' } },
       { key: 'filter', label: 'Tone', type: 'select', options: { none: 'Natural', mono: 'Black and white', warm: 'Warm', cool: 'Cool', fade: 'Faded film' } },
-      { key: 'inset', label: 'Frame', type: 'range', min: 0, max: 24 },
-      { key: 'caption', label: 'Caption', type: 'text', placeholder: 'Optional' },
+      { key: 'caption', label: 'Caption', type: 'text', placeholder: 'Optional', hint: 'On a Film Poster this is the title.' },
     ],
   },
   films: {
@@ -247,8 +274,6 @@ const TYPES = {
     fields: [
       { key: 'username', label: 'Letterboxd username', type: 'text', placeholder: 'Your public username' },
       { key: 'goal', label: 'Goal', type: 'number', placeholder: 'None', hint: 'A target count shows a progress bar. Leave at 0 for none.' },
-      { key: 'label', label: 'Label', type: 'text', placeholder: 'films watched' },
-      { key: 'showUser', label: 'Show username', type: 'toggle' },
     ],
   },
   cork: {
@@ -257,7 +282,7 @@ const TYPES = {
     size: { width: 560, height: 440 },
     min: { width: 260, height: 200 },
     max: { width: 1800, height: 1400 },
-    config: { items: [], strings: [], font: 'scrawl', size: 16 },
+    config: { items: [], strings: [], font: 'scrawl', size: 16, boardW: 0, boardH: 0 },
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 8, padding: 0 },
     fields: [
       { key: 'font', label: 'Note font', type: 'notefont' },
@@ -286,4 +311,6 @@ const TYPES = {
   },
 };
 
-module.exports = { TYPES, FONTS, NOTE_FONTS, MATERIALS, PRESETS, DEFAULT_APPEARANCE };
+for (const [type, list] of Object.entries(STYLES)) TYPES[type].styles = list;
+
+module.exports = { TYPES, STYLES, FONTS, NOTE_FONTS, MATERIALS, PRESETS, DEFAULT_APPEARANCE };

@@ -1,0 +1,28 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:">
+  <title>Feng Shui</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; user-select: none; -webkit-user-select: none; }
+    button {
+      position: absolute; inset: 6px; border: 0; padding: 0; border-radius: 50%; background: none; cursor: default;
+      filter: drop-shadow(0 3px 6px rgba(0,0,0,0.35)); transition: transform 0.25s cubic-bezier(.2,.8,.2,1);
+    }
+    button:hover { transform: scale(1.07); }
+    button:active { transform: scale(0.94); }
+    svg { width: 100%; height: 100%; display: block; }
+    .spin svg { animation: spin 1.1s cubic-bezier(.45,0,.2,1); }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .tip {
+      position: absolute; right: 4px; bottom: 100%; white-space: nowrap; font: 500 11px system-ui; color: #fff;
+      background: rgba(20,20,22,0.85); padding: 4px 8px; border-radius: 6px; opacity: 0; transition: opacity 0.2s;
+    }
+  </style>
+</head>
+<body>
+  <button id="b" title="Feng Shui: bring balance to this layout" aria-label="Feng Shui: rearrange the widgets in this layout"></button>
+  <script src="fengshui.js"></script>
+</body>
+</html>

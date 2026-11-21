@@ -67,6 +67,7 @@ const css = `
     radial-gradient(120% 90% at 30% 20%, #c99a68, #b4824f 60%, #a2713f);
   box-shadow: inset 0 2px 5px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.25), inset 0 0 40px rgba(60,30,10,0.25);
 }
+.cork .layer { position: absolute; left: 0; top: 0; transform-origin: 0 0; }
 .cork .item {
   position: absolute; transform-origin: 50% 0; cursor: grab;
   box-shadow: 0 0 0 0.5px rgba(0,0,0,0.08), 0 1px 1.5px rgba(0,0,0,0.22), 0 4px 8px -2px rgba(0,0,0,0.2), 0 14px 22px -10px rgba(0,0,0,0.42);
@@ -147,6 +148,19 @@ export function mount(root, ctx) {
   root.style.padding = '0';
   document.documentElement.classList.add('paper-note');
   const board = h('div.cork');
+  // Everything pinned lives on a layer drawn at the board's own size and
+  // scaled to fit, so a smaller or larger corkboard keeps its whole case.
+  const layer = h('div.layer');
+  board.append(layer);
+  let scale = 1;
+  const design = () => ({ w: ctx.config.boardW || board.clientWidth, h: ctx.config.boardH || board.clientHeight });
+  function fitLayer() {
+    const d = design();
+    if (!d.w || !d.h || !board.clientWidth) return;
+    scale = Math.min(board.clientWidth / d.w, board.clientHeight / d.h);
+    const ox = (board.clientWidth - d.w * scale) / 2, oy = (board.clientHeight - d.h * scale) / 2;
+    Object.assign(layer.style, { width: `${d.w}px`, height: `${d.h}px`, transform: `translate(${ox}px, ${oy}px) scale(${scale})` });
+  }
   const orientBtn = (cls, tip, portrait) => h(`button.${cls}`, { title: tip, 'aria-label': tip, 'data-interactive': '', onmousedown: (e) => e.stopPropagation(), onclick: () => orient(portrait) }, h('i'));
   const orientBar = h('div.orient', { 'data-interactive': '' }, orientBtn('p', 'Portrait', true), orientBtn('l', 'Landscape', false));
   const wrap = h('div.corkwrap', {}, h('div.cork-frame'), board, orientBar);
@@ -229,14 +243,14 @@ export function mount(root, ctx) {
     e.stopPropagation();
     // Bring to the front.
     items = [...items.filter((i) => i !== it), it];
-    board.insertBefore(els.get(it.id), strSvg);
+    layer.insertBefore(els.get(it.id), strSvg);
     const el = els.get(it.id);
     el.classList.add('dragging');
     const sx = e.clientX, sy = e.clientY, ox = it.x, oy = it.y;
-    const bw = board.clientWidth, bh = board.clientHeight;
+    const { w: bw, h: bh } = design();
     const move = (ev) => {
-      it.x = Math.round(Math.min(bw - 30, Math.max(-it.w + 30, ox + ev.clientX - sx)));
-      it.y = Math.round(Math.min(bh - 30, Math.max(0, oy + ev.clientY - sy)));
+      it.x = Math.round(Math.min(bw - 30, Math.max(-it.w + 30, ox + (ev.clientX - sx) / scale)));
+      it.y = Math.round(Math.min(bh - 30, Math.max(0, oy + (ev.clientY - sy) / scale)));
       place(it);
       drawStrings();
     };
@@ -255,12 +269,12 @@ export function mount(root, ctx) {
     e.preventDefault();
     e.stopPropagation();
     const sx = e.clientX, sy = e.clientY;
-    const box = board.getBoundingClientRect();
+    const box = layer.getBoundingClientRect();
     let tying = false;
     const move = (ev) => {
       if (!tying && Math.hypot(ev.clientX - sx, ev.clientY - sy) < 5) return;
       tying = true;
-      drawStrings({ a: pinPoint(it), b: { x: ev.clientX - box.left, y: ev.clientY - box.top } });
+      drawStrings({ a: pinPoint(it), b: { x: (ev.clientX - box.left) / scale, y: (ev.clientY - box.top) / scale } });
     };
     const up = (ev) => {
       window.removeEventListener('mousemove', move);
@@ -294,7 +308,7 @@ export function mount(root, ctx) {
     const focused = document.activeElement?.closest?.('[data-item]')?.dataset.item;
     if (focused) return; // never rebuild under the cursor while typing
     els.clear();
-    board.replaceChildren();
+    layer.replaceChildren();
     pinLayer.replaceChildren();
     for (const it of items) {
       let el;
@@ -327,12 +341,12 @@ export function mount(root, ctx) {
       pin.addEventListener('mousedown', (e) => pinDown(e, it));
       el.pinEl = pin;
       els.set(it.id, el);
-      board.append(el);
+      layer.append(el);
       pinLayer.append(pin);
       place(it);
     }
-    board.append(strSvg, pinLayer);
-    if (!items.length) board.append(h('div.empty', {}, 'Right-click to pin a note or a photo.'));
+    layer.append(strSvg, pinLayer);
+    if (!items.length) layer.append(h('div.empty', {}, 'Right-click to pin a note or a photo.'));
     drawStrings();
   }
 
@@ -341,6 +355,9 @@ export function mount(root, ctx) {
     const fonts = ctx.registry.FONTS;
     wrap.style.setProperty('--note-font', (fonts[c.font] || fonts.scrawl).stack);
     wrap.style.setProperty('--note-size', `${c.size}px`);
+    // Boards made before scaling existed are drawn at the size they are now.
+    if (!c.boardW && board.clientWidth) ctx.setConfig({ boardW: board.clientWidth, boardH: board.clientHeight });
+    fitLayer();
     const next = JSON.stringify([c.items, c.strings]);
     if (next === JSON.stringify([items, strings])) return;
     items = (c.items || []).map((i) => ({ ...i }));
@@ -369,7 +386,6 @@ export function mount(root, ctx) {
 
   // Portrait / landscape: swap the board's sides and spread everything
   // pinned on it proportionally into the new shape.
-  const FRAME_W = 44, FRAME_H = 48; // window minus the cork's visible area
   function markOrient() {
     const portrait = window.innerHeight >= window.innerWidth;
     orientBar.children[0].classList.toggle('on', portrait);
@@ -379,19 +395,19 @@ export function mount(root, ctx) {
     const b = { ...ctx.widget.bounds };
     if ((b.height >= b.width) === portrait) return;
     const nb = { ...b, width: b.height, height: b.width };
-    const ow = b.width - FRAME_W, oh = b.height - FRAME_H;
-    const nw = nb.width - FRAME_W, nh = nb.height - FRAME_H;
+    const { w: ow, h: oh } = design();
+    const nw = oh, nh = ow;
     for (const it of items) {
       const cx = (it.x + it.w / 2) / ow, cy = (it.y + it.h / 2) / oh;
       it.x = Math.round(Math.min(nw - it.w, Math.max(0, cx * nw - it.w / 2)));
       it.y = Math.round(Math.min(nh - it.h, Math.max(0, cy * nh - it.h / 2)));
     }
-    ctx.setConfig({ items: items.map((i) => ({ ...i })), strings: strings.map((x) => ({ ...x })) });
+    ctx.setConfig({ items: items.map((i) => ({ ...i })), strings: strings.map((x) => ({ ...x })), boardW: nw, boardH: nh });
     ctx.api.updateWidget(ctx.widget.id, { bounds: nb });
     for (const it of items) place(it);
     drawStrings();
   }
-  window.addEventListener('resize', () => { markOrient(); drawStrings(); });
+  window.addEventListener('resize', () => { markOrient(); fitLayer(); drawStrings(); });
   markOrient();
 
   load();

@@ -14,12 +14,11 @@ let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
 
-const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', coin: '◐', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌' };
+const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌' };
 const ART = {
   clock: ['10:42', 'Thursday · October 9'],
   countdown: ['48', 'days to go'],
   random: ['27', '1 – 100'],
-  coin: ['◐', 'heads'],
   stopwatch: ['01:24.6', 'lap 3'],
   launcher: ['⌘', 'your apps'],
   weather: ['18°', 'partly cloudy'],
@@ -199,7 +198,6 @@ function summary(w) {
     }
     case 'clock': return `${c.hour12 ? '12' : '24'}-hour${c.seconds ? ', seconds' : ''}`;
     case 'random': return `${c.min} – ${c.max}`;
-    case 'coin': return `${c.heads} / ${c.tails}`;
     case 'weather': return c.location ? c.location.name : 'No location chosen';
     case 'worldclock': return c.cities.length ? c.cities.map((x) => x.name).join(', ') : 'No cities yet';
     case 'note': {
@@ -259,7 +257,34 @@ function inspector(w) {
     ),
   ];
 
+  // Widgets with curated styles show those instead of the full look editor.
+  if (t.styles) return h('div', {}, head, ...content, ...styleEditor(w, t), ...size);
   return h('div', {}, head, ...content, ...appearanceEditor(w.appearance, (patch) => editWidget(w.id, { appearance: patch }), { imageSupport: t.imageSupport, widget: w, size }));
+}
+
+function styleEditor(w, t) {
+  const F = registry.FONTS;
+  const current = w.config.style || t.styles[0].id;
+  const FRAMES = {
+    polaroid: { background: '#fbfaf6', boxShadow: 'inset 0 -14px 0 #fbfaf6, 0 2px 6px rgba(0,0,0,0.25)', border: '5px solid #fbfaf6', borderBottomWidth: '14px' },
+    gallery: { background: '#e9e4da', border: '5px solid #1b1714', boxShadow: 'inset 0 0 0 5px #f6f2ea, 0 2px 6px rgba(0,0,0,0.3)' },
+    poster: { background: 'linear-gradient(180deg, #2b3a4a, #0d0f12)', border: '1px solid #000' },
+    bare: { background: 'linear-gradient(135deg, #8a9bb0, #3b4656)' },
+  };
+  const cards = t.styles.map((st) => {
+    const ap = st.appearance;
+    const frame = st.config && FRAMES[st.config.frame];
+    const sw = frame || { background: ap.tintOpacity > 0.02 ? ap.tint : 'linear-gradient(135deg, #8a8f99, #3c4049)', color: ap.text };
+    return h(`button.look${current === st.id ? '.on' : ''}`, {
+      title: `Use the ${st.name} style`,
+      onclick: () => { editWidget(w.id, { appearance: { ...st.appearance }, config: { ...(st.config || {}), style: st.id } }); render(); },
+    },
+      h('span.swatch', { style: { ...sw, color: frame ? (st.config.frame === 'poster' ? '#f4ede1' : '#333') : ap.text } },
+        h('span.aa', { style: { fontFamily: (F[ap.font] || F.sf).stack } }, frame ? '' : 'Aa'),
+        frame ? null : h('span.dot', { style: { background: ap.accent } })),
+      h('span.name', {}, st.name));
+  });
+  return [h('h2', {}, 'Style'), h('div.looks', {}, ...cards)];
 }
 
 function matches(f, config) {
@@ -707,6 +732,13 @@ function generalPage() {
       row('Snap to edges and other widgets', toggle(s.snapping, (v) => editSettings({ snapping: v }), 'Snapping')),
       row('Lock positions', toggle(s.locked, (v) => editSettings({ locked: v }), 'Lock positions'), 'Prevents accidental moves and resizes.'),
       row('Show widgets', toggle(s.widgetsVisible, (v) => { editSettings({ widgetsVisible: v }); render(); }, 'Show widgets'), 'Shortcut: ⌥⌘W while Morrow is active, or the menu bar icon.'),
+    ),
+    h('h2', {}, 'Feng Shui'),
+    h('div.group', {},
+      row('Feng Shui button', toggle(s.fengShui?.show !== false, (v) => { editSettings({ fengShui: { ...(s.fengShui || {}), show: v } }); render(); }, 'Feng Shui button'),
+        'A button in the lower-right corner of the screen. Click it and the widgets in this layout rearrange into a calm, balanced composition.'),
+      row('Button', segmented(s.fengShui?.icon === 'dragon' ? 'dragon' : 'yinyang', { yinyang: '☯ Yin-yang', dragon: '龍 Dragon' }, (v) => { editSettings({ fengShui: { ...(s.fengShui || {}), icon: v } }); render(); })),
+      row('Rearrange now', h('button.btn', { onclick: () => api.fengShui() }, 'Feng Shui')),
     ),
     h('h2', {}, 'App'),
     h('div.group', {},

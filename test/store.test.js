@@ -57,7 +57,7 @@ test('outdated or partial data is filled in, unknown widget types dropped', () =
 
 test('layouts keep separate widgets; duplicate copies with new ids', () => {
   const s = new Store(tmp());
-  const w = s.addWidget('coin', { x: 1, y: 1, width: 150, height: 150 });
+  const w = s.addWidget('random', { x: 1, y: 1, width: 150, height: 150 });
   const first = s.layout.id;
   const copy = s.createLayout('Work', first);
   assert.equal(copy.widgets.length, 1);

@@ -53,6 +53,14 @@ function openSettings(focusWidgetId) {
   settingsWin.on('closed', () => { settingsWin = null; });
 }
 
+// Feng Shui: rearrange the visible widgets of the current layout into balance.
+function fengShui() {
+  if (store.doc.settings.locked) return;
+  const widgets = store.widgets.filter((w) => w.visible).map((w) => ({ id: w.id, bounds: w.bounds, min: registry.TYPES[w.type].min }));
+  const placed = require('./fengshui').arrange(widgets, screen.getPrimaryDisplay().workArea);
+  for (const [id, bounds] of Object.entries(placed)) store.updateWidget(id, { bounds });
+}
+
 function sendDoc() {
   if (settingsWin && !settingsWin.isDestroyed()) settingsWin.webContents.send('morrow:doc', store.doc);
 }
@@ -135,6 +143,7 @@ function rebuildTray() {
       : []),
     { label: 'Add Widget', submenu: addWidgetMenu() },
     { label: 'Layout', submenu: layoutMenu() },
+    { label: 'Feng Shui This Layout', click: () => fengShui() },
     { type: 'separator' },
     { label: 'Open Morrow…', accelerator: 'Command+,', click: () => openSettings() },
     { type: 'separator' },
@@ -226,6 +235,7 @@ function registerIpc() {
     widgetContextMenu(id, items);
   });
   ipcMain.on('morrow:open-settings', (e, id) => openSettings(id));
+  ipcMain.on('morrow:feng-shui', () => fengShui());
   ipcMain.on('morrow:copy', (e, text) => clipboard.writeText(String(text)));
   ipcMain.handle('morrow:stopwatch', (e, action) => {
     const id = senderWidgetId(e);
@@ -376,7 +386,7 @@ app.whenReady().then(() => {
     store.addWidget('clock', { x: right - 360, y: area.y + 24, width: 360, height: 180 });
     const cd = store.addWidget('countdown', { x: right - 360, y: area.y + 216, width: 174, height: 150 });
     store.updateWidget(cd.id, { config: { title: 'New Year', target: `${new Date().getFullYear() + 1}-01-01T00:00`, layout: 'days' } });
-    store.addWidget('coin', { x: right - 174, y: area.y + 216, width: 150, height: 150 });
+    store.addWidget('random', { x: right - 174, y: area.y + 216, width: 150, height: 150 });
     openSettings();
   }
 
