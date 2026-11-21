@@ -14,7 +14,7 @@ let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
 
-const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐', doughcon: '5', neh: '33' };
+const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐', doughcon: '5', neh: '33', nuke: '☢' };
 const ART = {
   clock: ['10:42', 'Thursday · October 9'],
   countdown: ['48', 'days to go'],
@@ -32,6 +32,7 @@ const ART = {
   board: ['✐', 'marker or chalk'],
   doughcon: ['5', 'DEFCON 5'],
   neh: ['33', 'nothing ever happens'],
+  nuke: ['☢', 'launch.exe'],
 };
 
 const PAGES = [
@@ -212,6 +213,7 @@ function summary(w) {
     case 'page': return c.name || 'No file chosen';
     case 'doughcon': return 'Live from PizzINT Watch';
     case 'neh': return 'Live from PizzINT Watch';
+    case 'nuke': return 'Click to open launch.exe';
     case 'board': return { white: 'Whiteboard', green: 'Green chalkboard', black: 'Black chalkboard' }[c.surface] || 'Whiteboard';
     case 'watched': return c.username ? `@${c.username}` : 'No Letterboxd user';
     case 'image': return c.file ? (c.caption || c.name || 'Photo') : 'No photo yet';
@@ -739,8 +741,10 @@ function generalPage() {
       row('Lock positions', toggle(s.locked, (v) => editSettings({ locked: v }), 'Lock positions'), 'Prevents accidental moves and resizes.'),
       row('Show widgets', toggle(s.widgetsVisible, (v) => { editSettings({ widgetsVisible: v }); render(); }, 'Show widgets'), 'Shortcut: ⌥⌘W while Morrow is active, or the menu bar icon.'),
     ),
-    h('h2', {}, 'Feng Shui'),
+    h('h2', {}, 'Layouts and Feng Shui'),
     h('div.group', {},
+      row('Layout bar', toggle(s.bar?.show !== false, (v) => { editSettings({ bar: { show: v } }); render(); }, 'Layout bar'),
+        'A small switcher in the top-right corner with every layout, and a button to save the current one as a new layout.'),
       row('Feng Shui button', toggle(s.fengShui?.show !== false, (v) => { editSettings({ fengShui: { ...(s.fengShui || {}), show: v } }); render(); }, 'Feng Shui button'),
         'A button in the lower-right corner of the screen. Click it and the widgets in this layout rearrange into a calm, balanced composition.'),
       row('Button', segmented(s.fengShui?.icon === 'dragon' ? 'dragon' : 'yinyang', { yinyang: '☯ Yin-yang', dragon: '龍 Dragon' }, (v) => { editSettings({ fengShui: { ...(s.fengShui || {}), icon: v } }); render(); })),

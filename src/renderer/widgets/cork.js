@@ -125,8 +125,48 @@ const css = `
 .corkwrap .orient .p i { width: 8px; height: 11px; }
 .corkwrap .orient .l i { width: 12px; height: 8px; }
 .corkwrap .orient button.on { background: rgba(255,240,220,0.22); }
+.cork .item { --sx: 0px; --sy: 4px; }
+.corkwrap.lit .cork .item, .corkwrap.dark .cork .item {
+  box-shadow: 0 0 0 0.5px rgba(0,0,0,0.1), calc(var(--sx) * 0.4) calc(var(--sy) * 0.4) 2px rgba(0,0,0,0.3), var(--sx) var(--sy) 9px rgba(0,0,0,0.38), calc(var(--sx) * 2) calc(var(--sy) * 2) 20px -4px rgba(0,0,0,0.42); }
+.corkwrap.dark .cork .item { box-shadow: 0 0 0 0.5px rgba(0,0,0,0.1), 0 1px 3px rgba(0,0,0,0.3); }
+.corkwrap.locked .cork .item, .corkwrap.locked .cork .pin { cursor: default; }
+.corkwrap.locked .cork .item .x, .corkwrap.locked .orient { display: none; }
+.corkwrap.locked .cork .pin, .corkwrap.locked .cork svg.strings path.hit { pointer-events: none !important; }
+/* The desk lamp and the light it throws. */
+.corkwrap .room { position: absolute; inset: 0; border-radius: 7px; pointer-events: none; z-index: 5; transition: background .35s ease, opacity .35s ease; }
+.corkwrap.lit .room { background:
+  radial-gradient(circle at var(--lx) var(--ly), rgba(255,238,196,0.42) 0, rgba(255,222,160,0.18) 22%, rgba(255,210,150,0) 48%),
+  radial-gradient(circle at var(--lx) var(--ly), rgba(0,0,0,0) 34%, rgba(12,9,6,0.32) 66%, rgba(8,6,4,0.66) 100%); }
+.corkwrap.dark .room { background: radial-gradient(circle at var(--lx) var(--ly), rgba(14,18,30,0.55), rgba(6,8,14,0.80) 75%); }
+.corkwrap.haslamp { top: 62px; }
+.corkwrap .lamp { position: absolute; right: 4%; top: -68px; width: 30%; max-width: 230px; aspect-ratio: 200 / 150; z-index: 7; cursor: pointer; filter: drop-shadow(0 6px 8px rgba(0,0,0,0.55)); }
+.corkwrap .lamp svg { width: 100%; height: 100%; overflow: visible; display: block; }
+.corkwrap .lamp .halo { opacity: 0; transition: opacity .3s ease; }
+.corkwrap.lit .lamp .halo { opacity: 1; }
+.corkwrap .lamp .bulb { fill: #6d6a63; transition: fill .3s ease; }
+.corkwrap.lit .lamp .bulb { fill: #fff8e2; }
 .cork .empty { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(40,20,5,0.55); font: 500 13px system-ui; text-align: center; pointer-events: none; }
 `;
+
+const LAMP = `<svg viewBox="0 0 200 150" aria-hidden="true">
+  <defs>
+    <radialGradient id="lh" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff6d8" stop-opacity="0.95"/><stop offset="0.35" stop-color="#ffd98a" stop-opacity="0.45"/><stop offset="1" stop-color="#ffd98a" stop-opacity="0"/></radialGradient>
+    <linearGradient id="ls" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#3b3e44"/><stop offset="0.45" stop-color="#17191c"/><stop offset="1" stop-color="#050506"/></linearGradient>
+    <linearGradient id="la" x1="0" x2="1"><stop offset="0" stop-color="#2a2c30"/><stop offset="0.5" stop-color="#55585e"/><stop offset="1" stop-color="#1a1b1e"/></linearGradient>
+  </defs>
+  <ellipse class="halo" cx="86" cy="78" rx="70" ry="44" fill="url(#lh)"/>
+  <path d="M206 -6 L150 34" stroke="url(#la)" stroke-width="7" stroke-linecap="round"/>
+  <path d="M150 34 L120 22" stroke="url(#la)" stroke-width="6" stroke-linecap="round"/>
+  <circle cx="150" cy="34" r="6" fill="#2b2d31" stroke="#5a5d63" stroke-width="1.2"/>
+  <circle cx="120" cy="22" r="5" fill="#2b2d31" stroke="#5a5d63" stroke-width="1.2"/>
+  <g transform="rotate(-14 86 46)">
+    <path d="M38 70 C 40 40, 58 20, 86 18 C 114 20, 132 40, 134 70 Z" fill="url(#ls)"/>
+    <path d="M52 36 C 62 26, 74 22, 86 21" stroke="rgba(255,255,255,0.35)" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+    <rect x="80" y="10" width="12" height="10" rx="2" fill="#2b2d31"/>
+    <ellipse cx="86" cy="70" rx="48" ry="7.5" fill="#0b0b0c"/>
+    <ellipse class="bulb" cx="86" cy="70.5" rx="30" ry="5.2"/>
+  </g>
+</svg>`;
 
 const uid = () => Math.random().toString(36).slice(2, 10);
 
@@ -163,8 +203,40 @@ export function mount(root, ctx) {
   }
   const orientBtn = (cls, tip, portrait) => h(`button.${cls}`, { title: tip, 'aria-label': tip, 'data-interactive': '', onmousedown: (e) => e.stopPropagation(), onclick: () => orient(portrait) }, h('i'));
   const orientBar = h('div.orient', { 'data-interactive': '' }, orientBtn('p', 'Portrait', true), orientBtn('l', 'Landscape', false));
-  const wrap = h('div.corkwrap', {}, h('div.cork-frame'), board, orientBar);
+  const room = h('div.room');
+  const lamp = h('div.lamp', { 'data-interactive': '', title: 'Click to switch the lamp on or off', html: LAMP, onmousedown: (e) => e.stopPropagation(), onclick: () => ctx.setConfig({ lamp: ctx.config.lamp === 'on' ? 'off' : 'on' }) });
+  const wrap = h('div.corkwrap', {}, h('div.cork-frame'), board, orientBar, room, lamp);
   root.append(wrap);
+  const locked = () => !!ctx.config.locked;
+
+  // Light from the lamp's bulb: the room around it falls dark, and every
+  // note and photo casts its shadow away from the bulb.
+  function light() {
+    const mode = ctx.config.lamp;
+    wrap.classList.toggle('lit', mode === 'on');
+    wrap.classList.toggle('dark', mode === 'off');
+    lamp.style.display = mode === 'on' || mode === 'off' ? '' : 'none';
+    wrap.classList.toggle('haslamp', !lamp.style.display);
+    fitLayer();
+    room.style.display = lamp.style.display;
+    if (lamp.style.display === 'none') return;
+    const bulb = lamp.querySelector('.bulb').getBoundingClientRect();
+    const w = room.getBoundingClientRect();
+    const bx = bulb.left + bulb.width / 2, by = bulb.top + bulb.height / 2 + 6;
+    room.style.setProperty('--lx', `${bx - w.left}px`);
+    room.style.setProperty('--ly', `${by - w.top}px`);
+    const lr = layer.getBoundingClientRect();
+    const lx = (bx - lr.left) / scale, ly = (by - lr.top) / scale;
+    for (const it of items) {
+      const el = els.get(it.id);
+      if (!el) continue;
+      const dx = it.x + it.w / 2 - lx, dy = it.y + it.h / 2 - ly;
+      const d = Math.hypot(dx, dy) || 1;
+      const k = Math.min(16, 4 + d * 0.012);
+      el.style.setProperty('--sx', `${((dx / d) * k).toFixed(1)}px`);
+      el.style.setProperty('--sy', `${((dy / d) * k).toFixed(1)}px`);
+    }
+  }
 
   let items = [];
   let strings = [];
@@ -238,7 +310,7 @@ export function mount(root, ctx) {
   }
 
   function startDrag(e, it) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || locked()) return;
     e.preventDefault();
     e.stopPropagation();
     // Bring to the front.
@@ -265,7 +337,7 @@ export function mount(root, ctx) {
   }
 
   function pinDown(e, it) {
-    if (e.button !== 0) return;
+    if (e.button !== 0 || locked()) return;
     e.preventDefault();
     e.stopPropagation();
     const sx = e.clientX, sy = e.clientY;
@@ -313,12 +385,12 @@ export function mount(root, ctx) {
     for (const it of items) {
       let el;
       if (it.kind === 'photo') {
-        const cap = h('div.cap', { contenteditable: 'true', spellcheck: 'false' }, it.caption || '');
+        const cap = h('div.cap', { contenteditable: locked() ? 'false' : 'true', spellcheck: 'false' }, it.caption || '');
         cap.addEventListener('input', () => { it.caption = cap.textContent; save(); });
         el = h('div.item.photo-item', { 'data-item': it.id, 'data-interactive': '' }, h('img', { src: fileUrl(it.file), alt: '' }), cap);
       } else {
         const p = PAPERS[it.paper] || PAPERS.butter;
-        const text = h('div.text', { contenteditable: 'true', spellcheck: 'true', html: clean(it.html || '') });
+        const text = h('div.text', { contenteditable: locked() ? 'false' : 'true', spellcheck: 'true', html: clean(it.html || '') });
         text.addEventListener('input', () => { it.html = clean(text.innerHTML); save(); });
         text.addEventListener('blur', () => save(true));
         text.addEventListener('keydown', (e) => {
@@ -348,6 +420,7 @@ export function mount(root, ctx) {
     layer.append(strSvg, pinLayer);
     if (!items.length) layer.append(h('div.empty', {}, 'Right-click to pin a note or a photo.'));
     drawStrings();
+    light();
   }
 
   function load() {
@@ -358,8 +431,10 @@ export function mount(root, ctx) {
     // Boards made before scaling existed are drawn at the size they are now.
     if (!c.boardW && board.clientWidth) ctx.setConfig({ boardW: board.clientWidth, boardH: board.clientHeight });
     fitLayer();
+    const wasLocked = wrap.classList.contains('locked');
+    wrap.classList.toggle('locked', locked());
     const next = JSON.stringify([c.items, c.strings]);
-    if (next === JSON.stringify([items, strings])) return;
+    if (next === JSON.stringify([items, strings]) && wasLocked === locked()) { light(); return; }
     items = (c.items || []).map((i) => ({ ...i }));
     strings = (c.strings || []).map((s) => ({ ...s }));
     build();
@@ -407,7 +482,7 @@ export function mount(root, ctx) {
     for (const it of items) place(it);
     drawStrings();
   }
-  window.addEventListener('resize', () => { markOrient(); fitLayer(); drawStrings(); });
+  window.addEventListener('resize', () => { markOrient(); fitLayer(); drawStrings(); light(); });
   markOrient();
 
   load();
@@ -415,12 +490,15 @@ export function mount(root, ctx) {
     noDoubleClickSettings: true,
     update: load,
     menu: () => [
-      { label: 'Add Note', action: 'note' },
-      { label: 'Add Photo…', action: 'photo' },
-      ...(strings.length ? [{ label: 'Cut All Strings', action: 'cut' }] : []),
+      ...(locked() ? [] : [{ label: 'Add Note', action: 'note' }, { label: 'Add Photo…', action: 'photo' }]),
+      ...(strings.length && !locked() ? [{ label: 'Cut All Strings', action: 'cut' }] : []),
+      { label: 'Lock the Board', type: 'checkbox', checked: locked(), action: 'lock' },
+      { label: 'Desk Lamp', type: 'checkbox', checked: ctx.config.lamp === 'on' || ctx.config.lamp === 'off', action: 'lamp' },
     ],
     menuAction: (a) => {
-      if (a === 'note') addNote();
+      if (a === 'lock') ctx.setConfig({ locked: !locked() });
+      else if (a === 'lamp') ctx.setConfig({ lamp: ctx.config.lamp === 'on' || ctx.config.lamp === 'off' ? 'none' : 'on' });
+      else if (a === 'note') addNote();
       else if (a === 'photo') addPhoto();
       else if (a === 'cut') { strings = []; drawStrings(); save(true); }
     },

@@ -23,6 +23,11 @@ contextBridge.exposeInMainWorld('morrow', {
   contextMenu: (extra) => ipcRenderer.send('morrow:context-menu', extra),
   openSettings: (id) => ipcRenderer.send('morrow:open-settings', id),
   fengShui: () => ipcRenderer.send('morrow:feng-shui'),
+  onBar: on('morrow:bar'),
+  barSize: (w) => ipcRenderer.send('morrow:bar-size', w),
+  barFocus: () => ipcRenderer.send('morrow:bar-focus'),
+  openNuke: () => ipcRenderer.send('morrow:nuke-open'),
+  saveLayout: (name) => ipcRenderer.send('morrow:save-layout', name),
   copy: (text) => ipcRenderer.send('morrow:copy', text),
   stopwatch: (action) => ipcRenderer.invoke('morrow:stopwatch', action),
 

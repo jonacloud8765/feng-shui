@@ -34,7 +34,7 @@ const GAP = 12;
 // A paper Sticky Note draws itself: its own paper, shadow and pin, with the
 // desktop showing around it. Such windows get no native blur or shadow.
 function paperNote(widget) {
-  if (['cork', 'board', 'doughcon', 'neh', 'watched'].includes(widget.type)) return true;
+  if (['cork', 'board', 'doughcon', 'neh', 'watched', 'nuke'].includes(widget.type)) return true;
   if (widget.type === 'image' && widget.config.frame && widget.config.frame !== 'glass') return true;
   return widget.type === 'note' && (widget.config.paper || 'butter') !== 'glass';
 }
@@ -64,6 +64,7 @@ class WidgetWindows {
   sync({ fade = false } = {}) {
     const { settings } = this.store.doc;
     this.syncFengShui();
+    this.syncBar();
     const wanted = new Map(this.store.widgets.filter((w) => w.visible).map((w) => [w.id, w]));
     for (const [id, win] of this.windows) {
       if (!wanted.has(id) || !settings.widgetsVisible) this.close(id, fade);
@@ -215,6 +216,54 @@ class WidgetWindows {
       // Keep it down on the desktop with the widgets, not above other apps.
       if (mode === 'desktop') native.setDesktopLevel(win, true);
     });
+  }
+
+  // The layout bar: a liquid-glass switcher in the top-right corner of the
+  // main display, on the same layer as the widgets. It sizes itself to fit.
+  syncBar() {
+    const { settings, layouts, activeLayoutId } = this.store.doc;
+    const want = settings.widgetsVisible && (settings.bar || {}).show !== false;
+    const mode = this.mode;
+    let win = this.barWin;
+    if (win && !win.isDestroyed() && (!want || win.barMode !== mode)) { win.destroy(); win = this.barWin = null; }
+    if (!want) return;
+    const state = { layouts: layouts.map((l) => ({ id: l.id, name: l.name })), active: activeLayoutId };
+    if (win && !win.isDestroyed()) { win.webContents.send('morrow:bar', state); return; }
+    const a = screen.getPrimaryDisplay().workArea;
+    const H = 34;
+    win = this.barWin = new BrowserWindow({
+      x: a.x + a.width - 420 - 12, y: a.y + 10, width: 420, height: H,
+      show: false, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: true,
+      vibrancy: 'hud', visualEffectState: 'active', roundedCorners: true,
+      resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
+      skipTaskbar: true, acceptFirstMouse: true, type: mode === 'desktop-type' ? 'desktop' : undefined, title: 'Layouts',
+      webPreferences: { preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, sandbox: true },
+    });
+    win.barMode = mode;
+    win.barState = state;
+    if (mode === 'float') win.setAlwaysOnTop(true, 'floating');
+    win.setVisibleOnAllWorkspaces(!!settings.allSpaces, { visibleOnFullScreen: false, skipTransformProcessType: true });
+    if (mode === 'desktop') native.setDesktopLevel(win, true);
+    native.setCornerRadius(win, H / 2);
+    win.loadFile(path.join(__dirname, '..', 'renderer', 'bar.html'));
+    win.webContents.once('did-finish-load', () => win.webContents.send('morrow:bar', this.store.doc && { layouts: this.store.doc.layouts.map((l) => ({ id: l.id, name: l.name })), active: this.store.doc.activeLayoutId }));
+    win.once('ready-to-show', () => {
+      win.showInactive();
+      native.setCornerRadius(win, H / 2);
+      if (mode === 'desktop') native.setDesktopLevel(win, true);
+    });
+  }
+
+  // The bar asks for the width its contents need; it stays pinned to the right.
+  sizeBar(width) {
+    const win = this.barWin;
+    if (!win || win.isDestroyed()) return;
+    const a = screen.getPrimaryDisplay().workArea;
+    const w = Math.max(60, Math.min(a.width - 40, Math.round(width)));
+    const b = win.getBounds();
+    if (b.width === w) return;
+    win.setBounds({ x: a.x + a.width - w - 12, y: a.y + 10, width: w, height: b.height });
+    native.setCornerRadius(win, b.height / 2);
   }
 
   broadcast(channel, payload) {

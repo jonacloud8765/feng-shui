@@ -49,7 +49,7 @@ show or hide all widgets (⌥⌘W), add widgets, switch layouts and open setting
 - **Layouts:** each layout keeps its own widgets, positions, sizes and styles.
 
 Widgets: Clock, Countdown, Random Number, Stopwatch, App Launcher,
-Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget, Corkboard,
+Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget, Corkboard, Nuke France,
 Whiteboard, DEFCON and Nothing Ever Happens.
 
 ## Where things are saved
@@ -119,6 +119,10 @@ color, drag from a pushpin to another item to run a red string between them,
 and click a string to cut it. Hover the top-right corner to switch between
 portrait and landscape; everything on the board moves with it. Resizing the
 board scales everything pinned to it, so a smaller board keeps the whole case.
+From its right-click menu, Lock the Board freezes every item and string in
+place, and Desk Lamp hangs a lamp over it: click the lamp to switch it on or
+off. When it's on, the board is lit from the bulb and everything pinned casts
+its shadow away from it; when it's off, the room goes dark.
 
 ## Whiteboard
 
@@ -141,6 +145,20 @@ it named as the current threat. Each refreshes on its own every five minutes and
 refresh button; a forced refresh is throttled to one request every twenty
 seconds. A failed request keeps the last good reading, kept on disk, and marks
 it stale. Nothing is shown until a real reading has arrived.
+
+## Nuke France
+
+A green briefcase with the trefoil on its lid. Click it to open launch.exe, a
+joke 90s-Windows launch sequence, in a small window beside it. Drag it by its
+title bar; Esc or a click elsewhere closes it. It is a gag page and makes no
+requests of any kind.
+
+## Layout bar
+
+A small liquid-glass switcher in the top-right corner lists every layout with
+an icon; click one to switch. The button at its end saves what's on screen as
+a new layout. Turn it off in Settings or from the menu bar icon. Feng Shui
+keeps the space under it clear.
 
 ## Styles
 

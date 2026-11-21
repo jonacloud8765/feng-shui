@@ -17,6 +17,7 @@ const DEFAULT_SETTINGS = {
   showDock: false,
   launchAtLogin: false,
   fengShui: { show: false, icon: 'yinyang' },
+  bar: { show: true },
   appearance: { ...DEFAULT_APPEARANCE },
 };
 

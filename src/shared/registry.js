@@ -282,7 +282,7 @@ const TYPES = {
     size: { width: 560, height: 440 },
     min: { width: 260, height: 200 },
     max: { width: 1800, height: 1400 },
-    config: { items: [], strings: [], font: 'scrawl', size: 16, boardW: 0, boardH: 0 },
+    config: { items: [], strings: [], font: 'scrawl', size: 16, boardW: 0, boardH: 0, locked: false, lamp: 'none' },
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 8, padding: 0 },
     fields: [
       { key: 'font', label: 'Note font', type: 'notefont' },
@@ -319,6 +319,16 @@ const TYPES = {
     max: { width: 900, height: 660 },
     config: {},
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 16, padding: 0 },
+    fields: [],
+  },
+  nuke: {
+    name: 'Nuke France',
+    description: 'A briefcase that opens launch.exe, a joke 90s launch sequence.',
+    size: { width: 190, height: 160 },
+    min: { width: 110, height: 90 },
+    max: { width: 600, height: 500 },
+    config: {},
+    appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 12, padding: 0 },
     fields: [],
   },
   page: {

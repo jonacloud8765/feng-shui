@@ -15,6 +15,7 @@
 const MARGIN = 32;
 const GAP = 22;
 const BUTTON = 56; // kept clear at the bottom for the Feng Shui button
+const BAR = 40; // kept clear at the top for the layout bar
 
 const area = (s) => s.width * s.height;
 
@@ -28,14 +29,26 @@ function fit(size, maxW, maxH, min) {
 
 // Choose the heart: nearest the centre among widgets at least half the size of
 // the largest one.
-function pickHeart(widgets, box) {
+// the largest one. Later variants try the next candidates (any widget at
+// least a third of the largest), so each press can find a new balance.
+function pickHeart(widgets, box, variant = 0) {
   const biggest = Math.max(...widgets.map((w) => area(w.bounds)));
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
   const dist = (w) => Math.hypot(w.bounds.x + w.bounds.width / 2 - cx, w.bounds.y + w.bounds.height / 2 - cy);
-  return widgets
-    .filter((w) => area(w.bounds) >= biggest / 2)
-    .sort((a, b) => dist(a) - dist(b) || area(b.bounds) - area(a.bounds))[0];
+  const near = widgets.filter((w) => area(w.bounds) >= biggest / 2).sort((a, b) => dist(a) - dist(b) || area(b.bounds) - area(a.bounds));
+  const more = widgets.filter((w) => !near.includes(w) && area(w.bounds) >= biggest / 3 && w.bounds.width / w.bounds.height < 2.6).sort((a, b) => area(b.bounds) - area(a.bounds));
+  const all = [...near, ...more];
+  return all[variant % all.length];
+}
+
+// How many different hearts a layout offers (each also comes mirrored).
+function variants(widgets) {
+  const free = widgets.filter((w) => !w.share);
+  if (!free.length) return 2;
+  const biggest = Math.max(...free.map((w) => area(w.bounds)));
+  const n = free.filter((w) => area(w.bounds) >= biggest / 2 || (area(w.bounds) >= biggest / 3 && w.bounds.width / w.bounds.height < 2.6)).length;
+  return Math.max(1, n) * 2;
 }
 
 // Every way of sharing items between n non-empty columns (small n and lists only).
@@ -131,11 +144,20 @@ function side(best, strip, hugRight, out, bounds) {
 }
 
 // widgets: [{ id, bounds, min: {width,height} }]; work: {x,y,width,height}.
+// variant picks another heart (variant / 2) and mirrors odd variants.
 // Returns { [id]: bounds }.
-function arrange(widgets, work) {
+function arrange(widgets, work, { variant = 0 } = {}) {
+  const out = compose(widgets, work, Math.floor(variant / 2));
+  if (variant % 2 === 0) return out;
+  // The mirror image: left becomes right.
+  for (const b of Object.values(out)) b.x = Math.round(2 * work.x + work.width - b.x - b.width);
+  return out;
+}
+
+function compose(widgets, work, heartIndex) {
   const out = {};
   if (!widgets.length) return out;
-  const box = { x: work.x + MARGIN, y: work.y + MARGIN, width: work.width - MARGIN * 2, height: work.height - MARGIN * 2 - BUTTON };
+  const box = { x: work.x + MARGIN, y: work.y + MARGIN + BAR, width: work.width - MARGIN * 2, height: work.height - MARGIN * 2 - BUTTON - BAR };
   // A widget with a share (the corkboard) is grown to cover at least that
   // fraction of the screen, standing the full height of one side.
   widgets = widgets.map((w) => {
@@ -146,7 +168,7 @@ function arrange(widgets, work) {
     return { ...w, bounds: { ...w.bounds, ...size }, min: size, anchored: true };
   });
   const anchorW = Math.max(0, ...widgets.filter((w) => w.anchored).map((w) => w.bounds.width));
-  const heart = pickHeart(widgets.filter((w) => !w.anchored).length ? widgets.filter((w) => !w.anchored) : widgets, box);
+  const heart = pickHeart(widgets.filter((w) => !w.anchored).length ? widgets.filter((w) => !w.anchored) : widgets, box, heartIndex);
   let rest = widgets.filter((w) => w !== heart);
 
   // Long, low widgets rest beneath the heart, at most two of them.
@@ -247,4 +269,4 @@ function arrange(widgets, work) {
   return out;
 }
 
-module.exports = { arrange };
+module.exports = { arrange, variants };

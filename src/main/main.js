@@ -56,11 +56,63 @@ function openSettings(focusWidgetId) {
 }
 
 // Feng Shui: rearrange the visible widgets of the current layout into balance.
+// Each press moves on to the next balanced composition (another heart, or the
+// mirror image), skipping any that would leave the desk as it already is, so
+// the command always visibly does something. Positions are unlocked for it.
+const fengTurn = new Map(); // layout id -> next variant
 function fengShui() {
-  if (store.doc.settings.locked) return;
+  const fsh = require('./fengshui');
   const widgets = store.widgets.filter((w) => w.visible).map((w) => ({ id: w.id, bounds: w.bounds, min: registry.TYPES[w.type].min, share: w.type === 'cork' ? 0.25 : 0 }));
-  const placed = require('./fengshui').arrange(widgets, screen.getPrimaryDisplay().workArea);
+  if (!widgets.length) return;
+  const work = screen.getPrimaryDisplay().workArea;
+  const total = fsh.variants(widgets);
+  const layoutId = store.layout.id;
+  let v = fengTurn.get(layoutId) || 0;
+  let placed = null;
+  for (let tries = 0; tries < total; tries++, v++) {
+    placed = fsh.arrange(widgets, work, { variant: v % total });
+    const moved = widgets.reduce((t, w) => { const b = placed[w.id]; return t + (b ? Math.abs(b.x - w.bounds.x) + Math.abs(b.y - w.bounds.y) + Math.abs(b.width - w.bounds.width) : 0); }, 0);
+    if (moved > 60) break;
+  }
+  fengTurn.set(layoutId, (v + 1) % total);
+  if (store.doc.settings.locked) store.updateSettings({ locked: false });
   for (const [id, bounds] of Object.entries(placed)) store.updateWidget(id, { bounds });
+}
+
+// launch.exe: the Nuke France widget's page, in its own small window next to
+// the briefcase. Its title bar drags it; Esc or clicking elsewhere closes it.
+let nukeWin = null;
+function openNuke(from) {
+  if (nukeWin && !nukeWin.isDestroyed()) { nukeWin.close(); return; }
+  const W = 400, H = 440;
+  const b = from && !from.isDestroyed() ? from.getBounds() : screen.getCursorScreenPoint();
+  const area = screen.getDisplayNearestPoint({ x: b.x, y: b.y }).workArea;
+  let x = b.x + (b.width || 0) + 12, y = b.y + (b.height || 0) / 2 - H / 2;
+  if (x + W > area.x + area.width) x = b.x - W - 12;
+  x = Math.max(area.x + 8, Math.min(x, area.x + area.width - W - 8));
+  y = Math.max(area.y + 8, Math.min(y, area.y + area.height - H - 8));
+  nukeWin = new BrowserWindow({
+    x: Math.round(x), y: Math.round(y), width: W, height: H, frame: false, resizable: true, minWidth: 260, minHeight: 280,
+    show: false, title: 'launch.exe', backgroundColor: '#101418', hasShadow: true, fullscreenable: false, minimizable: false, maximizable: false, alwaysOnTop: true,
+    webPreferences: { contextIsolation: true, sandbox: true, nodeIntegration: false },
+  });
+  const win = nukeWin;
+  win.webContents.on('will-navigate', (e) => e.preventDefault());
+  win.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  win.webContents.on('before-input-event', (e, input) => { if (input.type === 'keyDown' && input.key === 'Escape') win.close(); });
+  win.webContents.on('did-finish-load', () => win.webContents.insertCSS('.tb{-webkit-app-region:drag}.tb button{-webkit-app-region:no-drag}'));
+  win.on('blur', () => setTimeout(() => { if (!win.isDestroyed() && !win.isFocused()) win.close(); }, 120));
+  win.on('closed', () => { if (nukeWin === win) nukeWin = null; });
+  win.loadFile(path.join(__dirname, '..', 'renderer', 'nuke', 'launch.html'));
+  win.once('ready-to-show', () => { win.show(); app.focus({ steal: true }); win.focus(); });
+}
+
+// Save the arrangement on screen as a new layout and switch to it, so the
+// one it came from stays as it was.
+function saveLayout(name) {
+  const l = store.createLayout(String(name || '').trim() || `${store.layout.name} copy`, store.layout.id);
+  store.switchLayout(l.id);
+  return l;
 }
 
 function sendDoc() {
@@ -146,6 +198,8 @@ function rebuildTray() {
     { label: 'Add Widget', submenu: addWidgetMenu() },
     { label: 'Layout', submenu: layoutMenu() },
     { label: 'Feng Shui This Layout', click: () => fengShui() },
+    { label: 'Save Layout As New…', click: () => windows.barWin?.webContents.executeJavaScript('document.querySelector(".seg.icon")?.click()') },
+    { label: 'Show Layout Bar', type: 'checkbox', checked: (s.bar || {}).show !== false, click: () => store.updateSettings({ bar: { show: (s.bar || {}).show === false } }) },
     { type: 'separator' },
     { label: 'Open Morrow…', accelerator: 'Command+,', click: () => openSettings() },
     { type: 'separator' },
@@ -233,11 +287,16 @@ function registerIpc() {
   ipcMain.on('morrow:context-menu', (e, extra) => {
     const id = senderWidgetId(e);
     // Widget-specific items come over as labels plus an action key.
-    const items = (extra || []).map((x) => ({ label: x.label, click: () => e.sender.send('morrow:menu-action', x.action) }));
+    const items = (extra || []).map((x) => (x.type === 'separator' ? { type: 'separator' }
+      : { label: x.label, ...(x.type === 'checkbox' || x.type === 'radio' ? { type: x.type, checked: !!x.checked } : {}), click: () => e.sender.send('morrow:menu-action', x.action) }));
     widgetContextMenu(id, items);
   });
   ipcMain.on('morrow:open-settings', (e, id) => openSettings(id));
   ipcMain.on('morrow:feng-shui', () => fengShui());
+  ipcMain.on('morrow:bar-size', (e, w) => windows.sizeBar(w));
+  ipcMain.on('morrow:bar-focus', () => { app.focus({ steal: true }); windows.barWin?.focus(); });
+  ipcMain.on('morrow:save-layout', (e, name) => saveLayout(name));
+  ipcMain.on('morrow:nuke-open', (e) => openNuke(BrowserWindow.fromWebContents(e.sender)));
   ipcMain.on('morrow:copy', (e, text) => clipboard.writeText(String(text)));
   ipcMain.handle('morrow:stopwatch', (e, action) => {
     const id = senderWidgetId(e);
@@ -374,6 +433,8 @@ app.whenReady().then(() => {
   });
 
   windows.sync();
+  // Development aid: MORROW_FENG_TEST=ms runs Feng Shui once after launch.
+  if (process.env.MORROW_FENG_TEST) setTimeout(fengShui, Number(process.env.MORROW_FENG_TEST));
   if (process.env.MORROW_SELFTEST) {
     try {
       return require('../../test/selftest')({ app, BrowserWindow, store, windows });
