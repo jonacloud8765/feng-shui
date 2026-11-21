@@ -38,7 +38,8 @@ const css = `
 .photo.f-polaroid .caption { background: none; color: #2b2a28; text-shadow: none; padding: 0 14px; bottom: 13px; font-family: "Nothing You Could Do", "Bradley Hand", cursive; font-style: normal; font-size: calc(clamp(13px, 6cqmin, 22px) * var(--scale)); text-align: center; }
 .photo.f-gallery { background: linear-gradient(135deg, #2a2420, #120f0d 60%, #241e1a); padding: 14px; border-radius: 2px;
   box-shadow: inset 0 1px 0 rgba(255,255,255,0.15), inset 0 -1px 0 rgba(0,0,0,0.6), 0 2px 3px rgba(0,0,0,0.3), 0 14px 26px -10px rgba(0,0,0,0.55); }
-.photo.f-gallery .mat { position: relative; width: 100%; height: 100%; background: #f6f2ea; padding: 11%; box-shadow: inset 0 2px 6px rgba(0,0,0,0.35); }
+.photo.f-gallery .mat { position: relative; width: 100%; height: 100%; background: #f6f2ea; padding: 7%; box-sizing: border-box; box-shadow: inset 0 2px 6px rgba(0,0,0,0.35); }
+.photo.f-gallery img { object-fit: cover; }
 .photo.f-gallery .frame { position: relative; inset: auto; width: 100%; height: 100%; border-radius: 0; box-shadow: 0 0 0 1px rgba(0,0,0,0.25), inset 0 1px 3px rgba(0,0,0,0.3); }
 .photo.f-gallery .caption { background: none; color: #ece6da; text-shadow: none; padding: 0; bottom: -1px; font-size: 10px; font-family: var(--info); font-style: normal; letter-spacing: 0.18em; text-transform: uppercase; text-align: center; opacity: 0.8; }
 .photo.f-poster { border-radius: 3px; overflow: hidden; background: #0c0d10;

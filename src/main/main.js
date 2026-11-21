@@ -8,6 +8,8 @@ const { Runtime } = require('./runtime');
 const registry = require('../shared/registry');
 const apps = require('./apps');
 const weather = require('./weather').createWeatherService();
+let pizzintService;
+const pizzint = () => pizzintService || (pizzintService = require('./pizzint').createPizzint(app.getPath('userData')));
 
 app.setName('Morrow');
 // A separate data folder (used for development and tests) also gets its own
@@ -276,6 +278,8 @@ function registerIpc() {
   // Results come back as { ok, data } or { ok: false, error } so widgets can show the reason.
   const settle = (p) => p.then((data) => ({ ok: true, data }), (err) => ({ ok: false, error: err.message }));
   ipcMain.handle('morrow:weather', (e, loc, force) => settle(weather.forecast(loc, { force })));
+  ipcMain.handle('morrow:pizzint', (e, kind, force) => settle(pizzint().get(kind, { force })));
+  ipcMain.on('morrow:pizzint-open', (e, kind) => shell.openExternal(kind === 'neh' ? 'https://www.pizzint.watch/nothingeverhappens' : 'https://www.pizzint.watch/'));
   ipcMain.handle('morrow:city-search', (e, q) => settle(weather.searchCities(q)));
   ipcMain.handle('morrow:import-image', (e, p) => settle(images.importImage(p)));
   ipcMain.handle('morrow:pick-photo', async () => {

@@ -49,7 +49,7 @@ const css = `
 .wb.texting .txt { pointer-events: auto; cursor: text; user-select: text; }
 .wb .txt.hand { font-family: "Caveat Brush", "Marker Felt", cursive; }
 .wb .txt.bubble { font-family: "Arial Rounded MT Bold", "Chalkboard SE", sans-serif; font-weight: 700; letter-spacing: 0.04em;
-  -webkit-text-stroke: 0.11em var(--ink); paint-order: stroke fill; color: var(--fill); }
+  -webkit-text-stroke: 0.06em var(--ink); color: var(--fill, transparent); filter: url(#messy); }
 .wb.chalk .txt { filter: url(#chalky); opacity: 0.92; }
 .wb.chalk .txt.hand { font-family: "Chalkboard SE", "Caveat Brush", cursive; }
 .wb .txt:empty::before { content: '|'; opacity: 0.35; }
@@ -76,10 +76,13 @@ const css = `
   background: rgba(255,255,255,0.55); box-shadow: 0 1px 1.5px rgba(0,0,0,0.3); }
 .wb.chalk .letter { background: rgba(0,0,0,0.25); color: #f3efe4; }
 .wb .letter.hand { font-family: "Caveat Brush", cursive; font-size: 13px; }
-.wb .letter.bubble { font-family: "Arial Rounded MT Bold", sans-serif; -webkit-text-stroke: 2px currentColor; paint-order: stroke fill; font-size: 11px; }
-.wb .letter.bubble { color: #fff; -webkit-text-stroke-color: #2a2b2e; }
-.wb.chalk .letter.bubble { color: #3a3a3a; -webkit-text-stroke-color: #f3efe4; }
+.wb .letter.bubble { font-family: "Arial Rounded MT Bold", sans-serif; font-size: 12px; }
+.wb .letter.bubble { color: transparent; -webkit-text-stroke: 0.8px #2a2b2e; }
+.wb.chalk .letter.bubble { -webkit-text-stroke-color: #f3efe4; }
 .wb .gap { flex: 1; }
+.wb .fillbtn { width: 18px; height: 16px; border-radius: 4px; border: 1.6px solid #1e1f22; background: transparent; box-shadow: 0 1px 1.5px rgba(0,0,0,0.25); }
+.wb .fillbtn.on { background: var(--c); }
+.wb.chalk .fillbtn { border-color: #f3efe4; }
 
 .wb .surfaces { position: absolute; top: 14px; right: 14px; display: flex; gap: 5px; padding: 4px; border-radius: 9px;
   background: rgba(30,30,30,0.35); backdrop-filter: blur(6px); opacity: 0; transition: opacity .2s ease; }
@@ -115,7 +118,7 @@ export function mount(root, ctx) {
   root.style.padding = '0';
   document.documentElement.classList.add('paper-note');
   // A rough edge for chalk lettering.
-  root.insertAdjacentHTML('beforeend', '<svg width="0" height="0" style="position:absolute"><filter id="chalky"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="1" seed="4"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.2 1.5"/><feComposite in="SourceGraphic" operator="in"/></filter></svg>');
+  root.insertAdjacentHTML('beforeend', '<svg width="0" height="0" style="position:absolute"><filter id="chalky"><feTurbulence type="fractalNoise" baseFrequency="1.4" numOctaves="1" seed="4"/><feColorMatrix values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.2 1.5"/><feComposite in="SourceGraphic" operator="in"/></filter><filter id="messy" x="-5%" y="-10%" width="110%" height="120%"><feTurbulence type="fractalNoise" baseFrequency="0.035" numOctaves="2" seed="6" result="n"/><feDisplacementMap in="SourceGraphic" in2="n" scale="3.5" result="a"/><feTurbulence type="fractalNoise" baseFrequency="0.05" numOctaves="1" seed="13" result="m"/><feDisplacementMap in="SourceGraphic" in2="m" scale="5" result="b"/><feComponentTransfer in="b" result="b2"><feFuncA type="linear" slope="0.55"/></feComponentTransfer><feMerge><feMergeNode in="b2"/><feMergeNode in="a"/></feMerge></filter></svg>');
 
   const canvas = h('canvas');
   const texts = h('div.texts');
@@ -131,6 +134,7 @@ export function mount(root, ctx) {
   let words = [];
   let tool = 'pen'; // pen | eraser | hand | bubble
   let live = null;
+  let lastWord = null;
   const c = () => ctx.config;
   const unit = () => surface.clientWidth || 1;
   const ink = () => (isChalk(c().surface) ? CHALKS[c().chalk] || CHALKS.classic : MARKERS[c().marker] || MARKERS.black);
@@ -275,8 +279,12 @@ export function mount(root, ctx) {
   function styleText(el, t) {
     const u = unit();
     Object.assign(el.style, { left: `${t.x * u}px`, top: `${t.y * u}px`, fontSize: `${t.s * u}px` });
-    el.style.setProperty('--ink', t.c);
-    el.style.setProperty('--fill', isChalk(c().surface) ? 'rgba(255,255,255,0.08)' : `color-mix(in srgb, ${t.c} 16%, transparent)`);
+    // Bubble letters: always a messy outline (black marker, or chalk), with
+    // an optional fill in the colour they were written with.
+    const bubble = t.st === 'bubble';
+    el.style.setProperty('--ink', bubble && !isChalk(c().surface) ? MARKERS.black : t.c);
+    if (bubble && t.f) el.style.setProperty('--fill', `color-mix(in srgb, ${t.c} ${isChalk(c().surface) ? 45 : 88}%, transparent)`);
+    else el.style.removeProperty('--fill');
     el.style.color = t.st === 'bubble' ? '' : t.c;
   }
 
@@ -295,6 +303,7 @@ export function mount(root, ctx) {
       el.textContent = t.t;
       styleText(el, t);
       el.addEventListener('input', () => { t.t = el.textContent; save(); });
+      el.addEventListener('focus', () => { lastWord = t; });
       el.addEventListener('blur', () => {
         if (!el.textContent.trim()) { words = words.filter((w) => w !== t); el.remove(); }
         save(true);
@@ -305,7 +314,7 @@ export function mount(root, ctx) {
   }
 
   function addText([x, y]) {
-    const t = { id: Math.random().toString(36).slice(2, 9), t: '', st: tool, c: ink(), x, y: y - 0.04, s: tool === 'bubble' ? 0.085 : 0.075 };
+    const t = { id: Math.random().toString(36).slice(2, 9), t: '', st: tool, c: ink(), x, y: y - 0.04, s: tool === 'bubble' ? 0.085 : 0.075, f: !!c().bubbleFill };
     words.push(t);
     buildTexts();
     const el = texts.querySelector(`[data-id="${t.id}"]`);
@@ -338,9 +347,26 @@ export function mount(root, ctx) {
     items.push(h('div.gap'));
     items.push(h('button', { class: `tool letter hand${tool === 'hand' ? ' on' : ''}`, title: 'Write in handwriting', onclick: () => pick('hand') }, 'Aa'));
     items.push(h('button', { class: `tool letter bubble${tool === 'bubble' ? ' on' : ''}`, title: 'Write in bubble letters', onclick: () => pick('bubble') }, 'Aa'));
+    if (tool === 'bubble') {
+      const on = !!c().bubbleFill;
+      items.push(tinted(h('button', { class: `tool fillbtn${on ? ' on' : ''}`, title: on ? 'Bubble letters: filled' : 'Bubble letters: hollow', 'aria-label': 'Fill bubble letters', onmousedown: (e) => e.preventDefault(), onclick: () => toggleFill() }), ink()));
+    }
     items.push(h('button', { class: `tool eraser${tool === 'eraser' ? ' on' : ''}`, title: 'Eraser', 'aria-label': 'Eraser', onclick: () => pick('eraser') }));
     tray.replaceChildren(...items);
     surfBar.replaceChildren(...Object.entries(SURFACES).map(([k, label]) => h('button', { class: `${k}${c().surface === k ? ' on' : ''}`, title: label, 'aria-label': label, onclick: () => ctx.setConfig({ surface: k }) || load() })));
+  }
+
+  function toggleFill() {
+    const on = !c().bubbleFill;
+    ctx.setConfig({ bubbleFill: on });
+    // Also fill (or empty) the bubble word being written.
+    if (lastWord && lastWord.st === 'bubble' && words.includes(lastWord)) {
+      lastWord.f = on;
+      lastWord.c = ink();
+      placeTexts();
+      save(true);
+    }
+    buildTray();
   }
 
   function load() {

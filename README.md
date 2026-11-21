@@ -49,7 +49,8 @@ show or hide all widgets (⌥⌘W), add widgets, switch layouts and open setting
 - **Layouts:** each layout keeps its own widgets, positions, sizes and styles.
 
 Widgets: Clock, Countdown, Random Number, Stopwatch, App Launcher,
-Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget, Corkboard.
+Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget, Corkboard,
+Whiteboard, DEFCON and Nothing Ever Happens.
 
 ## Where things are saved
 
@@ -118,6 +119,27 @@ and click a string to cut it. Hover the top-right corner to switch between
 portrait and landscape; everything on the board moves with it. Resizing the
 board scales everything pinned to it, so a smaller board keeps the whole case.
 
+## Whiteboard
+
+A whiteboard with five markers, or a green or black chalkboard with three
+chalk whites. Pick a marker, chalk, the eraser or a lettering style from the
+tray along the bottom. Draw by dragging on the board; with a lettering style,
+click to write in handwriting or bubble letters. Bubble letters always have a
+messy outline and can be filled with the marker's colour. Hover the top-right
+corner to switch surfaces; right-click for Undo and Wipe the Board (⌘Z also
+undoes). The drawing scales with the board.
+
+## DEFCON and Nothing Ever Happens
+
+Two small widgets with readings from PizzINT Watch. DEFCON shows the site's
+DOUGHCON level and the DEFCON level it maps to, coloured by readiness. The
+Nothing Ever Happens gauge shows the site's index, worked out the way its page
+does (the highest escalation probability among the markets it watches), on
+its own four bands. Each refreshes on its own every five minutes and has a
+refresh button; a forced refresh is throttled to one request every twenty
+seconds. A failed request keeps the last good reading, kept on disk, and marks
+it stale. Nothing is shown until a real reading has arrived.
+
 ## Styles
 
 Weather, App Launcher, World Clock, Photo, Films Watched and Stopwatch come
@@ -132,7 +154,8 @@ layout: the widget nearest the middle stays the heart, wide low widgets rest
 beneath it, small wide ones crown it, and the rest are shared between the
 left and right so both sides carry the same weight, with even spacing and
 nothing overlapping. Right-click it for settings. In General settings you can
-hide it, or swap the yin-yang for an ink dragon. The tray menu has the same
+show it (it's off by default), or swap the yin-yang for an ink dragon.
+The corkboard always gets at least a quarter of the screen. The tray menu has the same
 action as Feng Shui This Layout.
 
 ## Custom Widget

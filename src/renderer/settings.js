@@ -14,7 +14,7 @@ let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
 
-const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐' };
+const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐', doughcon: '5', neh: '33' };
 const ART = {
   clock: ['10:42', 'Thursday · October 9'],
   countdown: ['48', 'days to go'],
@@ -30,6 +30,8 @@ const ART = {
   page: ['</>', 'your own HTML'],
   cork: ['📌', 'notes and string'],
   board: ['✐', 'marker or chalk'],
+  doughcon: ['5', 'DEFCON 5'],
+  neh: ['33', 'nothing ever happens'],
 };
 
 const PAGES = [
@@ -208,6 +210,8 @@ function summary(w) {
     }
     case 'films': return [c.username ? `@${c.username}` : 'No Letterboxd user', c.folder ? c.folder.split('/').pop() : 'Movies'].join(' · ');
     case 'page': return c.name || 'No file chosen';
+    case 'doughcon': return 'Live from PizzINT Watch';
+    case 'neh': return 'Live from PizzINT Watch';
     case 'board': return { white: 'Whiteboard', green: 'Green chalkboard', black: 'Black chalkboard' }[c.surface] || 'Whiteboard';
     case 'watched': return c.username ? `@${c.username}` : 'No Letterboxd user';
     case 'image': return c.file ? (c.caption || c.name || 'Photo') : 'No photo yet';
