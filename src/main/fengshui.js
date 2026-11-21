@@ -22,7 +22,7 @@ const BAR = 40; // kept clear at the top for the layout bar
 // weight: how much room the widget deserves; aspect: the shape it looks best in
 // (width / height). A missing aspect means "keep the shape it has now".
 const PROFILE = {
-  films: { weight: 3.2, aspect: 0.82 },
+  films: { weight: 3.2, aspect: 1.75, band: true },
   board: { weight: 4.2, aspect: 1.65 },
   page: { weight: 3, aspect: null },
   image: { weight: 1.5, aspect: null },
@@ -33,7 +33,7 @@ const PROFILE = {
   weather: { weight: 1.1, aspect: 1.6, cap: [390, 245] },
   worldclock: { weight: 1, aspect: 1.5, cap: [400, 270] },
   clock: { weight: 0.85, aspect: 2, cap: [380, 190] },
-  watched: { weight: 0.9, aspect: 1.65, cap: [350, 215] },
+  watched: { weight: 0.5, aspect: 1.65, cap: [230, 140] }, // just a small ticket
   stopwatch: { weight: 0.8, aspect: 1.8, cap: [340, 190] },
   countdown: { weight: 0.8, aspect: 1.8, cap: [340, 190] },
   random: { weight: 0.6, aspect: 1.2, cap: [230, 190] },
@@ -145,6 +145,8 @@ function layoutColumns(cols, region, totalWeight) {
       if (!it.cap) score += it.weight * Math.abs(Math.log(cw / ch / it.aspect)) * 1.2;
       let share = (it.weight / totalWeight) * region.width * region.height;
       if (it.cap) share = Math.min(share, area(it.cap));
+      // A compact widget squeezed well under its comfortable size gets hard to read.
+      if (it.cap && area(size) < 0.6 * area(it.cap)) score += 4 * Math.log((0.6 * area(it.cap)) / Math.max(1, area(size)));
       const ratio = Math.log(Math.max(1, area(size)) / share);
       // Content widgets that end up cramped cost the most: they are the point.
       score += it.cap ? 0.8 * Math.abs(ratio) : 0.8 * Math.abs(ratio) + (ratio < 0 ? it.weight * 1.4 * -ratio : 0);
@@ -209,6 +211,8 @@ function candidates(items, region) {
   const groups = new Set();
   for (const r of results) {
     if (groups.has(r.group)) continue;
+    // Only offer arrangements nearly as good as the best one.
+    if (distinct.length && r.score > distinct[0].score + 2.5) break;
     groups.add(r.group);
     distinct.push(r);
     if (distinct.length >= 4) break;
@@ -224,7 +228,7 @@ function prepare(widgets, work) {
     const width = clamp(Math.ceil((it.share * work.width * work.height) / box.height), it.min.width, box.width * 0.45);
     return { ...it, size: { width: Math.round(width), height: Math.round(box.height) } };
   });
-  const free = items.filter((it) => !it.share);
+  let free = items.filter((it) => !it.share);
   let region = { ...box };
   const placed = {};
   anchored.forEach((it, i) => {
@@ -232,6 +236,20 @@ function prepare(widgets, work) {
     placed[it.id] = { x: left ? region.x : region.x + region.width - it.size.width, y: box.y, ...it.size };
     region = { ...region, x: left ? region.x + it.size.width + GAP : region.x, width: region.width - it.size.width - GAP };
   });
+  // A wide widget (Films) gets a full-width band across the top of what is
+  // left, so its posters run in long rows; the rest are set out below it.
+  const bands = free.filter((it) => PROFILE[it.type]?.band);
+  if (bands.length && free.length > bands.length) {
+    free = free.filter((it) => !bands.includes(it));
+    for (const it of bands) {
+      // The fewer widgets below, the deeper the band.
+      const others = free.length;
+      const h = Math.round(clamp(region.width / it.aspect, region.height * 0.4, region.height * clamp(0.64 - 0.025 * others, 0.42, 0.64)));
+      const width = Math.round(it.max ? Math.min(region.width, it.max.width) : region.width);
+      placed[it.id] = { x: Math.round(region.x + (region.width - width) / 2), y: region.y, width, height: h };
+      region = { ...region, y: region.y + h + GAP, height: region.height - h - GAP };
+    }
+  }
   return { placed, free, region };
 }
 
