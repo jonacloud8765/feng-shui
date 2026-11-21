@@ -34,6 +34,7 @@ const GAP = 12;
 // A paper Sticky Note draws itself: its own paper, shadow and pin, with the
 // desktop showing around it. Such windows get no native blur or shadow.
 function paperNote(widget) {
+  if (widget.type === 'cork') return true;
   return widget.type === 'note' && (widget.config.paper || 'butter') !== 'glass';
 }
 const materialOf = (widget) => (paperNote(widget) ? 'none' : widget.appearance.material);

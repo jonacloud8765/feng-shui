@@ -251,6 +251,19 @@ const TYPES = {
       { key: 'showUser', label: 'Show username', type: 'toggle' },
     ],
   },
+  cork: {
+    name: 'Corkboard',
+    description: 'A framed cork board for notes, photos and red string.',
+    size: { width: 560, height: 440 },
+    min: { width: 260, height: 200 },
+    max: { width: 1800, height: 1400 },
+    config: { items: [], strings: [], font: 'scrawl', size: 16 },
+    appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 8, padding: 0 },
+    fields: [
+      { key: 'font', label: 'Note font', type: 'notefont' },
+      { key: 'size', label: 'Text size', type: 'range', min: 10, max: 32 },
+    ],
+  },
   page: {
     name: 'Custom Widget',
     description: 'Your own widget from a single HTML file.',

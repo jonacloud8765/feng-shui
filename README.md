@@ -49,7 +49,7 @@ show or hide all widgets (⌥⌘W), add widgets, switch layouts and open setting
 - **Layouts:** each layout keeps its own widgets, positions, sizes and styles.
 
 Widgets: Clock, Countdown, Random Number, Coin Flip, Stopwatch, App Launcher,
-Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget.
+Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget, Corkboard.
 
 ## Where things are saved
 
@@ -108,6 +108,13 @@ top-right corner to resize. Text scales with the note without changing its
 saved size. Three handwriting fonts are bundled: Homemade
 Apple (Apache 2.0), Nothing You Could Do and Caveat Brush (SIL Open Font
 License). Their licenses are in `src/renderer/fonts`.
+
+## Corkboard
+
+A framed cork board. Right-click to pin a note or a photo. Drag an item by its
+paper to move it and click its text to write. Click a pushpin to change its
+color, drag from a pushpin to another item to run a red string between them,
+and click a string to cut it.
 
 ## Custom Widget
 

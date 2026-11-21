@@ -63,6 +63,7 @@ function createImages(dataDir) {
     const used = new Set();
     for (const l of doc.layouts) for (const w of l.widgets) {
       if (w.config && w.config.file) used.add(path.basename(w.config.file));
+      if (w.config && Array.isArray(w.config.items)) for (const it of w.config.items) if (it && it.file) used.add(path.basename(it.file));
       if (w.appearance && w.appearance.image && w.appearance.image.startsWith(dir)) used.add(path.basename(w.appearance.image));
     }
     for (const f of files) if (!used.has(f)) fs.rm(path.join(dir, f), { force: true }, () => {});
