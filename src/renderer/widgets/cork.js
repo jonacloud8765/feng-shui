@@ -69,12 +69,22 @@ const css = `
 }
 .cork .item {
   position: absolute; transform-origin: 50% 0; cursor: grab;
-  box-shadow: 0 1px 1.5px rgba(0,0,0,0.25), 0 6px 10px -4px rgba(0,0,0,0.35), 0 14px 18px -12px rgba(0,0,0,0.4);
+  box-shadow: 0 0 0 0.5px rgba(0,0,0,0.08), 0 1px 1.5px rgba(0,0,0,0.22), 0 4px 8px -2px rgba(0,0,0,0.2), 0 14px 22px -10px rgba(0,0,0,0.42);
 }
 .cork .item.dragging { cursor: grabbing; box-shadow: 0 2px 3px rgba(0,0,0,0.25), 0 16px 26px -8px rgba(0,0,0,0.45); }
 .cork .note-item {
   border-radius: 1.5px; padding: 24px 12px 12px; color: var(--ink);
-  background: linear-gradient(180deg, rgba(255,255,255,0.28), rgba(255,255,255,0) 40%), linear-gradient(200deg, rgba(0,0,0,0) 70%, rgba(0,0,0,0.07)), var(--paper);
+  /* The same clean paper as the Sticky Note widget. */
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(255,255,255,0.32), transparent 55%),
+    linear-gradient(180deg, rgba(0,0,0,0.045), rgba(0,0,0,0) 16%),
+    linear-gradient(200deg, rgba(255,255,255,0) 70%, rgba(0,0,0,0.06) 92%, rgba(0,0,0,0.12) 100%),
+    var(--paper);
+}
+.cork .note-item::after {
+  /* The lifted corner catches a little light. */
+  content: ''; position: absolute; right: 0; bottom: 0; width: 30px; height: 30px; pointer-events: none;
+  background: linear-gradient(315deg, rgba(255,255,255,0.0) 0, rgba(255,255,255,0.22) 30%, rgba(0,0,0,0.05) 52%, transparent 60%);
 }
 .cork .note-item .text {
   height: 100%; overflow: hidden; outline: none; cursor: text; user-select: text;
