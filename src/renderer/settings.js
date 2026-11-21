@@ -201,7 +201,11 @@ function summary(w) {
     case 'coin': return `${c.heads} / ${c.tails}`;
     case 'weather': return c.location ? c.location.name : 'No location chosen';
     case 'worldclock': return c.cities.length ? c.cities.map((x) => x.name).join(', ') : 'No cities yet';
-    case 'note': return c.text ? c.text.split('\n')[0].slice(0, 40) : 'Empty note';
+    case 'note': {
+      const strip = (x) => new DOMParser().parseFromString((x || '').replace(/<br>|<\/div>|<\/p>/g, '\n'), 'text/html').body.textContent;
+      const line = [strip(c.title), strip(c.body), c.text || ''].join('\n').split('\n').find((x) => x.trim());
+      return line ? line.trim().slice(0, 40) : 'Empty note';
+    }
     case 'films': return [c.username ? `@${c.username}` : 'No Letterboxd user', c.folder ? c.folder.split('/').pop() : 'Movies'].join(' · ');
     case 'page': return c.name || 'No file chosen';
     case 'watched': return c.username ? `@${c.username}` : 'No Letterboxd user';
@@ -282,6 +286,11 @@ function field(w, f) {
       h(`button.chip.paper-chip${v === k ? '.on' : ''}`, { title: p.label, 'aria-label': `${p.label} paper`, onclick: () => { set(k); render(); } },
         h('span.sw', { style: { background: p.bg || 'linear-gradient(135deg, rgba(255,255,255,0.35), rgba(255,255,255,0.05))', color: p.ink || 'inherit' } }, 'a'), p.label))));
     case 'font': return row(f.label, select(v, Object.fromEntries(Object.entries(registry.FONTS).map(([k, x]) => [k, x.label])), set, f.label));
+    case 'notefont': return h('div.row.notefonts', {}, h('div.k', {}, f.label),
+      h('div.chips.fontchips', {}, ...registry.NOTE_FONTS.map((k) => h(`button.chip.font-chip${v === k ? '.on' : ''}`, {
+        title: registry.FONTS[k].label, 'aria-label': registry.FONTS[k].label, style: { fontFamily: registry.FONTS[k].stack },
+        onclick: () => { set(k); render(); },
+      }, registry.FONTS[k].label.replace(/ \(.*\)$/, '')))));
     case 'image': return photoField(w);
     case 'folder': return folderField(w, f);
     case 'page': return pageField(w);

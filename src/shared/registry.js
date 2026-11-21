@@ -21,12 +21,17 @@ const FONTS = {
   bradley: { label: 'Bradley Hand (handwritten)', stack: '"Bradley Hand", Noteworthy, cursive' },
   marker: { label: 'Marker Felt', stack: '"Marker Felt", Noteworthy, cursive' },
   snell: { label: 'Snell Roundhand (script)', stack: '"Snell Roundhand", "Savoye LET", cursive' },
-  // Bundled with Morrow (SIL Open Font License, see src/renderer/fonts).
-  signature: { label: 'Signature (Herr Von Muellerhoff)', stack: '"Herr Von Muellerhoff", "Snell Roundhand", cursive' },
+  // Bundled with Morrow (open licenses, see src/renderer/fonts).
+  signature: { label: 'Homemade Apple (brush script)', stack: '"Homemade Apple", "Bradley Hand", cursive' },
+  scrawl: { label: 'Nothing You Could Do (quick pen)', stack: '"Nothing You Could Do", "Bradley Hand", cursive' },
+  brush: { label: 'Caveat Brush (marker)', stack: '"Caveat Brush", "Marker Felt", cursive' },
 };
 
 // Native macOS vibrancy materials Electron exposes. "none" turns the native
 // blur off and leaves only the tint, which is what the Minimal preset uses.
+// The five fonts a Sticky Note offers, in picker order.
+const NOTE_FONTS = ['signature', 'scrawl', 'brush', 'marker', 'sf'];
+
 const MATERIALS = {
   hud: 'HUD (deep glass)',
   'under-window': 'Under window (soft)',
@@ -184,13 +189,13 @@ const TYPES = {
     size: { width: 240, height: 220 },
     min: { width: 110, height: 90 },
     max: { width: 1200, height: 1200 },
-    config: { text: '', title: '', body: '', showTitle: true, paper: 'butter', font: 'noteworthy', titleFont: 'noteworthy', size: 17, lined: false, tape: true },
+    config: { text: '', title: '', body: '', showTitle: true, paper: 'butter', font: 'signature', titleFont: 'signature', size: 17, lined: false, tape: true },
     appearance: { align: 'left' },
     fields: [
       { key: 'paper', label: 'Paper', type: 'paper' },
       { key: 'showTitle', label: 'Title', type: 'toggle', hint: 'Select text and press ⌘U to underline it.' },
-      { key: 'titleFont', label: 'Title font', type: 'font' },
-      { key: 'font', label: 'Body font', type: 'font' },
+      { key: 'titleFont', label: 'Title font', type: 'notefont' },
+      { key: 'font', label: 'Body font', type: 'notefont' },
       { key: 'size', label: 'Text size', type: 'range', min: 10, max: 44 },
       { key: 'lined', label: 'Ruled lines', type: 'toggle' },
       { key: 'tape', label: 'Washi tape', type: 'toggle' },
@@ -267,4 +272,4 @@ const TYPES = {
   },
 };
 
-module.exports = { TYPES, FONTS, MATERIALS, PRESETS, DEFAULT_APPEARANCE };
+module.exports = { TYPES, FONTS, NOTE_FONTS, MATERIALS, PRESETS, DEFAULT_APPEARANCE };

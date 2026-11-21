@@ -97,8 +97,9 @@ progress bar. Click the number to open that page.
 
 A note with an optional title and a body, each with its own font. Select text
 and press ⌘U, ⌘B or ⌘I, or use the small bar that appears over a selection, to
-underline, bold or italicize it. The Signature font is Herr Von Muellerhoff,
-bundled under the SIL Open Font License (see `src/renderer/fonts`).
+underline, bold or italicize it. Three handwriting fonts are bundled: Homemade
+Apple (Apache 2.0), Nothing You Could Do and Caveat Brush (SIL Open Font
+License). Their licenses are in `src/renderer/fonts`.
 
 ## Custom Widget
 
