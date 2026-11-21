@@ -11,6 +11,7 @@ const ICONS = {
   closet: S('<path d="M3 2.5v11M5.5 2.5v11M8 4v9.5M10.2 3.6l2.8 9.6"/><path d="M1.8 13.5h12.4"/>'),
   intel: S('<circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="3.2"/><path d="M8 8l4.2-4.2"/><circle cx="8" cy="8" r="0.7" fill="currentColor"/>'),
   school: S('<path d="M1.5 6L8 3l6.5 3L8 9z"/><path d="M4.2 7.4v3.3c1 1 2.4 1.5 3.8 1.5s2.8-.5 3.8-1.5V7.4"/><path d="M14.5 6v3.5"/>'),
+  cabinet: S('<rect x="3" y="1.8" width="10" height="12.4" rx="1"/><path d="M3 6h10M3 10h10M6.8 3.9h2.4M6.8 7.9h2.4M6.8 11.9h2.4"/>'),
   grid: S('<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/>'),
   save: S('<path d="M3 2.5h8l2.5 2.5v8.5H3z"/><path d="M5.5 2.5v3.5h5v-3.5M5.5 13.5v-4h5v4"/>'),
 };
@@ -23,6 +24,7 @@ function iconFor(name) {
   if (/criterion|closet|shelf|book/.test(n)) return ICONS.closet;
   if (/8200|intel|osint|idf/.test(n)) return ICONS.intel;
   if (/school|class|study/.test(n)) return ICONS.school;
+  if (/file|cabinet|folder/.test(n)) return ICONS.cabinet;
   return ICONS.grid;
 }
 

@@ -38,6 +38,7 @@ const PROFILE = {
   countdown: { weight: 0.8, aspect: 1.8, cap: [340, 190] },
   random: { weight: 0.6, aspect: 1.2, cap: [230, 190] },
   launcher: { weight: 1, aspect: 4.6, cap: [660, 140] },
+  cabinet: { weight: 3.6, aspect: 1.42 },
   nuke: { weight: 0.5, aspect: 1.25, cap: [230, 185] },
 };
 // A cap is the size past which a glanceable widget shows nothing more: it stays

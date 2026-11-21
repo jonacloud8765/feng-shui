@@ -14,7 +14,7 @@ let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
 
-const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐', doughcon: '5', neh: '33', nuke: '☢' };
+const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐', doughcon: '5', neh: '33', nuke: '☢', cabinet: '🗄' };
 const ART = {
   clock: ['10:42', 'Thursday · October 9'],
   countdown: ['48', 'days to go'],
@@ -33,6 +33,7 @@ const ART = {
   doughcon: ['5', 'DEFCON 5'],
   neh: ['33', 'nothing ever happens'],
   nuke: ['☢', 'launch.exe'],
+  cabinet: ['🗄', 'Downloads, 90s style'],
 };
 
 const PAGES = [
@@ -214,6 +215,7 @@ function summary(w) {
     case 'doughcon': return 'Live from PizzINT Watch';
     case 'neh': return 'Live from PizzINT Watch';
     case 'nuke': return 'Click to open launch.exe';
+    case 'cabinet': return c.root ? c.root.split('/').pop() : 'Downloads';
     case 'board': return { white: 'Whiteboard', green: 'Green chalkboard', black: 'Black chalkboard' }[c.surface] || 'Whiteboard';
     case 'watched': return c.username ? `@${c.username}` : 'No Letterboxd user';
     case 'image': return c.file ? (c.caption || c.name || 'Photo') : 'No photo yet';
@@ -420,9 +422,10 @@ function folderField(w, f) {
     if (p) { editWidget(w.id, { config: { [f.key]: p } }); render(); }
   };
   const reset = () => { editWidget(w.id, { config: { [f.key]: '' } }); render(); };
+  const fallback = w.type === 'cabinet' ? 'Downloads' : 'Movies';
   return row(f.label, h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center', minWidth: 0 } },
-    h('span', { title: current || 'Movies', style: { opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px', direction: 'rtl' } }, current || 'Movies (default)'),
-    current ? h('button.btn', { onclick: reset }, 'Use Movies') : null,
+    h('span', { title: current || fallback, style: { opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '220px', direction: 'rtl' } }, current || `${fallback} (default)`),
+    current ? h('button.btn', { onclick: reset }, `Use ${fallback}`) : null,
     h('button.btn', { onclick: pick }, 'Choose…')));
 }
 

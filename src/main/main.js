@@ -368,6 +368,35 @@ function registerIpc() {
   ipcMain.on('morrow:open-profile', (e, user) => movies.openProfile(user));
   ipcMain.handle('morrow:watched', (e, user, force) => movies.watched(user, { force }));
   ipcMain.handle('morrow:film-details', (e, slugs) => movies.details(slugs));
+  ipcMain.handle('morrow:cabinet', async (e, op, ...args) => {
+    const cab = require('./cabinet');
+    const wid = senderWidgetId(e);
+    const w = store.widgets.find((x) => x.id === wid);
+    if (!w || w.type !== 'cabinet') return { ok: false, error: 'Not a File Cabinet.' };
+    const root = w.config.root || cab.defaultRoot();
+    try {
+      switch (op) {
+        case 'list': return await cab.list(root, args[0]);
+        case 'folders': return await cab.folders(root, args[0]);
+        case 'peek': return await cab.peek(root, args[0]);
+        case 'trash': return await cab.trash(root, args[0]);
+        case 'open': return { ok: !(await cab.open(root, args[0])) };
+        case 'reveal': cab.reveal(root, args[0]); return { ok: true };
+        case 'cancel': cab.cancelScan(args[0]); return { ok: true };
+        case 'scan': return await cab.scan(root, args[0], (p) => { if (!e.sender.isDestroyed()) e.sender.send('morrow:cabinet-progress', { id: args[0], ...p }); });
+        case 'pick': {
+          app.focus({ steal: true });
+          const r = await dialog.showOpenDialog({ properties: ['openDirectory'], defaultPath: root, message: 'Choose a folder for File Cabinet' });
+          if (r.canceled) return { ok: false, canceled: true };
+          store.updateWidget(wid, { config: { root: r.filePaths[0] } });
+          return { ok: true, root: r.filePaths[0] };
+        }
+        default: return { ok: false, error: 'Unknown request.' };
+      }
+    } catch (err) {
+      return { ok: false, error: String(err.message || err) };
+    }
+  });
   ipcMain.handle('morrow:pick-folder', async (e, current) => {
     app.focus({ steal: true });
     const r = await dialog.showOpenDialog(settingsWin && !settingsWin.isDestroyed() ? settingsWin : undefined, {

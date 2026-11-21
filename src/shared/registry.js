@@ -331,6 +331,22 @@ const TYPES = {
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 12, padding: 0 },
     fields: [],
   },
+  cabinet: {
+    name: 'File Cabinet',
+    description: 'A 90s file explorer for your Downloads, with Disk Cleanup.',
+    size: { width: 900, height: 620 },
+    min: { width: 480, height: 360 },
+    max: { width: 1900, height: 1400 },
+    // An empty root means the Downloads folder.
+    config: { root: '', view: 'icons', preview: true, sound: true },
+    appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 0, padding: 0 },
+    fields: [
+      { key: 'root', label: 'Folder', type: 'folder', hint: 'Empty means your Downloads folder.' },
+      { key: 'view', label: 'View', type: 'choice', options: { icons: 'Large Icons', details: 'Details' } },
+      { key: 'preview', label: 'Preview pane', type: 'toggle' },
+      { key: 'sound', label: 'Sounds', type: 'toggle' },
+    ],
+  },
   page: {
     name: 'Custom Widget',
     description: 'Your own widget from a single HTML file.',

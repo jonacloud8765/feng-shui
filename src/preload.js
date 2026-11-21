@@ -64,5 +64,7 @@ contextBridge.exposeInMainWorld('morrow', {
   watched: (user, force) => ipcRenderer.invoke('morrow:watched', user, force),
   openProfile: (user) => ipcRenderer.send('morrow:open-profile', user),
   pickPage: () => ipcRenderer.invoke('morrow:pick-page'),
+  cabinet: (op, ...args) => ipcRenderer.invoke('morrow:cabinet', op, ...args),
+  onCabinetProgress: on('morrow:cabinet-progress'),
   pickFolder: (current) => ipcRenderer.invoke('morrow:pick-folder', current),
 });
