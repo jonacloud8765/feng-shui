@@ -24,6 +24,16 @@ if [[ -f native/build/Release/morrow_native.node ]]; then
 fi
 cp build/icon.icns "$RES/electron.icns"
 
+# Morrow is in English (with Hebrew for local text); drop Chromium's other
+# interface languages, which are about 47 MB together.
+KEEP=(en en_GB he Base)
+for dir in "$RES" "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources"; do
+  for l in "$dir"/*.lproj(N); do
+    name=${${l:t}%.lproj}
+    (( ${KEEP[(Ie)$name]} )) || rm -rf "$l"
+  done
+done
+
 plutil -replace CFBundleName -string Morrow "$PLIST"
 plutil -replace CFBundleDisplayName -string Morrow "$PLIST"
 plutil -replace CFBundleIdentifier -string app.morrow.desktop "$PLIST"
