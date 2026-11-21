@@ -136,15 +136,26 @@ function arrange(widgets, work) {
   const out = {};
   if (!widgets.length) return out;
   const box = { x: work.x + MARGIN, y: work.y + MARGIN, width: work.width - MARGIN * 2, height: work.height - MARGIN * 2 - BUTTON };
-  const heart = pickHeart(widgets, box);
+  // A widget with a share (the corkboard) is grown to cover at least that
+  // fraction of the screen, standing the full height of one side.
+  widgets = widgets.map((w) => {
+    if (!w.share) return w;
+    const hgt = Math.round(box.height);
+    const wid = Math.ceil((w.share * work.width * work.height) / hgt);
+    const size = { width: Math.max(wid, w.min.width), height: hgt };
+    return { ...w, bounds: { ...w.bounds, ...size }, min: size, anchored: true };
+  });
+  const anchorW = Math.max(0, ...widgets.filter((w) => w.anchored).map((w) => w.bounds.width));
+  const heart = pickHeart(widgets.filter((w) => !w.anchored).length ? widgets.filter((w) => !w.anchored) : widgets, box);
   let rest = widgets.filter((w) => w !== heart);
 
   // Long, low widgets rest beneath the heart, at most two of them.
   const low = rest.filter((w) => w.bounds.width / w.bounds.height >= 2.6).sort((a, b) => b.bounds.width - a.bounds.width).slice(0, 2);
   rest = rest.filter((w) => !low.includes(w));
 
-  const hs = fit(heart.bounds, box.width * (rest.length ? 0.42 : 0.8), box.height * (low.length ? 0.66 : 0.82), heart.min);
-  const lows = low.map((w) => fit(w.bounds, Math.max(hs.width * 1.25, w.min.width), box.height * 0.16, w.min));
+  const heartMax = anchorW ? Math.min(box.width * 0.42, box.width - 2 * (anchorW + GAP)) : box.width * (rest.length ? 0.42 : 0.8);
+  const hs = fit(heart.bounds, heartMax, box.height * (low.length ? 0.66 : 0.82), heart.min);
+  const lows = low.map((w) => fit(w.bounds, anchorW ? heartMax : Math.max(hs.width * 1.25, w.min.width), box.height * 0.16, w.min));
   const below = lows.reduce((t, s) => t + s.height + GAP, 0);
 
   // With a crowded desk, one or two small, wide widgets (a clock, a counter)
@@ -197,26 +208,40 @@ function arrange(widgets, work) {
   const middle = Math.max(hs.width, ...lows.map((s) => s.width));
   const midX = box.x + (box.width - middle) / 2;
   const sideW = Math.max(0, midX - box.x - GAP);
+  // The anchored widget stands alone at the outer edge of its side.
+  const anchored = rest.filter((w) => w.anchored);
+  rest = rest.filter((w) => !w.anchored);
 
   // Share the rest between left and right: try every split that keeps the
   // two sides close in weight, and keep the one where widgets stay largest.
-  const leftStrip = { x: box.x, y: box.y, width: sideW, height: box.height };
-  const rightStrip = { x: midX + middle + GAP, y: box.y, width: sideW, height: box.height };
+  let leftStrip = { x: box.x, y: box.y, width: sideW, height: box.height };
+  let rightStrip = { x: midX + middle + GAP, y: box.y, width: sideW, height: box.height };
+  anchored.forEach((w, i) => {
+    const sz = { width: w.bounds.width, height: w.bounds.height };
+    if (i % 2 === 0) {
+      out[w.id] = { x: Math.round(leftStrip.x), y: Math.round(box.y + (box.height - sz.height) / 2), ...sz };
+      leftStrip = { ...leftStrip, x: leftStrip.x + sz.width + GAP, width: leftStrip.width - sz.width - GAP };
+    } else {
+      out[w.id] = { x: Math.round(rightStrip.x + rightStrip.width - sz.width), y: Math.round(box.y + (box.height - sz.height) / 2), ...sz };
+      rightStrip = { ...rightStrip, width: rightStrip.width - sz.width - GAP };
+    }
+  });
   const total = rest.reduce((t, w) => t + area(w.bounds), 0);
   let best = null;
   const n = Math.min(rest.length, 12);
   for (let mask = 0; mask < 1 << n; mask++) {
     const L = rest.filter((_, i) => i < n && mask & (1 << i)).concat(rest.slice(n).filter((_, i) => i % 2 === 0));
     const R = rest.filter((w) => !L.includes(w));
-    if (Math.abs(L.length - R.length) > 2) continue;
+    if (!anchored.length && Math.abs(L.length - R.length) > 2) continue;
     const wl = L.reduce((t, w) => t + area(w.bounds), 0);
-    if (total && Math.abs(wl / total - 0.5) > 0.2) continue;
+    if (L.length && leftStrip.width < 80) continue;
+    if (R.length && rightStrip.width < 80) continue;
     const pl = plan(L, leftStrip);
     const pr = plan(R, rightStrip);
-    const score = pl.score + pr.score - Math.abs(wl / (total || 1) - 0.5);
+    const score = pl.score + pr.score - (anchored.length ? 0 : 2 * Math.abs(wl / (total || 1) - 0.5));
     if (!best || score > best.score) best = { score, pl, pr };
   }
-  if (!best) best = { pl: plan(rest, leftStrip), pr: plan([], rightStrip) };
+  if (!best) best = { pl: plan(rest.slice(0, Math.ceil(rest.length / 2)), leftStrip), pr: plan(rest.slice(Math.ceil(rest.length / 2)), rightStrip) };
   side(best.pl, leftStrip, false, out, box);
   side(best.pr, rightStrip, true, out, box);
   return out;

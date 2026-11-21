@@ -14,7 +14,7 @@ let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
 
-const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌' };
+const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐' };
 const ART = {
   clock: ['10:42', 'Thursday · October 9'],
   countdown: ['48', 'days to go'],
@@ -29,6 +29,7 @@ const ART = {
   watched: ['1,040', 'films watched'],
   page: ['</>', 'your own HTML'],
   cork: ['📌', 'notes and string'],
+  board: ['✐', 'marker or chalk'],
 };
 
 const PAGES = [
@@ -207,6 +208,7 @@ function summary(w) {
     }
     case 'films': return [c.username ? `@${c.username}` : 'No Letterboxd user', c.folder ? c.folder.split('/').pop() : 'Movies'].join(' · ');
     case 'page': return c.name || 'No file chosen';
+    case 'board': return { white: 'Whiteboard', green: 'Green chalkboard', black: 'Black chalkboard' }[c.surface] || 'Whiteboard';
     case 'watched': return c.username ? `@${c.username}` : 'No Letterboxd user';
     case 'image': return c.file ? (c.caption || c.name || 'Photo') : 'No photo yet';
     case 'launcher': return c.apps.length ? c.apps.map((a) => a.name).slice(0, 3).join(', ') + (c.apps.length > 3 ? '…' : '') : 'No apps chosen';

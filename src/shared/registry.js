@@ -289,6 +289,18 @@ const TYPES = {
       { key: 'size', label: 'Text size', type: 'range', min: 10, max: 32 },
     ],
   },
+  board: {
+    name: 'Whiteboard',
+    description: 'Draw with markers on a whiteboard, or with chalk on a green or black chalkboard.',
+    size: { width: 520, height: 380 },
+    min: { width: 240, height: 180 },
+    max: { width: 1800, height: 1400 },
+    config: { surface: 'white', marker: 'black', chalk: 'classic', strokes: [], texts: [] },
+    appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 6, padding: 0 },
+    fields: [
+      { key: 'surface', label: 'Surface', type: 'select', options: { white: 'Whiteboard', green: 'Green chalkboard', black: 'Black chalkboard' } },
+    ],
+  },
   page: {
     name: 'Custom Widget',
     description: 'Your own widget from a single HTML file.',

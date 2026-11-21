@@ -56,7 +56,7 @@ function openSettings(focusWidgetId) {
 // Feng Shui: rearrange the visible widgets of the current layout into balance.
 function fengShui() {
   if (store.doc.settings.locked) return;
-  const widgets = store.widgets.filter((w) => w.visible).map((w) => ({ id: w.id, bounds: w.bounds, min: registry.TYPES[w.type].min }));
+  const widgets = store.widgets.filter((w) => w.visible).map((w) => ({ id: w.id, bounds: w.bounds, min: registry.TYPES[w.type].min, share: w.type === 'cork' ? 0.25 : 0 }));
   const placed = require('./fengshui').arrange(widgets, screen.getPrimaryDisplay().workArea);
   for (const [id, bounds] of Object.entries(placed)) store.updateWidget(id, { bounds });
 }

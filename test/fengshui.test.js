@@ -43,3 +43,18 @@ test('feng shui keeps a full dashboard of ten widgets tidy', () => {
     assert.ok(!(a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height), 'no overlaps');
   }
 });
+
+test('feng shui gives the corkboard at least a quarter of the screen', () => {
+  const ws = [w('idf', 523, 399), w('cork', 330, 450), w('films', 360, 470), w('watched', 300, 150), w('clock', 300, 150),
+    w('weather', 300, 190), w('world', 300, 200), w('dock', 520, 88), w('photo', 240, 330), w('stop', 260, 140)];
+  ws[1].share = 0.25;
+  ws[0].bounds.x = 458; ws[0].bounds.y = 250;
+  const out = arrange(ws, work);
+  assert.ok(out.cork.width * out.cork.height >= 0.25 * work.width * work.height - 1, 'a quarter of the screen');
+  const rects = Object.values(out);
+  for (const r of rects) assert.ok(r.x >= 0 && r.y >= 25 && r.x + r.width <= 1440 && r.y + r.height <= 815, 'on screen');
+  for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++) {
+    const a = rects[i], b = rects[j];
+    assert.ok(!(a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height), 'no overlaps');
+  }
+});

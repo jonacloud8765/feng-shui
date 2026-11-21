@@ -34,7 +34,7 @@ const GAP = 12;
 // A paper Sticky Note draws itself: its own paper, shadow and pin, with the
 // desktop showing around it. Such windows get no native blur or shadow.
 function paperNote(widget) {
-  if (widget.type === 'cork') return true;
+  if (widget.type === 'cork' || widget.type === 'board') return true;
   if (widget.type === 'image' && widget.config.frame && widget.config.frame !== 'glass') return true;
   return widget.type === 'note' && (widget.config.paper || 'butter') !== 'glass';
 }
@@ -210,7 +210,11 @@ class WidgetWindows {
     win.setVisibleOnAllWorkspaces(!!settings.allSpaces, { visibleOnFullScreen: false, skipTransformProcessType: true });
     if (mode === 'desktop') native.setDesktopLevel(win, true);
     win.loadFile(path.join(__dirname, '..', 'renderer', 'fengshui.html'), { query: { icon } });
-    win.once('ready-to-show', () => win.showInactive());
+    win.once('ready-to-show', () => {
+      win.showInactive();
+      // Keep it down on the desktop with the widgets, not above other apps.
+      if (mode === 'desktop') native.setDesktopLevel(win, true);
+    });
   }
 
   broadcast(channel, payload) {
