@@ -15,8 +15,8 @@ Free and open source under the MIT licence.
 | --- | --- |
 | <img src="docs/screenshots/desk-layout.jpg" alt="A glass desk layout with clock, weather, world clock, notes and launcher"> | <img src="docs/screenshots/films-cinema.jpg" alt="The Films widget showing movies and TV seasons grouped by show"> |
 | **Desk.** Glass widgets with real macOS blur. | **Cinema.** Films, with each show's seasons gathered together. |
-| <img src="docs/screenshots/film-closet.jpg" alt="The Film Closet: a 3D wall of film spines with a poster appearing on hover"> | <img src="docs/screenshots/feng-shui-layout.jpg" alt="The Feng Shui layout"> |
-| **Film Closet.** A walk-in shelf of films; hover a spine for its poster. | **Feng Shui.** One shared liquid glass. |
+| <img src="docs/screenshots/film-closet.jpg" alt="The Film Closet: a 3D wall of film spines with a poster appearing on hover"> | <img src="docs/screenshots/file-cabinet.jpg" alt="The File Cabinet: a 90s-style file explorer showing a Downloads folder"> |
+| **Film Closet.** A walk-in shelf of films; hover a spine for its poster. | **File Cabinet.** A 90s file explorer for your Downloads. |
 | <img src="docs/screenshots/situation-room.jpg" alt="A layout with a corkboard, whiteboard and status gauges"> | <img src="docs/screenshots/about.png" alt="The About window"> |
 | **Situation Room.** Corkboard, whiteboard and gauges. | **About.** |
 
@@ -55,8 +55,8 @@ awake and open settings.
   bagua arrangement sets them in three mirrored columns with even spacing.
   Other layouts are untouched.
 - **Shows grouped in Films.** Episodes and seasons of the same show sit
-  together in order, even when they came from different folders, with smaller
-  season thumbnails beside the movie posters and a Play All button.
+  together in order, even when they came from different folders, each season
+  the same size as a movie poster, with a Play All button.
 - **Arrow keys for layouts.** Choose Switch with ← → Keys in the layout menu,
   or click the layout bar, then use ← and → to move between layouts. Esc or
   Return finishes.
@@ -99,7 +99,7 @@ Letterboxd watchlist. Episodes are grouped by show, then by season in order.
 - **Play:** click a downloaded film to open it in [VLC](https://www.videolan.org/vlc/).
   A season opens as a playlist. If VLC isn't installed, the widget says so.
 - **Downloads:** Movies, then Shows. Each show has a header with a Play All
-  button and its seasons as half-size thumbnails.
+  button and its seasons in order, at the same size as the movie posters.
 - **Sections:** show downloads, the watchlist, or both, with an optional heading,
   so one widget can be a "Ready to watch" panel and another a watchlist shelf.
 - **Watchlist:** enter your Letterboxd username in the widget's settings. The
@@ -214,6 +214,16 @@ action as Feng Shui This Layout. On the Feng Shui layout it uses the bagua
 arrangement instead: each widget is placed by its element on a 3×3 grid, with
 no widget over 22% of the screen, no more than a 2.5× size gap and Fire never
 outweighing Water, then each column becomes one even, centred stack.
+
+## File Cabinet
+
+A 90s-style file explorer for one folder, your Downloads unless you choose
+another: a folder tree, Large Icons or Details, a preview pane, search and
+Properties, with optional click sounds. Scan runs a Disk Cleanup that finds
+temporary files, leftovers, old installers, duplicates, large files and empty
+folders. Nothing is ever erased: Delete asks first (No is the default) and then
+moves the items to the Trash, and the widget can't reach anything outside its
+folder.
 
 ## Film Closet
 

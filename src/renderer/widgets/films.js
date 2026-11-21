@@ -67,25 +67,18 @@ const css = `
 .films .filters input { flex: 1 1 90px; }
 .films .filters input::placeholder { color: inherit; opacity: 0.5; }
 .films .filters option { color: #111; }
-/* Shows: each show's seasons together, at half the movie poster size. */
+/* Shows: each show's seasons together, at the same size as the movie posters. */
 .films .shows { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 22px; }
 .films .show { flex: 0 1 auto; min-width: calc(var(--poster) * 1.2); max-width: 100%; }
-.films .show .items.seasons { display: flex; flex-wrap: wrap; }
-.films .show .items.seasons .item { width: calc(var(--poster) / 2); }
+.films .show .items.seasons { display: flex; flex-wrap: wrap; gap: 12px 10px; }
+.films .show .items.seasons .item { width: var(--poster); }
 .films .show-head { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; min-width: 0; }
 .films .show-t { flex: 1; min-width: 0; text-align: left; }
 .films .show-head .meta { margin-top: 1px; }
 .films .playall { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; padding: 0; background: rgba(255,255,255,0.1); color: inherit; opacity: 0.7; transition: opacity 0.2s, background-color 0.2s; }
 .films .playall:hover { opacity: 1; background: rgba(255,255,255,0.18); }
 .films .playall svg { width: 9px; height: 9px; margin-left: 1px; }
-.films .items.seasons { grid-template-columns: repeat(auto-fill, minmax(calc(var(--poster) / 2), calc(var(--poster) / 2))); gap: 8px 7px; }
-.films.shelf .items.seasons .item { flex: 0 0 calc(var(--poster) / 2); }
-.films .seasons .art { border-radius: 4px; }
-.films .seasons .art .card { font-size: calc(10px * var(--scale)); padding: 4px; }
-.films .seasons .art .badge { width: 14px; height: 14px; top: 3px; right: 3px; }
-.films .seasons .art .badge svg { width: 7px; height: 7px; }
-.films .seasons .name { font-size: calc(9px * var(--scale)); letter-spacing: -0.01em; }
-.films .seasons .meta { font-size: calc(9px * var(--scale)); }
+.films.shelf .items.seasons .item { flex: 0 0 var(--poster); }
 .films.list .items.seasons { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
 .films.list .seasons .art { width: 22px; }
 .films .progress { font-size: calc(10.5px * var(--scale)); opacity: 0.6; margin: -4px 0 8px; text-align: left; line-height: 1.4; }
