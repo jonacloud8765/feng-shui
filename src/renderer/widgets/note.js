@@ -23,8 +23,11 @@ export const PINS = {
   black: { label: 'Black', c: ['#7a7a7a', '#2a2a2a', '#000000'] },
 };
 
+// Long paper fibres, stretched sideways like real pulp.
+const FIBRE = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="520" height="260"><filter id="f"><feTurbulence type="fractalNoise" baseFrequency="0.006 0.09" numOctaves="4" seed="7" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.4  0 0 0 0 0.34  0 0 0 0 0.25  0 0 0 0.26 -0.1"/></filter><rect width="520" height="260" filter="url(#f)"/></svg>')}")`;
+
 // Paper grain, shared by every note.
-const GRAIN = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.35  0 0 0 0 0.3  0 0 0 0 0.2  0 0 0 0.55 0"/></filter><rect width="180" height="180" filter="url(#n)"/></svg>')}")`;
+const GRAIN = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.35  0 0 0 0 0.3  0 0 0 0 0.2  0 0 0 0.17 0"/></filter><rect width="180" height="180" filter="url(#n)"/></svg>')}")`;
 
 // A few specks of dust and a stray fibre, placed the same way every time for a given note.
 function dust(seed) {
@@ -47,40 +50,77 @@ const css = `
    for its shadow and for a pin that pokes out past the paper's edge. ---- */
 :root.paper-note .glass { overflow: visible; border-radius: 0; }
 :root.paper-note .glass > .layer { display: none; }
-.note.real { inset: 20px 14px 22px 12px; }
+.note.real { inset: 20px 14px 22px 12px; --curl: 24px; }
+.note.real { transform: rotate(var(--tilt, 0deg)); }
 .note.real .paper, .note.real .paper.on {
-  border-radius: 2px 2px 3px 2px; opacity: 1;
+  border-radius: 1.5px; opacity: 1;
+  /* The bottom-right corner is curled up, so the paper is cut away there. */
+  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--curl)), calc(100% - var(--curl)) 100%, 0 100%);
   background:
-    radial-gradient(120% 60% at 50% -10%, rgba(255,255,255,0.32), transparent 55%),
-    linear-gradient(180deg, rgba(0,0,0,0.045), rgba(0,0,0,0) 16%),
-    linear-gradient(200deg, rgba(255,255,255,0) 70%, rgba(0,0,0,0.06) 92%, rgba(0,0,0,0.12) 100%),
-    var(--dust), ${'${GRAIN}'},
+    radial-gradient(140% 70% at 30% -15%, rgba(255,255,255,0.36), transparent 55%),
+    linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.0) 3px, rgba(255,255,255,0.08) 3px, rgba(0,0,0,0) 17%),
+    linear-gradient(185deg, rgba(255,255,255,0) 55%, rgba(0,0,0,0.05) 85%, rgba(0,0,0,0.11) 100%),
+    linear-gradient(90deg, rgba(0,0,0,0.035), rgba(0,0,0,0) 6%, rgba(0,0,0,0) 94%, rgba(0,0,0,0.04)),
+    var(--dust), ${GRAIN}, ${FIBRE},
     var(--paper);
-  background-size: auto, auto, auto, 400px 400px, 180px 180px, auto;
-  background-blend-mode: normal, normal, normal, normal, multiply, normal;
-  box-shadow:
-    0 0.5px 0 rgba(255,255,255,0.6) inset,
-    0 0 0 0.5px rgba(0,0,0,0.08),
-    0 1px 1.5px rgba(0,0,0,0.18),
-    0 4px 8px -2px rgba(0,0,0,0.18),
-    0 14px 24px -10px rgba(0,0,0,0.35);
+  background-size: auto, auto, auto, auto, 400px 400px, 180px 180px, 520px 260px, auto;
+  background-blend-mode: normal, normal, normal, normal, normal, multiply, multiply, normal;
+  box-shadow: 0 0.5px 0 rgba(255,255,255,0.65) inset, 0 -0.5px 0 rgba(0,0,0,0.12) inset;
 }
-/* The bottom edge lifts off the desktop: two soft shadows tilt away under the corners. */
-.note.real .lift { position: absolute; inset: 0; pointer-events: none; z-index: -1; }
+/* Shadows live on a box behind the paper so the curled corner can cut the paper. */
+.note.real .lift {
+  position: absolute; inset: 0; pointer-events: none; z-index: -1;
+  clip-path: polygon(-40px -40px, calc(100% + 40px) -40px, calc(100% + 40px) calc(100% - var(--curl) + 6px), calc(100% - var(--curl) + 6px) calc(100% + 40px), -40px calc(100% + 40px));
+  box-shadow:
+    0 0 0 0.5px rgba(0,0,0,0.10),
+    0 1px 1.5px rgba(0,0,0,0.2),
+    0 4px 7px -2px rgba(0,0,0,0.18),
+    0 16px 26px -12px rgba(0,0,0,0.38);
+}
 .note.real .lift::before, .note.real .lift::after {
   content: ''; position: absolute; bottom: 10px; width: 46%; height: 22%;
-  box-shadow: 0 14px 12px rgba(0,0,0,0.32);
+  box-shadow: 0 14px 12px rgba(0,0,0,0.30);
 }
 .note.real .lift::before { left: 8px; transform: rotate(-3.2deg); }
-.note.real .lift::after { right: 6px; transform: rotate(3.6deg); }
+.note.real .lift::after { right: 14px; transform: rotate(4.4deg); box-shadow: 0 18px 14px rgba(0,0,0,0.34); }
 .note:not(.real) .lift { display: none; }
-/* The lifted corner catches a little light. */
+/* The curled-up corner: the paper's paler underside, folded over, with its own shadow. */
 .note.real .curl {
-  position: absolute; right: 0; bottom: 0; width: 34px; height: 34px; pointer-events: none;
-  border-bottom-right-radius: 3px;
-  background: linear-gradient(315deg, rgba(255,255,255,0.0) 0, rgba(255,255,255,0.22) 30%, rgba(0,0,0,0.05) 52%, transparent 60%);
+  position: absolute; right: 0; bottom: 0; width: var(--curl); height: var(--curl); pointer-events: none;
+  filter: drop-shadow(-2px -1px 2.5px rgba(0,0,0,0.22));
+}
+.note.real .curl::before {
+  content: ''; position: absolute; inset: 0;
+  clip-path: polygon(0 0, 100% 0, 0 100%);
+  border-bottom-right-radius: 60% 60%;
+  background:
+    linear-gradient(135deg, rgba(0,0,0,0.0) 0, rgba(0,0,0,0.0) 30%, rgba(255,255,255,0.55) 62%, rgba(0,0,0,0.10) 100%),
+    var(--paper);
+  filter: saturate(0.7) brightness(1.04);
 }
 .note:not(.real) .curl { display: none; }
+/* Window buttons, revealed by hovering the top-left corner. */
+.note .lights { position: absolute; left: 0; top: 0; padding: 9px 10px; display: flex; gap: 7px; z-index: 4; opacity: 0; transition: opacity 0.18s; }
+.note .lights:hover, .note .lights:focus-within { opacity: 1; }
+.note .lights button {
+  width: 12px; height: 12px; padding: 0; border-radius: 50%; border: 0.5px solid rgba(0,0,0,0.22);
+  display: grid; place-items: center; cursor: default; color: rgba(0,0,0,0.55); font: 700 9px/1 system-ui;
+}
+.note .lights button span { opacity: 0; }
+.note .lights:hover button span { opacity: 1; }
+.note .lights .close { background: #ff5f57; }
+.note .lights .min { background: #febc2e; }
+.note .lights .zoom { background: #28c840; }
+/* Resize grip in the top-right corner. */
+.note .grip.handle {
+  position: absolute; right: 0; top: 0; left: auto; bottom: auto; width: 22px; height: 22px; z-index: 4;
+  cursor: nesw-resize; opacity: 0; transition: opacity 0.18s;
+  background:
+    linear-gradient(225deg, transparent 0 5px, color-mix(in srgb, var(--ink, var(--text)) 45%, transparent) 5px 6px, transparent 6px 9px,
+      color-mix(in srgb, var(--ink, var(--text)) 45%, transparent) 9px 10px, transparent 10px);
+}
+.note:hover .grip.handle { opacity: 0.8; }
+.note.collapsed .body, .note.collapsed .curl { display: none; }
 .note.real .tape { top: -9px; opacity: 0.9; background: linear-gradient(90deg, rgba(250,246,236,0.78), rgba(240,234,220,0.62)); box-shadow: 0 1px 2px rgba(0,0,0,0.14); }
 .note.real .pushpin { top: -13px; filter: drop-shadow(1.5px 3px 1.5px rgba(0,0,0,0.38)); }
 .note .pushpin .tip { display: none; }
@@ -225,7 +265,13 @@ export function mount(root, ctx) {
   const fmt = h('div.fmt', {}, btn('u', 'underline', 'U', 'Underline (⌘U)'), btn('b', 'bold', 'B', 'Bold (⌘B)'), btn('i', 'italic', 'I', 'Italic (⌘I)'),
     h('span.sep'), listBtn('l', 'bullets', '•', 'Bulleted list (⌘⇧7)'), listBtn('c', 'check', '☐', 'Checklist (⌘⇧L)'));
   const sheet = h('div.sheet', {}, title, body);
-  const note = h('div.note', {}, h('div.lift'), paper, h('div.curl'), tape, pin, sheet, fmt);
+  const light = (cls, glyph, tip, fn) => h(`button.${cls}`, { title: tip, 'aria-label': tip, onclick: (e) => { e.stopPropagation(); fn(); } }, h('span', {}, glyph));
+  const lights = h('div.lights', {},
+    light('close', '×', 'Hide note (show it again from Settings)', () => ctx.api.updateWidget(ctx.widget.id, { visible: false })),
+    light('min', '–', 'Fold the note down to its title', () => collapse()),
+    light('zoom', '+', 'Zoom the note', () => zoom()));
+  const grip = h('div.grip.handle', { 'data-edge': 'ne', title: 'Resize' });
+  const note = h('div.note', {}, h('div.lift'), paper, h('div.curl'), tape, pin, sheet, fmt, lights, grip);
   // The note fills the whole glass, ignoring the widget padding wrapper.
   root.style.padding = '0';
   root.append(note);
@@ -353,6 +399,11 @@ export function mount(root, ctx) {
     note.classList.toggle('real', !!p.bg);
     document.documentElement.classList.toggle('paper-note', !!p.bg);
     note.style.setProperty('--dust', dust(ctx.widget.id || 'note'));
+    // Every note sits very slightly askew, the same way each time.
+    let t = 0;
+    for (const ch of ctx.widget.id || '') t = (t * 33 + ch.charCodeAt(0)) % 1000;
+    note.style.setProperty('--tilt', `${((t / 1000) * 1.2 - 0.6).toFixed(2)}deg`);
+    note.classList.toggle('collapsed', !!c.collapsed);
     const pc = (PINS[c.pinColor] || PINS.red).c;
     pc.forEach((v, i) => note.style.setProperty(`--pin-${i + 1}`, v));
     note.style.setProperty('--paper', p.bg || 'transparent');
@@ -375,10 +426,39 @@ export function mount(root, ctx) {
     if (document.activeElement !== body && body.innerHTML !== html) body.innerHTML = clean(html);
     if (document.activeElement !== title && title.innerHTML !== (c.title || '')) title.innerHTML = clean(c.title || '');
   }
+  // Yellow folds the note to a strip showing its title; again restores it.
+  function collapse() {
+    const c = ctx.config;
+    const b = { ...ctx.widget.bounds };
+    if (c.collapsed) {
+      ctx.setConfig({ collapsed: null });
+      ctx.api.updateWidget(ctx.widget.id, { bounds: { ...b, height: c.collapsed } });
+    } else {
+      ctx.setConfig({ collapsed: b.height });
+      ctx.api.updateWidget(ctx.widget.id, { bounds: { ...b, height: 96 } });
+    }
+    load();
+  }
+  // Green zooms to a larger copy (text scales with it); again goes back.
+  function zoom() {
+    const c = ctx.config;
+    const b = { ...ctx.widget.bounds };
+    if (c.zoomed) {
+      ctx.setConfig({ zoomed: null });
+      ctx.api.updateWidget(ctx.widget.id, { bounds: { ...b, width: c.zoomed.width, height: c.zoomed.height } });
+    } else {
+      const max = ctx.registry.TYPES.note.max;
+      const k = Math.min(1.7, max.width / b.width, max.height / b.height, (screen.availWidth - 20) / b.width, (screen.availHeight - 20) / b.height);
+      ctx.setConfig({ zoomed: { width: b.width, height: b.height } });
+      ctx.api.updateWidget(ctx.widget.id, { bounds: { ...b, width: Math.round(b.width * k), height: Math.round(b.height * k) } });
+    }
+  }
+
   // Text follows the note's size without changing the saved text size: the
   // size is remembered with the dimensions it was chosen at, and scaled from there.
   function fit() {
     const c = ctx.config;
+    if (c.collapsed) return; // a folded note keeps its text size
     const w = window.innerWidth, hgt = window.innerHeight;
     let base = c.base;
     if (!base || base.size !== c.size) {

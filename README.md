@@ -101,7 +101,10 @@ underline, bold or italicize it.
 Start a line with "- " for a bulleted list or "[] " for a checklist (or press
 ⌘⇧7 / ⌘⇧L), and click a box to tick it. Pin the note with washi tape, a
 pushpin (six colors), or nothing. Paper notes are drawn as real paper with grain,
-a little dust and a lifted-corner shadow; the Glass paper keeps the glass look. Three handwriting fonts are bundled: Homemade
+a little dust and a lifted-corner shadow; the Glass paper keeps the glass look.
+Hover the top-left corner for close (hide), fold and zoom buttons; drag the
+top-right corner to resize. Text scales with the note without changing its
+saved size. Three handwriting fonts are bundled: Homemade
 Apple (Apache 2.0), Nothing You Could Do and Caveat Brush (SIL Open Font
 License). Their licenses are in `src/renderer/fonts`.
 
