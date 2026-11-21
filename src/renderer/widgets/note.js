@@ -32,6 +32,10 @@ const css = `
   -webkit-mask: linear-gradient(90deg, transparent 0 2px, #000 2px calc(100% - 2px), transparent calc(100% - 2px));
   pointer-events: none;
 }
+.note .pushpin {
+  position: absolute; top: 4px; left: 50%; width: 26px; height: 36px; transform: translateX(-50%) rotate(8deg);
+  pointer-events: none; z-index: 2; filter: drop-shadow(1px 3px 2px rgba(0,0,0,0.28));
+}
 .note .sheet {
   position: relative; flex: 1; min-height: 0; overflow-y: auto;
   margin: calc(var(--pad) + 6px) var(--pad) var(--pad);
@@ -62,6 +66,9 @@ const css = `
   transform: translate(-50%, calc(-100% - 6px));
 }
 .note .fmt.on { display: flex; }
+/* While typing, the bar rests quietly in the corner. */
+.note .fmt.dock { display: flex; transform: none; left: auto !important; top: auto !important; right: 8px; bottom: 8px; opacity: 0.55; transition: opacity 0.2s; }
+.note .fmt.dock:hover { opacity: 1; }
 .note .fmt button {
   width: 26px; height: 24px; border: 0; border-radius: 6px; background: transparent; color: #fff;
   font: 600 14px/1 system-ui; cursor: pointer;
@@ -70,11 +77,30 @@ const css = `
 .note .fmt button.active { background: rgba(255,255,255,0.28); }
 .note .fmt .u { text-decoration: underline; }
 .note .fmt .i { font-style: italic; font-family: Georgia, serif; }
+.note .fmt .sep { width: 1px; margin: 3px 2px; background: rgba(255,255,255,0.2); }
+.note ul { margin: 0.1em 0; padding-left: 1.25em; }
+.note ul li { padding-left: 0.1em; }
+.note ul[data-check] { list-style: none; padding-left: 1.55em; }
+.note ul[data-check] li { position: relative; }
+.note ul[data-check] li::before {
+  content: ''; position: absolute; left: -1.45em; top: 0.32em; width: 0.8em; height: 0.8em; box-sizing: border-box;
+  border: 1.5px solid currentColor; border-radius: 0.22em; opacity: 0.7; cursor: pointer;
+}
+.note ul[data-check] li[data-done]::before {
+  opacity: 0.85; background: var(--ink, var(--text)); border-color: var(--ink, var(--text));
+}
+.note ul[data-check] li[data-done]::after {
+  content: ''; position: absolute; left: -1.2em; top: 0.42em; width: 0.22em; height: 0.42em;
+  border: solid var(--paper-bg, #fff); border-width: 0 0.12em 0.12em 0; transform: rotate(45deg); pointer-events: none;
+}
+.note ul[data-check] li[data-done] { color: color-mix(in srgb, var(--ink, var(--text)) 50%, transparent); text-decoration: line-through; text-decoration-thickness: 0.06em; }
 `;
 
 // Notes are stored as a small subset of HTML so underline, bold and italic
 // survive. Anything else pasted in is reduced to its text.
-const KEEP = new Set(['U', 'B', 'STRONG', 'I', 'EM', 'BR', 'DIV', 'P']);
+const KEEP = new Set(['U', 'B', 'STRONG', 'I', 'EM', 'BR', 'DIV', 'P', 'UL', 'OL', 'LI']);
+// The only attributes kept: which lists are checklists, and which items are ticked.
+const ATTRS = { UL: 'data-check', LI: 'data-done' };
 
 export function clean(html) {
   const tpl = document.createElement('template');
@@ -85,7 +111,8 @@ export function clean(html) {
       if (child.nodeType !== Node.ELEMENT_NODE) { child.remove(); continue; }
       walk(child);
       if (KEEP.has(child.tagName)) {
-        for (const a of [...child.attributes]) child.removeAttribute(a.name);
+        for (const a of [...child.attributes]) if (a.name !== ATTRS[child.tagName]) child.removeAttribute(a.name);
+        if (child.hasAttribute(ATTRS[child.tagName])) child.setAttribute(ATTRS[child.tagName], '');
       } else {
         child.replaceWith(...child.childNodes);
       }
@@ -101,14 +128,25 @@ export function mount(root, ctx) {
   root.append(h('style', {}, css));
   const paper = h('div.paper');
   const tape = h('div.tape');
+  const pin = h('div.pushpin', { html: `<svg viewBox="0 0 22 30" width="26" height="36" aria-hidden="true">
+    <defs><radialGradient id="pinhead" cx="35%" cy="30%" r="70%"><stop offset="0" stop-color="#ff8a7a"/><stop offset="0.55" stop-color="#d8382c"/><stop offset="1" stop-color="#8e1d16"/></radialGradient></defs>
+    <path d="M11 17 L11 29" stroke="#9aa0a6" stroke-width="1.6" stroke-linecap="round"/>
+    <ellipse cx="11" cy="17" rx="6" ry="2.2" fill="#a8261d"/>
+    <path d="M7 9 h8 l1.5 7 h-11 z" fill="#c22f24"/>
+    <circle cx="11" cy="7.5" r="6.5" fill="url(#pinhead)"/>
+    <ellipse cx="8.6" cy="5.2" rx="2" ry="1.3" fill="rgba(255,255,255,0.65)"/></svg>` });
   const title = h('div.title', { contenteditable: 'true', spellcheck: 'true', 'data-placeholder': 'Title', 'aria-label': 'Note title' });
   const body = h('div.body', { contenteditable: 'true', spellcheck: 'true', 'data-placeholder': 'Write something…', 'aria-label': 'Note' });
   const btn = (cls, cmd, label, tip) => h(`button.${cls}`, {
     title: tip, onmousedown: (e) => { e.preventDefault(); document.execCommand(cmd); save(); place(); },
   }, label);
-  const fmt = h('div.fmt', {}, btn('u', 'underline', 'U', 'Underline (⌘U)'), btn('b', 'bold', 'B', 'Bold (⌘B)'), btn('i', 'italic', 'I', 'Italic (⌘I)'));
+  const listBtn = (cls, kind, label, tip) => h(`button.${cls}`, {
+    title: tip, onmousedown: (e) => { e.preventDefault(); toggleList(kind); },
+  }, label);
+  const fmt = h('div.fmt', {}, btn('u', 'underline', 'U', 'Underline (⌘U)'), btn('b', 'bold', 'B', 'Bold (⌘B)'), btn('i', 'italic', 'I', 'Italic (⌘I)'),
+    h('span.sep'), listBtn('l', 'bullets', '•', 'Bulleted list (⌘⇧7)'), listBtn('c', 'check', '☐', 'Checklist (⌘⇧L)'));
   const sheet = h('div.sheet', {}, title, body);
-  const note = h('div.note', {}, paper, tape, sheet, fmt);
+  const note = h('div.note', {}, paper, tape, pin, sheet, fmt);
   // The note fills the whole glass, ignoring the widget padding wrapper.
   root.style.padding = '0';
   root.append(note);
@@ -128,11 +166,66 @@ export function mount(root, ctx) {
       document.execCommand('insertText', false, e.clipboardData.getData('text/plain'));
     });
     el.addEventListener('keydown', (e) => {
+      if (e.metaKey && e.shiftKey && (e.code === 'Digit7' || e.code === 'KeyL')) {
+        e.preventDefault(); toggleList(e.code === 'KeyL' ? 'check' : 'bullets'); return;
+      }
       if (!e.metaKey) return;
       const cmd = { u: 'underline', b: 'bold', i: 'italic' }[e.key.toLowerCase()];
       if (cmd) { e.preventDefault(); document.execCommand(cmd); save(); place(); }
     });
   }
+  // Lists live only in the body. A checklist is a bulleted list marked data-check.
+  const listAt = () => {
+    const n = document.getSelection().anchorNode;
+    const el = n && (n.nodeType === 1 ? n : n.parentElement);
+    return el && body.contains(el) ? el.closest('ul') : null;
+  };
+  function toggleList(kind) {
+    if (!body.contains(document.getSelection().anchorNode)) body.focus();
+    const ul = listAt();
+    if (ul && (kind === 'check') !== ul.hasAttribute('data-check')) {
+      // Switch the list's kind in place.
+      ul.toggleAttribute('data-check', kind === 'check');
+      if (kind !== 'check') ul.querySelectorAll('li[data-done]').forEach((li) => li.removeAttribute('data-done'));
+    } else {
+      document.execCommand('insertUnorderedList');
+      const made = listAt();
+      if (made && kind === 'check') made.setAttribute('data-check', '');
+    }
+    save(); place();
+  }
+  // Tick a checklist item by clicking its box.
+  body.addEventListener('mousedown', (e) => {
+    const li = e.target.closest?.('ul[data-check] > li');
+    if (!li || e.clientX > li.getBoundingClientRect().left) return;
+    e.preventDefault();
+    li.toggleAttribute('data-done');
+    save();
+  });
+  body.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      // A new checklist line starts unticked.
+      setTimeout(() => { const n = document.getSelection().anchorNode; (n?.nodeType === 1 ? n : n?.parentElement)?.closest('li')?.removeAttribute('data-done'); });
+    }
+    if (e.key === ' ') {
+      // "- " or "* " starts a bulleted list, "[] " a checklist.
+      const sel = document.getSelection();
+      const n = sel.anchorNode;
+      if (!sel.isCollapsed || n?.nodeType !== 3 || listAt()) return;
+      const before = n.textContent.slice(0, sel.anchorOffset);
+      const kind = before === '-' || before === '*' ? 'bullets' : before === '[]' ? 'check' : null;
+      if (!kind) return;
+      const lineStart = !n.previousSibling || n.previousSibling.nodeName === 'BR';
+      if (!lineStart) return;
+      e.preventDefault();
+      sel.setBaseAndExtent(n, 0, n, sel.anchorOffset);
+      document.execCommand('delete');
+      toggleList(kind);
+    }
+  });
+
+  body.addEventListener('blur', () => fmt.classList.remove('dock'));
+
   // Enter in the title moves on to the body.
   title.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); body.focus(); } });
 
@@ -141,16 +234,32 @@ export function mount(root, ctx) {
     const sel = document.getSelection();
     const inNote = sel.rangeCount && !sel.isCollapsed && sheet.contains(sel.anchorNode);
     fmt.classList.toggle('on', !!inNote);
-    if (!inNote) return;
+    fmt.classList.toggle('dock', !inNote && document.activeElement === body);
+    if (!inNote) { updateActive(); return; }
     const r = sel.getRangeAt(0).getBoundingClientRect();
     const box = note.getBoundingClientRect();
     fmt.style.left = `${Math.min(Math.max(r.left + r.width / 2 - box.left, 44), box.width - 44)}px`;
     fmt.style.top = `${Math.max(r.top - box.top, 36)}px`;
+    updateActive();
+  }
+  function updateActive() {
     for (const [b, cmd] of [[fmt.children[0], 'underline'], [fmt.children[1], 'bold'], [fmt.children[2], 'italic']]) {
       b.classList.toggle('active', document.queryCommandState(cmd));
     }
+    const ul = listAt();
+    fmt.children[4].classList.toggle('active', !!ul && !ul.hasAttribute('data-check'));
+    fmt.children[5].classList.toggle('active', !!ul?.hasAttribute('data-check'));
   }
   document.addEventListener('selectionchange', place);
+  let lastRange = null;
+  document.addEventListener('selectionchange', () => {
+    const sel = document.getSelection();
+    if (sel.rangeCount && body.contains(sel.anchorNode)) lastRange = sel.getRangeAt(0).cloneRange();
+  });
+  function restore() {
+    body.focus();
+    if (lastRange) { const sel = document.getSelection(); sel.removeAllRanges(); sel.addRange(lastRange); }
+  }
 
   function underlineSelection() {
     const sel = document.getSelection();
@@ -162,6 +271,7 @@ export function mount(root, ctx) {
     const p = PAPERS[c.paper] || PAPERS.glass;
     paper.classList.toggle('on', !!p.bg);
     note.style.setProperty('--paper', p.bg || 'transparent');
+    note.style.setProperty('--paper-bg', p.bg || '#fff');
     if (p.ink) note.style.setProperty('--ink', p.ink); else note.style.removeProperty('--ink');
     const fonts = ctx.registry.FONTS;
     const bodyFont = (fonts[c.font] || fonts.noteworthy).stack;
@@ -170,7 +280,11 @@ export function mount(root, ctx) {
     note.style.setProperty('--note-size', `${c.size}px`);
     note.classList.toggle('lined', !!c.lined);
     title.classList.toggle('hidden', !c.showTitle);
-    tape.style.display = c.tape ? '' : 'none';
+    // Older notes only had a tape on/off switch; carry "off" over once.
+    let pinned = c.pin;
+    if (c.tape === false && c.pin === 'tape') { pinned = 'none'; ctx.setConfig({ pin: 'none', tape: true }); }
+    tape.style.display = pinned === 'tape' ? '' : 'none';
+    pin.style.display = pinned === 'pushpin' ? '' : 'none';
     // Older notes kept plain text; show it as the body until it's edited.
     const html = c.body != null && c.body !== '' ? c.body : escape(c.text || '');
     if (document.activeElement !== body && body.innerHTML !== html) body.innerHTML = clean(html);
@@ -179,7 +293,14 @@ export function mount(root, ctx) {
   load();
   return {
     update: load,
-    menu: () => [{ label: 'Underline Selection', action: 'underline' }],
-    menuAction: (a) => a === 'underline' && underlineSelection(),
+    menu: () => [
+      { label: 'Underline Selection', action: 'underline' },
+      { label: 'Bulleted List', action: 'bullets' },
+      { label: 'Checklist', action: 'check' },
+    ],
+    menuAction: (a) => {
+      if (a === 'underline') underlineSelection();
+      else if (a === 'bullets' || a === 'check') { restore(); toggleList(a); }
+    },
   };
 }

@@ -97,7 +97,10 @@ progress bar. Click the number to open that page.
 
 A note with an optional title and a body, each with its own font. Select text
 and press ⌘U, ⌘B or ⌘I, or use the small bar that appears over a selection, to
-underline, bold or italicize it. Three handwriting fonts are bundled: Homemade
+underline, bold or italicize it.
+Start a line with "- " for a bulleted list or "[] " for a checklist (or press
+⌘⇧7 / ⌘⇧L), and click a box to tick it. Pin the note with washi tape, a
+pushpin, or nothing. Three handwriting fonts are bundled: Homemade
 Apple (Apache 2.0), Nothing You Could Do and Caveat Brush (SIL Open Font
 License). Their licenses are in `src/renderer/fonts`.
 
