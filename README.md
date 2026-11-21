@@ -93,6 +93,13 @@ A single number: how many films a Letterboxd member has logged as watched,
 read from their public Films page and checked hourly. Set a goal to add a
 progress bar. Click the number to open that page.
 
+## Sticky Note
+
+A note with an optional title and a body, each with its own font. Select text
+and press ⌘U, ⌘B or ⌘I, or use the small bar that appears over a selection, to
+underline, bold or italicize it. The Signature font is Herr Von Muellerhoff,
+bundled under the SIL Open Font License (see `src/renderer/fonts`).
+
 ## Custom Widget
 
 Turns any self-contained HTML file into a widget. Morrow copies the file into
