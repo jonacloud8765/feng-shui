@@ -137,7 +137,7 @@ const css = `
 .corkwrap.lit .room { background:
   radial-gradient(circle at var(--lx) var(--ly), rgba(255,238,196,0.42) 0, rgba(255,222,160,0.18) 22%, rgba(255,210,150,0) 48%),
   radial-gradient(circle at var(--lx) var(--ly), rgba(0,0,0,0) 34%, rgba(12,9,6,0.32) 66%, rgba(8,6,4,0.66) 100%); }
-.corkwrap.dark .room { background: radial-gradient(circle at var(--lx) var(--ly), rgba(14,18,30,0.55), rgba(6,8,14,0.80) 75%); }
+.corkwrap.dark .room { background: radial-gradient(circle at var(--lx) var(--ly), rgba(10,13,22,0.74), rgba(4,5,10,0.9) 75%); }
 .corkwrap.haslamp { top: 62px; }
 .corkwrap .lamp { position: absolute; right: 4%; top: -68px; width: 30%; max-width: 230px; aspect-ratio: 200 / 150; z-index: 7; cursor: pointer; filter: drop-shadow(0 6px 8px rgba(0,0,0,0.55)); }
 .corkwrap .lamp svg { width: 100%; height: 100%; overflow: visible; display: block; }
@@ -204,7 +204,7 @@ export function mount(root, ctx) {
   const orientBtn = (cls, tip, portrait) => h(`button.${cls}`, { title: tip, 'aria-label': tip, 'data-interactive': '', onmousedown: (e) => e.stopPropagation(), onclick: () => orient(portrait) }, h('i'));
   const orientBar = h('div.orient', { 'data-interactive': '' }, orientBtn('p', 'Portrait', true), orientBtn('l', 'Landscape', false));
   const room = h('div.room');
-  const lamp = h('div.lamp', { 'data-interactive': '', title: 'Click to switch the lamp on or off', html: LAMP, onmousedown: (e) => e.stopPropagation(), onclick: () => ctx.setConfig({ lamp: ctx.config.lamp === 'on' ? 'off' : 'on' }) });
+  const lamp = h('div.lamp', { 'data-interactive': '', title: 'Click to switch the lamp on or off', html: LAMP, onmousedown: (e) => e.stopPropagation(), onclick: () => { ctx.setConfig({ lamp: ctx.config.lamp === 'on' ? 'off' : 'on' }); light(); } });
   const wrap = h('div.corkwrap', {}, h('div.cork-frame'), board, orientBar, room, lamp);
   root.append(wrap);
   const locked = () => !!ctx.config.locked;
@@ -496,8 +496,9 @@ export function mount(root, ctx) {
       { label: 'Desk Lamp', type: 'checkbox', checked: ctx.config.lamp === 'on' || ctx.config.lamp === 'off', action: 'lamp' },
     ],
     menuAction: (a) => {
-      if (a === 'lock') ctx.setConfig({ locked: !locked() });
-      else if (a === 'lamp') ctx.setConfig({ lamp: ctx.config.lamp === 'on' || ctx.config.lamp === 'off' ? 'none' : 'on' });
+      // setConfig doesn't echo back to this window, so repaint here.
+      if (a === 'lock') { ctx.setConfig({ locked: !locked() }); load(); }
+      else if (a === 'lamp') { ctx.setConfig({ lamp: ctx.config.lamp === 'on' || ctx.config.lamp === 'off' ? 'none' : 'on' }); light(); }
       else if (a === 'note') addNote();
       else if (a === 'photo') addPhoto();
       else if (a === 'cut') { strings = []; drawStrings(); save(true); }

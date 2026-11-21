@@ -85,7 +85,7 @@ export function mount(root, ctx) {
     ticket.classList.remove('flip');
     void ticket.offsetWidth;
     ticket.classList.add('flip');
-    setTimeout(() => ctx.setConfig({ look: next }), 300);
+    setTimeout(() => { ctx.setConfig({ look: next }); paint(); }, 300);
   });
   ticket.addEventListener('animationend', () => ticket.classList.remove('flip'));
 
@@ -144,6 +144,6 @@ export function mount(root, ctx) {
     },
     resume: () => load(false),
     menu: () => [{ label: 'Refresh Count', action: 'refresh' }, { type: 'separator' }, ...ORDER.map((k) => ({ label: LOOKS[k], type: 'radio', checked: look() === k, action: `look:${k}` }))],
-    menuAction: (a) => { if (a === 'refresh') load(true); else if (a.startsWith('look:')) ctx.setConfig({ look: a.slice(5) }); },
+    menuAction: (a) => { if (a === 'refresh') load(true); else if (a.startsWith('look:')) { ctx.setConfig({ look: a.slice(5) }); paint(); } },
   };
 }
