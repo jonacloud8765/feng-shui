@@ -55,5 +55,6 @@ contextBridge.exposeInMainWorld('morrow', {
   filmDetails: (slugs) => ipcRenderer.invoke('morrow:film-details', slugs),
   watched: (user, force) => ipcRenderer.invoke('morrow:watched', user, force),
   openProfile: (user) => ipcRenderer.send('morrow:open-profile', user),
+  pickPage: () => ipcRenderer.invoke('morrow:pick-page'),
   pickFolder: (current) => ipcRenderer.invoke('morrow:pick-folder', current),
 });

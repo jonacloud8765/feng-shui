@@ -241,6 +241,17 @@ const TYPES = {
       { key: 'showUser', label: 'Show username', type: 'toggle' },
     ],
   },
+  page: {
+    name: 'Custom Widget',
+    description: 'Your own widget from a single HTML file.',
+    size: { width: 360, height: 360 },
+    min: { width: 120, height: 80 },
+    max: { width: 1800, height: 1400 },
+    config: { file: '', name: '' },
+    // The page draws its own card; Morrow adds only the native blur behind it.
+    appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 30, padding: 0 },
+    fields: [{ key: 'file', label: 'HTML file', type: 'page' }],
+  },
   stopwatch: {
     name: 'Stopwatch',
     description: 'Start, pause, laps. Expands to show lap times.',

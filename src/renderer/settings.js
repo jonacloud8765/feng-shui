@@ -14,7 +14,7 @@ let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
 
-const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', coin: '◐', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#' };
+const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', coin: '◐', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>' };
 const ART = {
   clock: ['10:42', 'Thursday · October 9'],
   countdown: ['48', 'days to go'],
@@ -28,6 +28,7 @@ const ART = {
   image: ['▣', 'your photo'],
   films: ['▶', 'ready to watch'],
   watched: ['1,040', 'films watched'],
+  page: ['</>', 'your own HTML'],
 };
 
 const PAGES = [
@@ -202,6 +203,7 @@ function summary(w) {
     case 'worldclock': return c.cities.length ? c.cities.map((x) => x.name).join(', ') : 'No cities yet';
     case 'note': return c.text ? c.text.split('\n')[0].slice(0, 40) : 'Empty note';
     case 'films': return [c.username ? `@${c.username}` : 'No Letterboxd user', c.folder ? c.folder.split('/').pop() : 'Movies'].join(' · ');
+    case 'page': return c.name || 'No file chosen';
     case 'watched': return c.username ? `@${c.username}` : 'No Letterboxd user';
     case 'image': return c.file ? (c.caption || c.name || 'Photo') : 'No photo yet';
     case 'launcher': return c.apps.length ? c.apps.map((a) => a.name).slice(0, 3).join(', ') + (c.apps.length > 3 ? '…' : '') : 'No apps chosen';
@@ -282,6 +284,7 @@ function field(w, f) {
     case 'font': return row(f.label, select(v, Object.fromEntries(Object.entries(registry.FONTS).map(([k, x]) => [k, x.label])), set, f.label));
     case 'image': return photoField(w);
     case 'folder': return folderField(w, f);
+    case 'page': return pageField(w);
     case 'city': return cityEditor(w, f, false);
     case 'cities': return cityEditor(w, f, true);
     default: return row(f.label, text(v, set, { placeholder: f.placeholder || '', label: f.label }), f.hint);
@@ -350,6 +353,18 @@ function appsEditor(w) {
     h('div.row', {}, h('div.k', {}, 'Add applications', h('small', {}, 'From /Applications, /System/Applications and ~/Applications.')),
       h('div.v', {}, search, h('button.link', { title: 'Rescan', onclick: async () => { installed = await api.listApps(true); paintList(); } }, '↻'))),
     listBox);
+}
+
+function pageField(w) {
+  const pick = async () => {
+    const r = await api.pickPage();
+    if (r.ok) { editWidget(w.id, { config: { file: r.data.file, name: r.data.name } }); render(); }
+    else if (!r.canceled) toast(r.error);
+  };
+  return row('HTML file', h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+    h('span', { style: { opacity: 0.75 } }, w.config.name || 'None chosen'),
+    h('button.btn', { onclick: pick }, w.config.file ? 'Replace…' : 'Choose…')),
+  'A single self-contained file. Morrow keeps its own copy, so the original can move.');
 }
 
 function folderField(w, f) {
