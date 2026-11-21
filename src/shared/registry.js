@@ -110,10 +110,9 @@ const STYLES = {
     { id: 'bare', name: 'Borderless', appearance: CLEAR({ radius: 14 }), config: { frame: 'bare' } },
   ],
   watched: [
-    { id: 'letterboxd', name: 'Letterboxd', appearance: look('hud', '#14181c', 0.82, '#ffffff', '#00e054', { weight: 600, infoFont: 'sf' }) },
-    { id: 'marquee', name: 'Marquee', appearance: look('hud', '#0a0a0c', 0.72, '#f4ede1', '#e6b45e', { font: 'didot', infoFont: 'avenir' }) },
-    { id: 'ticket', name: 'Ticket Stub', appearance: look('popover', '#f4ead8', 0.78, '#3a2a1a', '#c0392b', { font: 'futura', infoFont: 'futura', weight: 400, radius: 10, highlight: 0.3 }) },
-    { id: 'clear', name: 'Clear', appearance: CLEAR({ weight: 200 }) },
+    { id: 'admit', name: 'Admit One', appearance: CLEAR(), config: { look: 'admit' } },
+    { id: 'deco', name: 'Picture House', appearance: CLEAR(), config: { look: 'deco' } },
+    { id: 'foil', name: 'Midnight Premiere', appearance: CLEAR(), config: { look: 'foil' } },
   ],
   stopwatch: [
     { id: 'chrono', name: 'Chrono', appearance: look('hud', '#101114', 0.7, '#f2f2f2', '#ff9f0a', { weight: 200 }) },
@@ -267,12 +266,13 @@ const TYPES = {
   watched: {
     name: 'Films Watched',
     description: 'How many films you’ve watched, from your Letterboxd profile.',
-    size: { width: 220, height: 170 },
-    min: { width: 120, height: 90 },
+    size: { width: 300, height: 180 },
+    min: { width: 160, height: 100 },
     max: { width: 900, height: 700 },
-    config: { username: '', label: 'films watched', showUser: true, goal: 0 },
+    config: { username: '', label: 'films watched', showUser: true, goal: 0, look: 'admit' },
     fields: [
       { key: 'username', label: 'Letterboxd username', type: 'text', placeholder: 'Your public username' },
+      { key: 'look', label: 'Ticket', type: 'choice', options: { admit: 'Admit One', deco: 'Picture House', foil: 'Midnight' }, hint: 'Or click the ticket to change it.' },
       { key: 'goal', label: 'Goal', type: 'number', placeholder: 'None', hint: 'A target count shows a progress bar. Leave at 0 for none.' },
     ],
   },
@@ -303,7 +303,7 @@ const TYPES = {
   },
   doughcon: {
     name: 'DEFCON',
-    description: 'The DEFCON level from PizzINT Watch’s Pentagon pizza index (DOUGHCON).',
+    description: 'The DEFCON level from PizzINT Watch’s Pentagon pizza index.',
     size: { width: 340, height: 128 },
     min: { width: 230, height: 90 },
     max: { width: 900, height: 340 },

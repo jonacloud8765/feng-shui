@@ -23,7 +23,9 @@ ${pzCss}
 .dc .shield svg { height: 100%; display: block; }
 .dc .text { min-width: 0; display: flex; flex-direction: column; gap: 1.5cqh; }
 .dc .kicker { font-size: max(8px, 8.5cqh); letter-spacing: 0.32em; color: color-mix(in srgb, var(--lvl) 75%, #dfe); text-transform: uppercase; }
-.dc .big { display: flex; align-items: baseline; gap: 3.5cqw; }
+.dc .big { display: flex; align-items: center; gap: 4cqw; min-width: 0; }
+.dc .side { display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 2.5cqh; min-width: 0; }
+.dc .desc { white-space: normal !important; line-height: 1.3; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
 .dc .num { font-family: "DIN Condensed", "Avenir Next Condensed", "Impact", sans-serif; font-weight: 700; font-size: 52cqh; line-height: 0.82;
   color: var(--lvl); text-shadow: 0 0 14px color-mix(in srgb, var(--lvl) 55%, transparent); letter-spacing: 0.02em; }
 .dc .defcon { font-size: max(8px, 9cqh); letter-spacing: 0.22em; padding: 0.35em 0.6em 0.25em; border: 1px solid color-mix(in srgb, var(--lvl) 60%, transparent);
@@ -40,7 +42,7 @@ function shield(level) {
   return `<svg viewBox="0 0 40 46">
     <path d="M20 2 L36 8 V22 C36 33 29 40 20 44 C11 40 4 33 4 22 V8 Z" style="fill: color-mix(in srgb, var(--lvl) 14%, transparent); stroke: var(--lvl)" stroke-width="2" stroke-linejoin="round"/>
     <path d="M20 7 L31.5 11.4 V22 C31.5 30 26.6 35.4 20 38.6 C13.4 35.4 8.5 30 8.5 22 V11.4 Z" fill="none" style="stroke: var(--lvl)" stroke-width="0.8" opacity="0.55"/>
-    <text x="20" y="29" text-anchor="middle" font-family="DIN Condensed, Impact, sans-serif" font-weight="700" font-size="17" style="fill: var(--lvl)">${level || '–'}</text>
+    <path d="M20 13.5 L22.6 19.8 L29.3 20.3 L24.2 24.6 L25.8 31.2 L20 27.6 L14.2 31.2 L15.8 24.6 L10.7 20.3 L17.4 19.8 Z" style="fill: var(--lvl); opacity: ${level ? 0.95 : 0.35}"/>
   </svg>`;
 }
 
@@ -50,7 +52,7 @@ export function mount(root, ctx) {
   document.documentElement.classList.add('paper-note');
   const card = h('div.dc');
   const row = h('div.row');
-  const info = h('button.pz-btn', { title: 'About DEFCON and DOUGHCON (opens PizzINT Watch)', 'aria-label': 'About DEFCON', html: INFO_SVG, onmousedown: (e) => e.stopPropagation(), onclick: () => ctx.api.openPizzint('doughcon') });
+  const info = h('button.pz-btn', { title: 'About DEFCON (opens PizzINT Watch)', 'aria-label': 'About DEFCON', html: INFO_SVG, onmousedown: (e) => e.stopPropagation(), onclick: () => ctx.api.openPizzint('doughcon') });
   card.style.setProperty('--lvl', '#39ff6a');
 
   function render(r, _state, error) {
@@ -63,9 +65,8 @@ export function mount(root, ctx) {
     row.replaceChildren(
       h('div.shield', { html: shield(r.level) }),
       h('div.text', {},
-        h('div.kicker', {}, 'DEFCON'),
-        h('div.big', {}, h('div.num', {}, String(r.defcon)), h('div.defcon', {}, `DOUGHCON ${r.level}`)),
-        h('div.desc', { title: r.description }, r.description)));
+        h('div.big', {}, h('div.num', {}, String(r.defcon)),
+          h('div.side', {}, h('div.kicker', {}, 'DEFCON'), h('div.desc', { title: r.description }, r.description)))));
   }
 
   render(null);

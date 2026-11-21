@@ -90,9 +90,10 @@ Letterboxd watchlist. Episodes are grouped into one entry per season.
 
 ## Films Watched
 
-A single number: how many films a Letterboxd member has logged as watched,
-read from their public Films page and checked hourly. Set a goal to add a
-progress bar. Click the number to open that page.
+How many films a Letterboxd member has logged as watched, read from their
+public Films page and checked hourly, printed on a cinema ticket stub. Click
+the ticket to flip through its three looks: Admit One, Picture House and
+Midnight Premiere. Set a goal to add a progress bar.
 
 ## Sticky Note
 
@@ -131,11 +132,12 @@ undoes). The drawing scales with the board.
 
 ## DEFCON and Nothing Ever Happens
 
-Two small widgets with readings from PizzINT Watch. DEFCON shows the site's
-DOUGHCON level and the DEFCON level it maps to, coloured by readiness. The
-Nothing Ever Happens gauge shows the site's index, worked out the way its page
-does (the highest escalation probability among the markets it watches), on
-its own four bands. Each refreshes on its own every five minutes and has a
+Two small widgets with readings from PizzINT Watch. DEFCON shows the level
+from the site's Pentagon pizza index, coloured by readiness. The Nothing Ever
+Happens gauge shows the site's index, worked out the way its page does (the
+highest escalation probability among the markets it watches), on its own four
+bands, with the score in a half disc under the needle and the market driving
+it named as the current threat. Each refreshes on its own every five minutes and has a
 refresh button; a forced refresh is throttled to one request every twenty
 seconds. A failed request keeps the last good reading, kept on disk, and marks
 it stale. Nothing is shown until a real reading has arrived.
