@@ -15,9 +15,9 @@
 // the column arrangement in fengshui.js.
 
 const GRID = 8;
-const MARGIN = 16;
+const MARGIN = 32;
 const BAR = 40; // the layout bar along the top
-const TITLE = 24; // the lacquer title bar the skin adds to every widget
+const TITLE = 0; // the skin adds no title bar; kept so minimum heights stay explicit
 
 // Zones by [column, row], seen from the Dock looking in.
 const ZONES = {
@@ -76,7 +76,7 @@ function words(w) {
   return `${c.title || ''} ${c.label || ''} ${file} ${w.type}`.toLowerCase();
 }
 
-// A short, plain title for the lacquer title bar.
+// A short, plain title for the widget (used in the arrangement report and tests).
 function titleOf(w, typeName) {
   const c = w.config || {};
   const t = String(c.title || '').replace(/<[^>]*>/g, '').trim();
@@ -146,7 +146,8 @@ function arrange(widgets, work) {
   const left = Math.ceil((work.x + MARGIN) / GRID) * GRID, top = Math.ceil((work.y + MARGIN + BAR) / GRID) * GRID;
   const right = Math.floor((work.x + work.width - MARGIN) / GRID) * GRID, bottomEdge = Math.floor((work.y + work.height - MARGIN) / GRID) * GRID;
   const content = { x: left, y: top, width: right - left, height: bottomEdge - top };
-  const gutter = work.width >= 1600 ? 16 : 8;
+  // Generous gutters: liquid glass needs room to breathe.
+  const gutter = work.width >= 1600 ? 32 : 24;
   const cellW = (content.width - 2 * gutter) / 3;
   const cellH = (content.height - 2 * gutter) / 3;
   const contentArea = content.width * content.height;
@@ -244,49 +245,42 @@ function arrange(widgets, work) {
     }
   }
 
-  // 4. Pack each cell. Columns sit against the outer edges and the middle column
-  // is centred; the top row hangs from the top, the bottom row rests on the
-  // bottom, the middle row is centred. Faces open toward the room.
+  // 4. Pack. Each screen column is one quiet stack: its widgets share one
+  // width, sit an even distance apart, and the stack is centred in the room's
+  // height, so the three columns mirror each other. The left column rests on
+  // the left wall, the right column on the right wall, the middle is centred.
   const placed = {};
-  const rowY = [content.y, content.y + cellH + gutter, content.y + 2 * (cellH + gutter)];
   const colX = [content.x, content.x + cellW + gutter, content.x + 2 * (cellW + gutter)];
-  // A tall stack may spill past its cell (Family's corkboard and photo), so the
-  // left and right columns are packed top to bottom as one column, keeping order.
   COLUMN_ZONES.forEach((zones, ci) => {
-    const stacks = zones.map((z) => occupancy[z]);
-    const heights = stacks.map((s) => (s.length ? s.reduce((t, it) => t + it.size.height, 0) + gutter * (s.length - 1) : 0));
-    // Where each stack would like to sit.
-    const want = heights.map((h, ri) => {
-      if (ri === 0) return rowY[0];
-      if (ri === 2) return rowY[2] + cellH - h;
-      return rowY[1] + (cellH - h) / 2;
-    });
-    // Push stacks apart so they never overlap and stay inside the room.
-    const y = want.slice();
-    for (let ri = 1; ri < 3; ri++) {
-      const prevEnd = heights[ri - 1] ? y[ri - 1] + heights[ri - 1] + gutter : -Infinity;
-      if (heights[ri] && y[ri] < prevEnd) y[ri] = prevEnd;
+    const members = zones.flatMap((z) => occupancy[z]);
+    if (!members.length) return;
+    // One width for the column, where each widget's limits allow it.
+    const colW = Math.min(snap(cellW), Math.max(...members.map((m) => m.size.width)));
+    for (const m of members) {
+      const w = Math.max(m.min.width, Math.min(colW, m.max?.width || colW));
+      if (['cork', 'image', 'films', 'page', 'cabinet', 'board'].includes(m.type)) {
+        // Shaped widgets keep their proportions.
+        const a = m.size.width / m.size.height;
+        m.size = { width: w, height: Math.max(m.min.height, snap(w / a)) };
+      } else m.size = { width: w, height: m.size.height };
     }
-    const bottom = content.y + content.height;
-    for (let ri = 2; ri >= 0; ri--) {
-      if (!heights[ri]) continue;
-      const nextStart = ri < 2 && heights[ri + 1] ? y[ri + 1] - gutter : bottom;
-      if (y[ri] + heights[ri] > nextStart) y[ri] = nextStart - heights[ri];
-      y[ri] = Math.max(content.y, y[ri]);
+    const used = () => members.reduce((t, m) => t + m.size.height, 0);
+    let guard = 300;
+    while (used() + gutter * (members.length - 1) > content.height && guard--) {
+      const tall = members.reduce((a, b) => (b.size.height > a.size.height ? b : a));
+      if (!shrink(tall)) break;
     }
-    stacks.forEach((stack, ri) => {
-      let yy = snap(y[ri]);
-      // In the centre cell the widget sits toward a side, leaving the middle third clear.
-      for (const it of stack) {
-        let x;
-        if (ci === 0) x = colX[0];
-        else if (ci === 2) x = colX[2] + cellW - it.size.width;
-        else x = colX[1] + (cellW - it.size.width) / 2;
-        if (zones[ri] === 'center') x = colX[1];
-        placed[it.id] = { x: snap(x), y: yy, width: it.size.width, height: it.size.height };
-        yy += it.size.height + gutter;
-      }
-    });
+    const free = content.height - used();
+    const gap = members.length > 1 ? Math.max(gutter, Math.min(56, free / (members.length + 1))) : 0;
+    let y = content.y + (content.height - used() - gap * (members.length - 1)) / 2;
+    for (const it of members) {
+      let x;
+      if (ci === 0) x = colX[0];
+      else if (ci === 2) x = colX[2] + cellW - it.size.width;
+      else x = colX[1] + (cellW - it.size.width) / 2;
+      placed[it.id] = { x: snap(x), y: snap(y), width: it.size.width, height: it.size.height };
+      y += it.size.height + gap;
+    }
   });
 
   // Keep everything inside the room after snapping.

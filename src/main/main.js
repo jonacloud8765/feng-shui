@@ -115,7 +115,7 @@ function baguaArrange() {
   for (const [id, bounds] of Object.entries(placed)) store.updateWidget(id, { bounds, config: { fsRolled: 0 } });
   store.setLayoutMeta(store.layout.id, { fsArranged: BAGUA_VERSION });
 }
-const BAGUA_VERSION = 1;
+const BAGUA_VERSION = 2;
 
 // launch.exe: the Nuke France widget's page, in its own small window next to
 // the briefcase. Its title bar drags it; Esc or clicking elsewhere closes it.
@@ -368,7 +368,7 @@ function rebuildTray() {
     { label: 'Add Widget', submenu: addWidgetMenu() },
     { label: 'Layout', submenu: layoutMenu() },
     { label: 'Feng Shui This Layout', click: () => fengShui() },
-    { label: 'Save Layout As New…', click: () => windows.barWin?.webContents.executeJavaScript('document.querySelector(".seg.icon")?.click()') },
+    { label: 'Save Layout As New…', click: () => windows.barWin?.webContents.executeJavaScript('window.startNaming && window.startNaming()') },
     { label: 'Show Layout Bar', type: 'checkbox', checked: (s.bar || {}).show !== false, click: () => store.updateSettings({ bar: { show: (s.bar || {}).show === false } }) },
     ...awakeMenu(),
     { type: 'separator' },
@@ -476,6 +476,8 @@ function registerIpc() {
   ipcMain.on('morrow:bar-keys', (e, on) => { if (BrowserWindow.fromWebContents(e.sender) === windows.barWin) layoutKeys(on); });
   ipcMain.on('morrow:bar-step', (e, dir) => stepLayout(dir > 0 ? 1 : -1));
   ipcMain.on('morrow:save-layout', (e, name) => saveLayout(name));
+  // The bar's save button: keep this layout exactly as it is and lock it.
+  ipcMain.on('morrow:lock-layout', (e, on) => { store.updateSettings({ locked: !!on }); store.flush(); });
   ipcMain.on('morrow:nuke-open', (e) => openNuke(BrowserWindow.fromWebContents(e.sender)));
   ipcMain.on('morrow:copy', (e, text) => clipboard.writeText(String(text)));
   ipcMain.handle('morrow:stopwatch', (e, action) => {

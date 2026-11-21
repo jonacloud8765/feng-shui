@@ -39,11 +39,16 @@ function paperNote(widget) {
   if (widget.type === 'image' && widget.config.frame && widget.config.frame !== 'glass') return true;
   return widget.type === 'note' && (widget.config.paper || 'butter') !== 'glass';
 }
-// The Feng Shui layout draws its own lacquer frames, so its widgets get no
-// native blur or shadow either. Every other layout is untouched.
+// The Feng Shui layout puts every glass widget on one shared liquid glass:
+// the same material, tint, radius and light, with only a small element accent
+// telling them apart. Widgets that draw themselves (paper, cork, tickets) keep
+// their own look. Every other layout is untouched.
 let skinned = false;
-const materialOf = (widget) => (skinned || paperNote(widget) ? 'none' : widget.appearance.material);
-const shadowOf = (widget) => !skinned && !paperNote(widget) && !!widget.appearance.shadow;
+const HARMONY = { material: 'hud', tint: '#10161d', tintOpacity: 0.26, text: '#f6f1e7', highlight: 1, radius: 26, padding: 18, shadow: true, weight: 300 };
+const ELEMENT_ACCENT = { wood: '#a8d8b9', fire: '#f3b09c', earth: '#e6cd96', metal: '#dfe3ea', water: '#a9c9ec' };
+const appearanceOf = (widget) => (skinned && !paperNote(widget) ? { ...widget.appearance, ...HARMONY } : widget.appearance);
+const materialOf = (widget) => (paperNote(widget) ? 'none' : appearanceOf(widget).material);
+const shadowOf = (widget) => !paperNote(widget) && !!appearanceOf(widget).shadow;
 
 class WidgetWindows {
   constructor(store, { onContextMenu } = {}) {
@@ -70,7 +75,10 @@ class WidgetWindows {
 
   // What a widget window is sent: the widget, plus how the skin draws it.
   payload(widget) {
-    return { ...widget, skin: this.skin ? bagua.skinFor(widget, TYPES[widget.type]?.name) : null };
+    if (!this.skin) return { ...widget, skin: null };
+    const skin = bagua.skinFor(widget, TYPES[widget.type]?.name);
+    const appearance = paperNote(widget) ? widget.appearance : { ...appearanceOf(widget), accent: ELEMENT_ACCENT[skin.element] || widget.appearance.accent };
+    return { ...widget, appearance, skin };
   }
 
   // Bring the visible set of windows in line with the active layout.
@@ -195,7 +203,7 @@ class WidgetWindows {
 
   // Round the native blur to the widget's own corner radius.
   shape(win, widget) {
-    const r = widget.appearance.radius;
+    const r = appearanceOf(widget).radius;
     if (materialOf(widget) === 'none' || win.widgetRadius === r) return;
     if (native.setCornerRadius(win, r)) win.widgetRadius = r;
   }
@@ -269,14 +277,14 @@ class WidgetWindows {
     const skin = this.skin;
     if (win && !win.isDestroyed() && (!want || win.barMode !== mode || win.barSkin !== skin)) { win.destroy(); win = this.barWin = null; }
     if (!want) return;
-    const state = { layouts: layouts.map((l) => ({ id: l.id, name: l.name })), active: activeLayoutId, skin };
+    const state = { layouts: layouts.map((l) => ({ id: l.id, name: l.name })), active: activeLayoutId, skin, locked: !!settings.locked };
     if (win && !win.isDestroyed()) { win.webContents.send('morrow:bar', state); return; }
     const a = screen.getPrimaryDisplay().workArea;
     const H = 34;
     win = this.barWin = new BrowserWindow({
       x: a.x + a.width - 420 - 12, y: a.y + 10, width: 420, height: H,
-      show: false, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: !skin,
-      vibrancy: skin ? undefined : 'hud', visualEffectState: 'active', roundedCorners: !skin,
+      show: false, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: true,
+      vibrancy: 'hud', visualEffectState: 'active', roundedCorners: true,
       resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
       skipTaskbar: true, acceptFirstMouse: true, type: mode === 'desktop-type' ? 'desktop' : undefined, title: 'Layouts',
       webPreferences: { preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, sandbox: true },
@@ -287,14 +295,14 @@ class WidgetWindows {
     if (mode === 'float') win.setAlwaysOnTop(true, 'floating');
     win.setVisibleOnAllWorkspaces(!!settings.allSpaces, { visibleOnFullScreen: false, skipTransformProcessType: true });
     if (mode === 'desktop') native.setDesktopLevel(win, true);
-    if (!skin) native.setCornerRadius(win, H / 2);
+    native.setCornerRadius(win, H / 2);
     win.loadFile(path.join(__dirname, '..', 'renderer', 'bar.html'));
-    win.webContents.once('did-finish-load', () => win.webContents.send('morrow:bar', this.store.doc && { layouts: this.store.doc.layouts.map((l) => ({ id: l.id, name: l.name })), active: this.store.doc.activeLayoutId, skin: this.skin }));
+    win.webContents.once('did-finish-load', () => win.webContents.send('morrow:bar', this.store.doc && { layouts: this.store.doc.layouts.map((l) => ({ id: l.id, name: l.name })), active: this.store.doc.activeLayoutId, skin: this.skin, locked: !!this.store.doc.settings.locked }));
     win.once('ready-to-show', () => {
       // A bar rebuilt mid-way through keyboard switching (the Feng Shui skin
       // comes and goes with its layout) picks the keyboard straight back up.
       if (this.barKeys) { win.show(); win.focus(); win.webContents.send('morrow:bar-keys', true); } else win.showInactive();
-      if (!skin) native.setCornerRadius(win, H / 2);
+      native.setCornerRadius(win, H / 2);
       if (mode === 'desktop') native.setDesktopLevel(win, true);
     });
   }

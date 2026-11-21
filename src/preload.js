@@ -33,6 +33,7 @@ contextBridge.exposeInMainWorld('morrow', {
   onBarKeys: on('morrow:bar-keys'),
   openNuke: () => ipcRenderer.send('morrow:nuke-open'),
   saveLayout: (name) => ipcRenderer.send('morrow:save-layout', name),
+  lockLayout: (on) => ipcRenderer.send('morrow:lock-layout', !!on),
   copy: (text) => ipcRenderer.send('morrow:copy', text),
   stopwatch: (action) => ipcRenderer.invoke('morrow:stopwatch', action),
 

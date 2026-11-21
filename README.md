@@ -7,7 +7,7 @@
 <p align="center">Calm desktop widgets for macOS.<br>
 Clocks, weather, films, notes, a corkboard and a few small toys, each a window of its own, arranged so the desktop feels balanced.</p>
 
-<p align="center"><img src="docs/screenshots/feng-shui-layout.jpg" alt="The Feng Shui layout: lacquer-framed widgets arranged on a bagua grid over an ink-wash wallpaper"></p>
+<p align="center"><img src="docs/screenshots/feng-shui-layout.jpg" alt="The Feng Shui layout: liquid glass widgets in three balanced columns over ink mountains at dusk"></p>
 
 Feng Shui is the new name for Morrow. The app, the menus and the About window
 say Feng Shui; the data folder, the bundle id and the source keep the Morrow
@@ -49,15 +49,21 @@ awake and open settings.
 
 ## What's new
 
-- **The Feng Shui skin.** A layout named "Feng Shui" gets red-lacquer frames,
-  an element seal on every widget (木 火 土 金 水), an ink-wash wallpaper,
-  brush cursors and a bagua arrangement. Other layouts are untouched.
+- **The Feng Shui look.** A layout named "Feng Shui" puts every widget on one
+  shared liquid glass, with the same tint, radius and light, over ink
+  mountains in mist at dusk. Each widget carries one quiet note of its element
+  (木 火 土 金 水): a breath of colour in a corner and a small seal on hover. The
+  bagua arrangement sets them in three mirrored columns with even spacing.
+  Other layouts are untouched.
 - **Shows grouped in Films.** Episodes and seasons of the same show sit
   together in order, even when they came from different folders, with smaller
   season thumbnails beside the movie posters and a Play All button.
 - **Arrow keys for layouts.** Choose Switch with ← → Keys in the layout menu,
   or click the layout bar, then use ← and → to move between layouts. Esc or
   Return finishes.
+- **Save and lock.** The button at the end of the layout bar keeps the layout
+  exactly as it is and locks every widget in place. Click it again to unlock.
+  Save Layout As New… in the menu bar still makes a copy.
 - **Keep Mac Awake.** A menu-bar toggle under Show Layout Bar, with session
   details, an End Current Session button, and sessions that last indefinitely,
   for some minutes or hours, until a time, while an app is running or while a
@@ -185,8 +191,8 @@ requests of any kind.
 ## Layout bar
 
 A small liquid-glass switcher in the top-right corner lists every layout with
-an icon; click one to switch. The button at its end saves what's on screen as
-a new layout. Turn it off in Settings or from the menu bar icon. Feng Shui
+an icon; click one to switch. The button at its end saves the layout as it is
+and locks it. Turn it off in Settings or from the menu bar icon. Feng Shui
 keeps the space under it clear.
 
 ## Styles
@@ -206,9 +212,9 @@ nothing overlapping. Right-click it for settings. In General settings you can
 show it (it's off by default), or swap the yin-yang for an ink dragon.
 The corkboard always gets at least a quarter of the screen. The tray menu has the same
 action as Feng Shui This Layout. On the Feng Shui layout it uses the bagua
-arrangement instead: a 3×3 grid on an 8-point rhythm, each widget placed by its
-element, with no widget over 22% of the screen, no more than a 2.5× size gap,
-and Fire never outweighing Water.
+arrangement instead: each widget is placed by its element on a 3×3 grid, with
+no widget over 22% of the screen, no more than a 2.5× size gap and Fire never
+outweighing Water, then each column becomes one even, centred stack.
 
 ## Custom Widget
 

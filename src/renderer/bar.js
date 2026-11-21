@@ -1,6 +1,7 @@
 // The layout bar: a small liquid-glass switcher in the top-right corner. One
-// segment per layout (exactly one is on), and a button that saves the current
-// arrangement as a new layout.
+// segment per layout (exactly one is on), and a button that saves the layout
+// in place and locks it (click again to unlock). Save Layout As New… in the
+// menu bar still names a copy here.
 
 const S = (d) => `<svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
 const ICONS = {
@@ -14,6 +15,7 @@ const ICONS = {
   cabinet: S('<rect x="3" y="1.8" width="10" height="12.4" rx="1"/><path d="M3 6h10M3 10h10M6.8 3.9h2.4M6.8 7.9h2.4M6.8 11.9h2.4"/>'),
   grid: S('<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/>'),
   save: S('<path d="M3 2.5h8l2.5 2.5v8.5H3z"/><path d="M5.5 2.5v3.5h5v-3.5M5.5 13.5v-4h5v4"/>'),
+  locked: S('<rect x="3.2" y="7" width="9.6" height="6.8" rx="1.4"/><path d="M5.3 7V5.2a2.7 2.7 0 0 1 5.4 0V7"/><circle cx="8" cy="10.3" r="0.8" fill="currentColor" stroke="none"/>'),
 };
 function iconFor(name) {
   const n = name.toLowerCase();
@@ -67,7 +69,7 @@ function render() {
   for (const l of state.layouts) {
     const b = el('button', { className: `seg${l.id === state.active ? ' on' : ''}`, title: l.name });
     b.innerHTML = iconFor(l.name);
-    // In the Feng Shui skin its own tab carries the characters, like the kit's tab art.
+    // In the Feng Shui skin its own tab carries the characters.
     if (state.skin === 'fengshui' && /feng|shui/i.test(l.name)) b.prepend(el('span', { className: 'han', textContent: '风水' }));
     b.append(el('span', { textContent: l.name }));
     b.setAttribute('aria-pressed', String(l.id === state.active));
@@ -80,15 +82,27 @@ function render() {
   }
   bar.append(el('div', { className: 'sep' }));
   if (flash) bar.append(el('span', { className: 'note', textContent: flash }));
-  else if (keys) bar.append(el('span', { className: 'note keys', textContent: '← → to switch' }));
-  const save = el('button', { className: 'seg icon', title: 'Save this arrangement as a new layout', ariaLabel: 'Save layout' });
-  save.innerHTML = ICONS.save;
-  save.addEventListener('click', () => { naming = true; render(); });
+  const locked = !!state.locked;
+  const save = el('button', {
+    className: `seg icon${locked ? ' locked' : ''}`,
+    title: locked ? 'Locked. Click to unlock this layout' : 'Save this layout as it is and lock it',
+    ariaLabel: locked ? 'Unlock layout' : 'Save and lock layout',
+  });
+  save.innerHTML = locked ? ICONS.locked : ICONS.save;
+  save.addEventListener('click', () => {
+    window.morrow.lockLayout(!locked);
+    flash = locked ? 'Unlocked' : 'Saved and locked';
+    setTimeout(() => { flash = ''; render(); }, 1600);
+    state.locked = !locked;
+    render();
+  });
   bar.append(save);
   fit();
 }
 
 window.morrow.onBar((s) => { state = s; if (!naming) render(); });
+// The menu bar's Save Layout As New… asks for a name here.
+window.startNaming = () => { naming = true; render(); };
 
 // Layout switching mode (from the menu bar's Layout menu, or a click on the bar).
 let keys = false;
