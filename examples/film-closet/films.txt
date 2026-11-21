@@ -1,0 +1,145 @@
+# Public-domain films used as the Film Closet's demo data: title | year | genre
+# Everything released in 1930 or earlier is in the US public domain; the later
+# titles are well-known films whose US copyright lapsed.
+A Trip to the Moon|1902|Fantasy
+The Great Train Robbery|1903|Western
+Intolerance|1916|Drama
+The Immigrant|1917|Comedy
+Broken Blossoms|1919|Drama
+The Cabinet of Dr. Caligari|1920|Horror
+The Mark of Zorro|1920|Adventure
+Way Down East|1920|Drama
+Dr. Jekyll and Mr. Hyde|1920|Horror
+The Golem|1920|Horror
+One Week|1920|Comedy
+The Kid|1921|Comedy
+Destiny|1921|Fantasy
+The Phantom Carriage|1921|Drama
+The Sheik|1921|Romance
+Nosferatu|1922|Horror
+Nanook of the North|1922|Documentary
+Häxan|1922|Horror
+Dr. Mabuse the Gambler|1922|Crime
+Robin Hood|1922|Adventure
+Foolish Wives|1922|Drama
+Cops|1922|Comedy
+Safety Last!|1923|Comedy
+Our Hospitality|1923|Comedy
+The Hunchback of Notre Dame|1923|Drama
+Salomé|1923|Drama
+The Ten Commandments|1923|Epic
+The Covered Wagon|1923|Western
+Sherlock Jr.|1924|Comedy
+The Navigator|1924|Comedy
+The Thief of Bagdad|1924|Adventure
+The Last Laugh|1924|Drama
+Greed|1924|Drama
+Die Nibelungen|1924|Fantasy
+Peter Pan|1924|Fantasy
+The Iron Horse|1924|Western
+Girl Shy|1924|Comedy
+He Who Gets Slapped|1924|Drama
+The Hands of Orlac|1924|Horror
+The Gold Rush|1925|Comedy
+Battleship Potemkin|1925|Drama
+The Phantom of the Opera|1925|Horror
+The Freshman|1925|Comedy
+Seven Chances|1925|Comedy
+Go West|1925|Comedy
+The Lost World|1925|Adventure
+Ben-Hur|1925|Epic
+The Big Parade|1925|War
+Strike|1925|Drama
+The Unholy Three|1925|Crime
+Lady Windermere's Fan|1925|Comedy
+Faust|1926|Fantasy
+The General|1926|Comedy
+The Son of the Sheik|1926|Romance
+Battling Butler|1926|Comedy
+Mother|1926|Drama
+The Black Pirate|1926|Adventure
+Flesh and the Devil|1926|Romance
+The Scarlet Letter|1926|Drama
+The Adventures of Prince Achmed|1926|Animation
+Metropolis|1927|Sci-Fi
+Sunrise|1927|Romance
+Wings|1927|War
+The Lodger|1927|Thriller
+It|1927|Comedy
+College|1927|Comedy
+Napoléon|1927|Epic
+The Jazz Singer|1927|Musical
+Seventh Heaven|1927|Romance
+The Unknown|1927|Horror
+Underworld|1927|Crime
+London After Midnight|1927|Horror
+The Kid Brother|1927|Comedy
+Berlin: Symphony of a Metropolis|1927|Documentary
+October|1927|Drama
+The Ring|1927|Drama
+The Passion of Joan of Arc|1928|Drama
+Steamboat Bill, Jr.|1928|Comedy
+The Crowd|1928|Drama
+The Wind|1928|Drama
+Speedy|1928|Comedy
+The Circus|1928|Comedy
+The Man Who Laughs|1928|Drama
+Storm Over Asia|1928|Drama
+The Fall of the House of Usher|1928|Horror
+Steamboat Willie|1928|Animation
+Spies|1928|Thriller
+The Cameraman|1928|Comedy
+Lonesome|1928|Romance
+The Last Command|1928|Drama
+Street Angel|1928|Drama
+The Docks of New York|1928|Drama
+Show People|1928|Comedy
+The Wedding March|1928|Drama
+Pandora's Box|1929|Drama
+Man with a Movie Camera|1929|Documentary
+Un Chien Andalou|1929|Surreal
+Blackmail|1929|Thriller
+Diary of a Lost Girl|1929|Drama
+Woman in the Moon|1929|Sci-Fi
+The Broadway Melody|1929|Musical
+Applause|1929|Drama
+Spite Marriage|1929|Comedy
+The Skeleton Dance|1929|Animation
+Arsenal|1929|War
+Big Business|1929|Comedy
+The Cocoanuts|1929|Comedy
+Hallelujah|1929|Musical
+The Virginian|1929|Western
+Coquette|1929|Drama
+Earth|1930|Drama
+All Quiet on the Western Front|1930|War
+The Blue Angel|1930|Drama
+Animal Crackers|1930|Comedy
+L'Âge d'Or|1930|Surreal
+Little Caesar|1930|Crime
+Morocco|1930|Romance
+Hell's Angels|1930|War
+The Big Trail|1930|Western
+Murder!|1930|Thriller
+Anna Christie|1930|Drama
+Free and Easy|1930|Comedy
+Abraham Lincoln|1930|Drama
+Westfront 1918|1930|War
+His Girl Friday|1940|Comedy
+Meet John Doe|1941|Drama
+Penny Serenade|1941|Drama
+Detour|1945|Noir
+Scarlet Street|1945|Noir
+The Stranger|1946|Noir
+D.O.A.|1949|Noir
+Royal Wedding|1951|Musical
+Kansas City Confidential|1952|Noir
+Plan 9 from Outer Space|1957|Sci-Fi
+House on Haunted Hill|1959|Horror
+The Little Shop of Horrors|1960|Comedy
+Carnival of Souls|1962|Horror
+The Brain That Wouldn't Die|1962|Sci-Fi
+Charade|1963|Thriller
+McLintock!|1963|Western
+The Last Man on Earth|1964|Sci-Fi
+Night of the Living Dead|1968|Horror

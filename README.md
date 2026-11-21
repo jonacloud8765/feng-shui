@@ -18,6 +18,8 @@ source under the MIT licence.
 | --- | --- |
 | <img src="docs/screenshots/desk-layout.jpg" alt="A glass desk layout with clock, weather, world clock, notes and launcher"> | <img src="docs/screenshots/films-cinema.jpg" alt="The Films widget showing movies and TV seasons grouped by show"> |
 | **Desk.** Glass widgets with real macOS blur. | **Cinema.** Films, with each show's seasons gathered together. |
+| <img src="docs/screenshots/film-closet.jpg" alt="The Film Closet: a 3D wall of film spines with a poster appearing on hover"> | <img src="docs/screenshots/feng-shui-layout.jpg" alt="The Feng Shui layout"> |
+| **Film Closet.** A walk-in shelf of films; hover a spine for its poster. | **Feng Shui.** One shared liquid glass. |
 | <img src="docs/screenshots/situation-room.jpg" alt="A layout with a corkboard, whiteboard and status gauges"> | <img src="docs/screenshots/about.png" alt="The About window"> |
 | **Situation Room.** Corkboard, whiteboard and gauges. | **About.** |
 
@@ -215,6 +217,21 @@ action as Feng Shui This Layout. On the Feng Shui layout it uses the bagua
 arrangement instead: each widget is placed by its element on a 3×3 grid, with
 no widget over 22% of the screen, no more than a 2.5× size gap and Fire never
 outweighing Water, then each column becomes one even, centred stack.
+
+## Film Closet
+
+A walk-in closet of films as a Custom Widget: three walls of shelves in
+perspective, a spine for every film and a few favourites face out. Hover a
+spine and its poster, year and genre appear beside it. The version in
+[`examples/film-closet`](examples/film-closet) is filled with public-domain
+films, with spines and posters drawn by its build script, so nothing
+copyrighted is bundled. Add it with Add Widget › Custom Widget and choose
+`examples/film-closet/index.html`. To fill it with your own list, edit
+`films.txt` (title | year | genre) and run:
+
+```sh
+python3 examples/film-closet/build.py   # needs Pillow
+```
 
 ## Custom Widget
 

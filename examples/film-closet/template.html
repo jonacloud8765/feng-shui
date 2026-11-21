@@ -1,0 +1,71 @@
+<!doctype html><html><head><meta charset="utf-8"><title>Film Closet</title><style>
+html, body { margin: 0; height: 100%; background: transparent; overflow: hidden; }
+* { cursor: url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAATCAYAAACk9eypAAAAcElEQVR4nJWRCwoAIQhEx6H7X9klMNZt85MQlcxztABAcRG0Xa8AVW1DXIcuRH/pQNwTFcRTMoMYVYogxt2eIWbACRqRUER+LABhIZoJv96WTCwLSocWE1fzwDl4ceoygVbl3WGP0KX8h9uYlT8v9QDGFTEUFqxnbgAAAABJRU5ErkJggg==) 0 0, default; cursor: -webkit-image-set(url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAwAAAATCAYAAACk9eypAAAAcElEQVR4nJWRCwoAIQhEx6H7X9klMNZt85MQlcxztABAcRG0Xa8AVW1DXIcuRH/pQNwTFcRTMoMYVYogxt2eIWbACRqRUER+LABhIZoJv96WTCwLSocWE1fzwDl4ceoygVbl3WGP0KX8h9uYlT8v9QDGFTEUFqxnbgAAAABJRU5ErkJggg==) 1x, url(data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABgAAAAmCAYAAADeB1slAAAAq0lEQVR4nNWVgQqGMAiEPen9X/l+qC2if9HmdFvCIJh6fh6ViAjTCQmNalwSCCFR74aPAiT3402iXo2qBbxJtLeBWcCLRK2FbgLsJJlP0EuyDoGVZD2CVpJ1CWpJwgm21gIAbymZAnMJkCblsd9iSo1AOAHyzvKklx3nB17vz8v/vGKM8wCVE7XGOA/kfXJavBjiASIFVIIDhhq2eLH+/+CTHkiK+2d2znvwA8faWhQIZ/jVAAAAAElFTkSuQmCC) 2x) 0 0, default; }
+.closet { position: absolute; inset: 0; border-radius: 14px; overflow: hidden; background: #0d0b0a; perspective: 500px; perspective-origin: 50% 46%;
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.06); }
+.scene { position: absolute; left: 50%; top: 50%; width: 0; height: 0; transform-style: preserve-3d; transform: scale(var(--fit, 1)); }
+.wall { position: absolute; height: 2196px; background: #16110e; display: flex; flex-direction: column; }
+.wall.back { width: 1900px; transform: translate3d(-950.0px, -1098.0px, -900px); }
+.wall.left { width: 900px; transform-origin: 100% 50%; transform: translate3d(-1850.0px, -1098.0px, -900px) rotateY(90deg); filter: brightness(0.8); }
+.wall.right { width: 900px; transform-origin: 0 50%; transform: translate3d(950.0px, -1098.0px, -900px) rotateY(-90deg); filter: brightness(0.8); }
+.wall.left .row { justify-content: flex-end; }
+.row { position: relative; height: 366px; box-sizing: border-box; display: flex; align-items: flex-end; padding: 0 20px 26px; gap: 1px;
+  background: linear-gradient(180deg, #0a0807 0, #1a1410 18%, #1c1612 70%, #120e0b); }
+.row::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 26px;
+  background: linear-gradient(180deg, #3a2b20, #241a13 45%, #120d09); box-shadow: 0 -2px 0 rgba(255,220,170,0.08) inset; }
+.sp { position: relative; flex: none; box-sizing: border-box; background: var(--c); color: var(--k); border-radius: 2px 2px 0 0;
+  display: flex; flex-direction: column; align-items: center; overflow: hidden;
+  box-shadow: inset 2px 0 0 rgba(255,255,255,0.14), inset -3px 0 0 rgba(0,0,0,0.35); }
+.sp::before { content: ''; position: absolute; left: 0; right: 0; top: 14%; height: 5%; background: color-mix(in srgb, var(--k) 35%, transparent); }
+.sp i { font: 700 10px/1 "Futura", "Avenir Next", sans-serif; font-style: normal; margin-top: 7px; opacity: 0.8; }
+.sp b { font: 600 13px/1 "Futura", "Avenir Next", sans-serif; letter-spacing: 0.08em; text-transform: uppercase; writing-mode: vertical-rl;
+  margin-top: 30%; white-space: nowrap; overflow: hidden; max-height: 62%; }
+.sp.fav5::after { content: '★'; position: absolute; bottom: 6px; left: 0; right: 0; text-align: center; font-size: 11px; color: #f4c95d; }
+.face { position: relative; flex: none; margin: 0 12px;
+  box-shadow: 0 0 0 5px #0b0b0b, 0 0 0 6px rgba(255,255,255,0.15), 0 18px 28px rgba(0,0,0,0.85); }
+.face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.film.sel { outline: 6px dashed #e0392b; outline-offset: 6px; z-index: 2; }
+.shade { position: absolute; inset: 0; pointer-events: none;
+  background: radial-gradient(60% 70% at 50% 45%, transparent 55%, rgba(0,0,0,0.55)), linear-gradient(180deg, rgba(0,0,0,0.25), transparent 20%, transparent 80%, rgba(0,0,0,0.35)); }
+.tip { position: absolute; z-index: 9; width: 132px; padding: 7px; background: #f4f1ea; color: #121212; border: 1px solid #000;
+  box-shadow: 3px 3px 0 rgba(0,0,0,0.6); font: 11px/1.25 "Futura", "Avenir Next", sans-serif; pointer-events: none; opacity: 0; transition: opacity .12s; }
+.tip.on { opacity: 1; }
+.tip img { width: 100%; display: block; border: 1px solid #000; background: #222; aspect-ratio: 2 / 3; object-fit: cover; }
+.tip .t { margin-top: 6px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; }
+.tip .m { display: flex; justify-content: space-between; margin-top: 2px; opacity: 0.7; }
+.label { position: absolute; left: 16px; bottom: 12px; font: 500 10px "Futura", sans-serif; letter-spacing: 0.4em; color: rgba(240,230,210,0.5); pointer-events: none; }
+</style></head><body><div class="closet">
+<div class="scene">{{WALLS}}</div>
+<div class="shade"></div>
+<div class="label">FILM CLOSET</div>
+<div class="tip"><img alt=""><div class="t"></div><div class="m"><span class="y"></span><span class="g"></span></div></div>
+</div><script>
+const closet = document.querySelector('.closet'), scene = document.querySelector('.scene'), tip = document.querySelector('.tip');
+// Scale with the widget, keeping the corner where the reference has it.
+const fit = () => scene.style.setProperty('--fit', String(Math.max(closet.clientWidth / 1240, closet.clientHeight / 700)));
+addEventListener('resize', fit); fit();
+let cur = null;
+closet.addEventListener('mousemove', (e) => {
+  const el = e.target.closest('.film');
+  if (el !== cur) {
+    cur?.classList.remove('sel');
+    cur = el;
+    if (el) {
+      el.classList.add('sel');
+      tip.querySelector('img').src = el.dataset.p;
+      tip.querySelector('.t').textContent = el.dataset.t;
+      tip.querySelector('.y').textContent = el.dataset.y;
+      tip.querySelector('.g').textContent = el.dataset.g;
+    }
+    tip.classList.toggle('on', !!el);
+  }
+  if (el) {
+    const r = closet.getBoundingClientRect(), w = tip.offsetWidth, h = tip.offsetHeight;
+    let x = e.clientX - r.left + 18, y = e.clientY - r.top + 16;
+    if (x + w > r.width - 6) x = e.clientX - r.left - w - 14;
+    if (y + h > r.height - 6) y = r.height - h - 6;
+    tip.style.left = x + 'px'; tip.style.top = Math.max(6, y) + 'px';
+  }
+});
+closet.addEventListener('mouseleave', () => { cur?.classList.remove('sel'); cur = null; tip.classList.remove('on'); });
+</script></body></html>
