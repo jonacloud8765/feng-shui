@@ -31,6 +31,14 @@ const native = require('./native');
 const SNAP = 10;
 const GAP = 12;
 
+// A paper Sticky Note draws itself: its own paper, shadow and pin, with the
+// desktop showing around it. Such windows get no native blur or shadow.
+function paperNote(widget) {
+  return widget.type === 'note' && (widget.config.paper || 'butter') !== 'glass';
+}
+const materialOf = (widget) => (paperNote(widget) ? 'none' : widget.appearance.material);
+const shadowOf = (widget) => !paperNote(widget) && !!widget.appearance.shadow;
+
 class WidgetWindows {
   constructor(store, { onContextMenu } = {}) {
     this.store = store;
@@ -68,14 +76,14 @@ class WidgetWindows {
   open(widget, fade) {
     const bounds = this.onScreen(widget.bounds);
     const mode = this.mode;
-    const material = widget.appearance.material;
+    const material = materialOf(widget);
     const win = new BrowserWindow({
       ...bounds,
       show: false,
       frame: false,
       transparent: true,
       backgroundColor: '#00000000',
-      hasShadow: widget.appearance.shadow,
+      hasShadow: shadowOf(widget),
       vibrancy: material === 'none' ? undefined : material,
       visualEffectState: 'active',
       roundedCorners: true,
@@ -148,14 +156,14 @@ class WidgetWindows {
       this.open(widget);
       return;
     }
-    const material = widget.appearance.material;
+    const material = materialOf(widget);
     if (material !== win.widgetMaterial) {
       win.setVibrancy(material === 'none' ? null : material);
       win.widgetMaterial = material;
       win.widgetRadius = null; // a new effect view needs its mask again
     }
     this.shape(win, widget);
-    win.setHasShadow(!!widget.appearance.shadow);
+    win.setHasShadow(shadowOf(widget));
     if (!this.gesture || this.gesture.id !== widget.id) {
       const b = win.getBounds();
       const t = widget.bounds;
@@ -169,7 +177,7 @@ class WidgetWindows {
   // Round the native blur to the widget's own corner radius.
   shape(win, widget) {
     const r = widget.appearance.radius;
-    if (widget.appearance.material === 'none' || win.widgetRadius === r) return;
+    if (materialOf(widget) === 'none' || win.widgetRadius === r) return;
     if (native.setCornerRadius(win, r)) win.widgetRadius = r;
   }
 

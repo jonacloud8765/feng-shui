@@ -13,7 +13,78 @@ export const PAPERS = {
   ink: { label: 'Midnight', bg: '#1b2234', ink: '#efe8da' },
 };
 
+// Pushpin heads: [light, base, shadow].
+export const PINS = {
+  red: { label: 'Red', c: ['#ff8a7a', '#d8382c', '#7e1912'] },
+  blue: { label: 'Blue', c: ['#8fc2ff', '#2f6fd6', '#163a7a'] },
+  yellow: { label: 'Yellow', c: ['#fff2a0', '#f0c419', '#8a6a06'] },
+  green: { label: 'Green', c: ['#a6e8a0', '#3aa64a', '#1b5a24'] },
+  white: { label: 'Pearl', c: ['#ffffff', '#e4e1da', '#9b968c'] },
+  black: { label: 'Black', c: ['#7a7a7a', '#2a2a2a', '#000000'] },
+};
+
+// Paper grain, shared by every note.
+const GRAIN = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.35  0 0 0 0 0.3  0 0 0 0 0.2  0 0 0 0.55 0"/></filter><rect width="180" height="180" filter="url(#n)"/></svg>')}")`;
+
+// A few specks of dust and a stray fibre, placed the same way every time for a given note.
+function dust(seed) {
+  let x = 0;
+  for (const ch of seed) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
+  const rnd = () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296);
+  let out = '';
+  for (let i = 0; i < 14; i++) {
+    out += `<circle cx="${(rnd() * 400).toFixed(1)}" cy="${(rnd() * 400).toFixed(1)}" r="${(0.35 + rnd() * 0.9).toFixed(2)}" fill="rgba(${rnd() < 0.7 ? '60,50,40' : '255,255,255'},${(0.18 + rnd() * 0.3).toFixed(2)})"/>`;
+  }
+  for (let i = 0; i < 2; i++) {
+    const sx = rnd() * 380, sy = rnd() * 380;
+    out += `<path d="M${sx.toFixed(0)} ${sy.toFixed(0)} q ${(rnd() * 14 - 7).toFixed(1)} ${(rnd() * 10 - 5).toFixed(1)} ${(rnd() * 22 - 11).toFixed(1)} ${(rnd() * 16 - 8).toFixed(1)}" stroke="rgba(70,60,50,0.16)" stroke-width="0.5" fill="none"/>`;
+  }
+  return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">${out}</svg>`)}")`;
+}
+
 const css = `
+/* ---- Physical paper: the note sits inside the window with room around it
+   for its shadow and for a pin that pokes out past the paper's edge. ---- */
+:root.paper-note .glass { overflow: visible; border-radius: 0; }
+:root.paper-note .glass > .layer { display: none; }
+.note.real { inset: 20px 14px 22px 12px; }
+.note.real .paper, .note.real .paper.on {
+  border-radius: 2px 2px 3px 2px; opacity: 1;
+  background:
+    radial-gradient(120% 60% at 50% -10%, rgba(255,255,255,0.32), transparent 55%),
+    linear-gradient(180deg, rgba(0,0,0,0.045), rgba(0,0,0,0) 16%),
+    linear-gradient(200deg, rgba(255,255,255,0) 70%, rgba(0,0,0,0.06) 92%, rgba(0,0,0,0.12) 100%),
+    var(--dust), ${'${GRAIN}'},
+    var(--paper);
+  background-size: auto, auto, auto, 400px 400px, 180px 180px, auto;
+  background-blend-mode: normal, normal, normal, normal, multiply, normal;
+  box-shadow:
+    0 0.5px 0 rgba(255,255,255,0.6) inset,
+    0 0 0 0.5px rgba(0,0,0,0.08),
+    0 1px 1.5px rgba(0,0,0,0.18),
+    0 4px 8px -2px rgba(0,0,0,0.18),
+    0 14px 24px -10px rgba(0,0,0,0.35);
+}
+/* The bottom edge lifts off the desktop: two soft shadows tilt away under the corners. */
+.note.real .lift { position: absolute; inset: 0; pointer-events: none; z-index: -1; }
+.note.real .lift::before, .note.real .lift::after {
+  content: ''; position: absolute; bottom: 10px; width: 46%; height: 22%;
+  box-shadow: 0 14px 12px rgba(0,0,0,0.32);
+}
+.note.real .lift::before { left: 8px; transform: rotate(-3.2deg); }
+.note.real .lift::after { right: 6px; transform: rotate(3.6deg); }
+.note:not(.real) .lift { display: none; }
+/* The lifted corner catches a little light. */
+.note.real .curl {
+  position: absolute; right: 0; bottom: 0; width: 34px; height: 34px; pointer-events: none;
+  border-bottom-right-radius: 3px;
+  background: linear-gradient(315deg, rgba(255,255,255,0.0) 0, rgba(255,255,255,0.22) 30%, rgba(0,0,0,0.05) 52%, transparent 60%);
+}
+.note:not(.real) .curl { display: none; }
+.note.real .tape { top: -9px; opacity: 0.9; background: linear-gradient(90deg, rgba(250,246,236,0.78), rgba(240,234,220,0.62)); box-shadow: 0 1px 2px rgba(0,0,0,0.14); }
+.note.real .pushpin { top: -20px; filter: drop-shadow(3px 6px 2.5px rgba(0,0,0,0.33)); }
+.note:not(.real) .pushpin { top: 4px; }
+
 .note { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .note .paper { position: absolute; inset: 0; border-radius: inherit; pointer-events: none; transition: background-color 0.4s var(--ease); }
 .note .paper.on {
@@ -55,10 +126,12 @@ const css = `
   flex: 1; font-family: var(--note-font); font-size: calc(var(--note-size) * var(--scale)); line-height: 1.45;
 }
 .note .title:empty::before, .note .body:empty::before { content: attr(data-placeholder); opacity: 0.35; pointer-events: none; }
-.note u { text-decoration-thickness: 0.06em; text-underline-offset: 0.14em; }
+/* Handwriting fonts sit low with long tails, so the underline goes well below and skips the tails. */
+.note u { text-decoration-thickness: 0.055em; text-underline-offset: 0.32em; text-decoration-skip-ink: all; }
+.note.lined .body ul { margin: 0; }
 .note.lined .body {
   background-image: repeating-linear-gradient(180deg, transparent 0, transparent calc(1.45em - 1px), color-mix(in srgb, var(--ink, var(--text)) 18%, transparent) calc(1.45em - 1px), color-mix(in srgb, var(--ink, var(--text)) 18%, transparent) 1.45em);
-  background-position: 0 -0.1em;
+  background-position: 0 0.06em;
 }
 .note .fmt {
   position: absolute; z-index: 3; display: none; gap: 2px; padding: 3px;
@@ -129,10 +202,12 @@ export function mount(root, ctx) {
   const paper = h('div.paper');
   const tape = h('div.tape');
   const pin = h('div.pushpin', { html: `<svg viewBox="0 0 22 30" width="26" height="36" aria-hidden="true">
-    <defs><radialGradient id="pinhead" cx="35%" cy="30%" r="70%"><stop offset="0" stop-color="#ff8a7a"/><stop offset="0.55" stop-color="#d8382c"/><stop offset="1" stop-color="#8e1d16"/></radialGradient></defs>
-    <path d="M11 17 L11 29" stroke="#9aa0a6" stroke-width="1.6" stroke-linecap="round"/>
-    <ellipse cx="11" cy="17" rx="6" ry="2.2" fill="#a8261d"/>
-    <path d="M7 9 h8 l1.5 7 h-11 z" fill="#c22f24"/>
+    <defs><radialGradient id="pinhead" cx="35%" cy="30%" r="70%"><stop offset="0" style="stop-color:var(--pin-1)"/><stop offset="0.55" style="stop-color:var(--pin-2)"/><stop offset="1" style="stop-color:var(--pin-3)"/></radialGradient>
+      <linearGradient id="pinneck" x1="0" x2="1"><stop offset="0" style="stop-color:var(--pin-3)"/><stop offset="0.45" style="stop-color:var(--pin-2)"/><stop offset="1" style="stop-color:var(--pin-3)"/></linearGradient>
+      <linearGradient id="needle" x1="0" x2="1"><stop offset="0" stop-color="#6d7277"/><stop offset="0.5" stop-color="#e6e9ec"/><stop offset="1" stop-color="#7d8287"/></linearGradient></defs>
+    <path d="M10.2 17 L10.6 29.4 L11.4 29.4 L11.8 17 z" fill="url(#needle)"/>
+    <ellipse cx="11" cy="17" rx="6" ry="2.2" style="fill:var(--pin-3)"/>
+    <path d="M7 9 h8 l1.5 7.4 h-11 z" fill="url(#pinneck)"/>
     <circle cx="11" cy="7.5" r="6.5" fill="url(#pinhead)"/>
     <ellipse cx="8.6" cy="5.2" rx="2" ry="1.3" fill="rgba(255,255,255,0.65)"/></svg>` });
   const title = h('div.title', { contenteditable: 'true', spellcheck: 'true', 'data-placeholder': 'Title', 'aria-label': 'Note title' });
@@ -146,7 +221,7 @@ export function mount(root, ctx) {
   const fmt = h('div.fmt', {}, btn('u', 'underline', 'U', 'Underline (⌘U)'), btn('b', 'bold', 'B', 'Bold (⌘B)'), btn('i', 'italic', 'I', 'Italic (⌘I)'),
     h('span.sep'), listBtn('l', 'bullets', '•', 'Bulleted list (⌘⇧7)'), listBtn('c', 'check', '☐', 'Checklist (⌘⇧L)'));
   const sheet = h('div.sheet', {}, title, body);
-  const note = h('div.note', {}, paper, tape, pin, sheet, fmt);
+  const note = h('div.note', {}, h('div.lift'), paper, h('div.curl'), tape, pin, sheet, fmt);
   // The note fills the whole glass, ignoring the widget padding wrapper.
   root.style.padding = '0';
   root.append(note);
@@ -270,6 +345,12 @@ export function mount(root, ctx) {
     const c = ctx.config;
     const p = PAPERS[c.paper] || PAPERS.glass;
     paper.classList.toggle('on', !!p.bg);
+    // Paper notes are drawn as real paper; the glass note keeps the glass look.
+    note.classList.toggle('real', !!p.bg);
+    document.documentElement.classList.toggle('paper-note', !!p.bg);
+    note.style.setProperty('--dust', dust(ctx.widget.id || 'note'));
+    const pc = (PINS[c.pinColor] || PINS.red).c;
+    pc.forEach((v, i) => note.style.setProperty(`--pin-${i + 1}`, v));
     note.style.setProperty('--paper', p.bg || 'transparent');
     note.style.setProperty('--paper-bg', p.bg || '#fff');
     if (p.ink) note.style.setProperty('--ink', p.ink); else note.style.removeProperty('--ink');

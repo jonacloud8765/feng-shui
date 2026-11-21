@@ -189,7 +189,7 @@ const TYPES = {
     size: { width: 240, height: 220 },
     min: { width: 110, height: 90 },
     max: { width: 1200, height: 1200 },
-    config: { text: '', title: '', body: '', showTitle: true, paper: 'butter', font: 'signature', titleFont: 'signature', size: 17, lined: false, tape: true, pin: 'tape' },
+    config: { text: '', title: '', body: '', showTitle: true, paper: 'butter', font: 'signature', titleFont: 'signature', size: 17, lined: false, tape: true, pin: 'tape', pinColor: 'red' },
     appearance: { align: 'left' },
     fields: [
       { key: 'paper', label: 'Paper', type: 'paper' },
@@ -199,6 +199,7 @@ const TYPES = {
       { key: 'size', label: 'Text size', type: 'range', min: 10, max: 44 },
       { key: 'lined', label: 'Ruled lines', type: 'toggle' },
       { key: 'pin', label: 'Pinned with', type: 'choice', options: { tape: 'Washi tape', pushpin: 'Pushpin', none: 'Nothing' } },
+      { key: 'pinColor', label: 'Pin color', type: 'pincolor', when: { pin: 'pushpin' } },
     ],
   },
   image: {

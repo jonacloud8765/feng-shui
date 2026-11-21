@@ -1,5 +1,5 @@
 import { h } from './dom.js';
-import { PAPERS } from './widgets/note.js';
+import { PAPERS, PINS } from './widgets/note.js';
 
 const api = window.morrow;
 const nav = document.getElementById('nav');
@@ -282,6 +282,9 @@ function field(w, f) {
     case 'range': return row(f.label, slider(v, { min: f.min, max: f.max, step: f.step || 1 }, set, f.label));
     case 'apps': return appsEditor(w);
     case 'countdown': return countdownEditor(w);
+    case 'pincolor': return row(f.label, h('div.chips', { style: { padding: 0, justifyContent: 'flex-end' } }, ...Object.entries(PINS).map(([k, p]) =>
+      h(`button.chip.paper-chip${v === k ? '.on' : ''}`, { title: p.label, 'aria-label': `${p.label} pin`, onclick: () => { set(k); render(); } },
+        h('span.sw', { style: { background: `radial-gradient(circle at 35% 30%, ${p.c[0]}, ${p.c[1]} 55%, ${p.c[2]})`, borderRadius: '50%' } }), p.label))));
     case 'paper': return row(f.label, h('div.chips', { style: { padding: 0, justifyContent: 'flex-end' } }, ...Object.entries(PAPERS).map(([k, p]) =>
       h(`button.chip.paper-chip${v === k ? '.on' : ''}`, { title: p.label, 'aria-label': `${p.label} paper`, onclick: () => { set(k); render(); } },
         h('span.sw', { style: { background: p.bg || 'linear-gradient(135deg, rgba(255,255,255,0.35), rgba(255,255,255,0.05))', color: p.ink || 'inherit' } }, 'a'), p.label))));
