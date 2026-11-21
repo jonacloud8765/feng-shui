@@ -17,6 +17,36 @@ const CORK_GRAIN = svg(220, 220, '<filter id="g"><feTurbulence type="fractalNois
 const CORK_FLECK = svg(260, 260, '<filter id="f"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="1" seed="11" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.93  0 0 0 0 0.80  0 0 0 0 0.60  0 0 0 3.2 -1.9"/></filter><rect width="260" height="260" filter="url(#f)"/>');
 const CORK_BLOTCH = svg(480, 480, '<filter id="b"><feTurbulence type="fractalNoise" baseFrequency="0.018" numOctaves="3" seed="2" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.35  0 0 0 0 0.22  0 0 0 0 0.10  0 0 0 0.9 -0.35"/></filter><rect width="480" height="480" filter="url(#b)"/>');
 
+// Wear and tear of a board that has seen a few cases: a bullet hole with
+// splintered cork, a couple of cigarette burns and ash smudges, and grime
+// along the bottom where hands rest.
+const BULLET = svg(70, 70, `
+  <defs><radialGradient id="r" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#0d0805"/><stop offset="0.32" stop-color="#1c120a"/><stop offset="0.45" stop-color="#5a3a1e"/><stop offset="0.62" stop-color="#d9b48a" stop-opacity="0.55"/><stop offset="1" stop-color="#d9b48a" stop-opacity="0"/></radialGradient>
+  <filter id="j"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" seed="5"/><feDisplacementMap in="SourceGraphic" scale="3.2"/></filter></defs>
+  <g filter="url(#j)">
+    <circle cx="35" cy="35" r="15" fill="url(#r)"/>
+    <path d="M35 35 L52 27 M35 35 L49 47 M35 35 L22 49 M35 35 L18 26 M35 35 L37 16" stroke="#3b2412" stroke-width="0.9" stroke-linecap="round" opacity="0.55"/>
+    <circle cx="35" cy="35" r="4.4" fill="#070403"/>
+  </g>`);
+const BURN = svg(60, 60, `
+  <defs><radialGradient id="b" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#1a0f08" stop-opacity="0.85"/><stop offset="0.35" stop-color="#3d2512" stop-opacity="0.7"/><stop offset="0.6" stop-color="#6b4320" stop-opacity="0.35"/><stop offset="1" stop-color="#6b4320" stop-opacity="0"/></radialGradient>
+  <filter id="w"><feTurbulence type="fractalNoise" baseFrequency="0.25" numOctaves="2" seed="9"/><feDisplacementMap in="SourceGraphic" scale="6"/></filter></defs>
+  <ellipse cx="30" cy="30" rx="24" ry="19" fill="url(#b)" filter="url(#w)"/>`);
+const ASH = svg(140, 60, `
+  <defs><filter id="a"><feTurbulence type="fractalNoise" baseFrequency="0.08 0.3" numOctaves="3" seed="3"/><feColorMatrix values="0 0 0 0 0.42  0 0 0 0 0.40  0 0 0 0 0.38  0 0 0 1.3 -0.55"/><feGaussianBlur stdDeviation="0.6"/></filter>
+  <radialGradient id="m"><stop offset="0.3" stop-color="#fff"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient><mask id="k"><rect width="140" height="60" fill="url(#m)"/></mask></defs>
+  <rect width="140" height="60" filter="url(#a)" mask="url(#k)"/>`);
+const WEAR = [
+  `${BULLET} 52% 47% / 54px 54px no-repeat`,
+  `${BURN} 9% 95% / 70px 66px no-repeat`,
+  `${BURN} 93% 72% / 52px 48px no-repeat`,
+  `${ASH} 22% 99% / 130px 52px no-repeat`,
+  `${ASH} 74% 100% / 110px 44px no-repeat`,
+  'linear-gradient(0deg, rgba(45,25,8,0.5), rgba(45,25,8,0.16) 12%, transparent 28%)',
+  'radial-gradient(40% 18% at 6% 100%, rgba(30,15,5,0.35), transparent 70%)',
+  'radial-gradient(36% 16% at 96% 100%, rgba(30,15,5,0.3), transparent 70%)',
+].join(', ');
+
 const css = `
 :root.paper-note .glass { overflow: visible; border-radius: 0; }
 :root.paper-note .glass > .layer { display: none; }
@@ -33,7 +63,7 @@ const css = `
 }
 .cork {
   position: absolute; inset: 13px; border-radius: 2px; overflow: hidden;
-  background: ${CORK_FLECK}, ${CORK_GRAIN}, ${CORK_BLOTCH},
+  background: ${WEAR}, ${CORK_FLECK}, ${CORK_GRAIN}, ${CORK_BLOTCH},
     radial-gradient(120% 90% at 30% 20%, #c99a68, #b4824f 60%, #a2713f);
   box-shadow: inset 0 2px 5px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(0,0,0,0.25), inset 0 0 40px rgba(60,30,10,0.25);
 }
@@ -72,6 +102,18 @@ const css = `
   filter: drop-shadow(1.5px 3px 1.5px rgba(0,0,0,0.4));
 }
 .cork .pin:hover { transform: translateY(-1px); }
+.corkwrap .orient {
+  position: absolute; right: 18px; top: 2px; z-index: 6; display: flex; gap: 2px; padding: 2px; border-radius: 7px;
+  background: rgba(40,24,12,0.82); box-shadow: 0 1px 3px rgba(0,0,0,0.35); opacity: 0; transition: opacity 0.18s;
+}
+.corkwrap:hover .orient { opacity: 1; }
+.corkwrap .orient button {
+  width: 24px; height: 18px; border: 0; border-radius: 5px; padding: 0; background: transparent; display: grid; place-items: center; cursor: default;
+}
+.corkwrap .orient button i { display: block; border: 1.4px solid rgba(255,240,220,0.85); border-radius: 1.5px; }
+.corkwrap .orient .p i { width: 8px; height: 11px; }
+.corkwrap .orient .l i { width: 12px; height: 8px; }
+.corkwrap .orient button.on { background: rgba(255,240,220,0.22); }
 .cork .empty { position: absolute; inset: 0; display: grid; place-items: center; color: rgba(40,20,5,0.55); font: 500 13px system-ui; text-align: center; pointer-events: none; }
 `;
 
@@ -95,7 +137,9 @@ export function mount(root, ctx) {
   root.style.padding = '0';
   document.documentElement.classList.add('paper-note');
   const board = h('div.cork');
-  const wrap = h('div.corkwrap', {}, h('div.cork-frame'), board);
+  const orientBtn = (cls, tip, portrait) => h(`button.${cls}`, { title: tip, 'aria-label': tip, 'data-interactive': '', onmousedown: (e) => e.stopPropagation(), onclick: () => orient(portrait) }, h('i'));
+  const orientBar = h('div.orient', { 'data-interactive': '' }, orientBtn('p', 'Portrait', true), orientBtn('l', 'Landscape', false));
+  const wrap = h('div.corkwrap', {}, h('div.cork-frame'), board, orientBar);
   root.append(wrap);
 
   let items = [];
@@ -312,6 +356,33 @@ export function mount(root, ctx) {
     build();
     save(true);
   }
+
+  // Portrait / landscape: swap the board's sides and spread everything
+  // pinned on it proportionally into the new shape.
+  const FRAME_W = 44, FRAME_H = 48; // window minus the cork's visible area
+  function markOrient() {
+    const portrait = window.innerHeight >= window.innerWidth;
+    orientBar.children[0].classList.toggle('on', portrait);
+    orientBar.children[1].classList.toggle('on', !portrait);
+  }
+  function orient(portrait) {
+    const b = { ...ctx.widget.bounds };
+    if ((b.height >= b.width) === portrait) return;
+    const nb = { ...b, width: b.height, height: b.width };
+    const ow = b.width - FRAME_W, oh = b.height - FRAME_H;
+    const nw = nb.width - FRAME_W, nh = nb.height - FRAME_H;
+    for (const it of items) {
+      const cx = (it.x + it.w / 2) / ow, cy = (it.y + it.h / 2) / oh;
+      it.x = Math.round(Math.min(nw - it.w, Math.max(0, cx * nw - it.w / 2)));
+      it.y = Math.round(Math.min(nh - it.h, Math.max(0, cy * nh - it.h / 2)));
+    }
+    ctx.setConfig({ items: items.map((i) => ({ ...i })), strings: strings.map((x) => ({ ...x })) });
+    ctx.api.updateWidget(ctx.widget.id, { bounds: nb });
+    for (const it of items) place(it);
+    drawStrings();
+  }
+  window.addEventListener('resize', () => { markOrient(); drawStrings(); });
+  markOrient();
 
   load();
   return {

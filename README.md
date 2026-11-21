@@ -114,7 +114,8 @@ License). Their licenses are in `src/renderer/fonts`.
 A framed cork board. Right-click to pin a note or a photo. Drag an item by its
 paper to move it and click its text to write. Click a pushpin to change its
 color, drag from a pushpin to another item to run a red string between them,
-and click a string to cut it.
+and click a string to cut it. Hover the top-right corner to switch between
+portrait and landscape; everything on the board moves with it.
 
 ## Custom Widget
 
