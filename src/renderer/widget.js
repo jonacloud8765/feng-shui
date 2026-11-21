@@ -78,7 +78,8 @@ window.addEventListener('contextmenu', (e) => {
 });
 
 window.addEventListener('dblclick', (e) => {
-  if (!e.target.closest(interactive)) window.morrow.openSettings(id);
+  // Some widgets (the Sticky Note) are typed in, so a double-click there is just text selection.
+  if (!e.target.closest(interactive) && !instance?.noDoubleClickSettings) window.morrow.openSettings(id);
 });
 
 main();

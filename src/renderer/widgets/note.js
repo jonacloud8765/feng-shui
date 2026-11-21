@@ -23,54 +23,24 @@ export const PINS = {
   black: { label: 'Black', c: ['#7a7a7a', '#2a2a2a', '#000000'] },
 };
 
-// Long paper fibres, stretched sideways like real pulp.
-const FIBRE = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="520" height="260"><filter id="f"><feTurbulence type="fractalNoise" baseFrequency="0.006 0.09" numOctaves="4" seed="7" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.4  0 0 0 0 0.34  0 0 0 0 0.25  0 0 0 0.26 -0.1"/></filter><rect width="520" height="260" filter="url(#f)"/></svg>')}")`;
-
-// Paper grain, shared by every note.
-const GRAIN = `url("data:image/svg+xml,${encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 0.35  0 0 0 0 0.3  0 0 0 0 0.2  0 0 0 0.17 0"/></filter><rect width="180" height="180" filter="url(#n)"/></svg>')}")`;
-
-// A few specks of dust and a stray fibre, placed the same way every time for a given note.
-function dust(seed) {
-  let x = 0;
-  for (const ch of seed) x = (x * 31 + ch.charCodeAt(0)) >>> 0;
-  const rnd = () => ((x = (x * 1664525 + 1013904223) >>> 0) / 4294967296);
-  let out = '';
-  for (let i = 0; i < 14; i++) {
-    out += `<circle cx="${(rnd() * 400).toFixed(1)}" cy="${(rnd() * 400).toFixed(1)}" r="${(0.35 + rnd() * 0.9).toFixed(2)}" fill="rgba(${rnd() < 0.7 ? '60,50,40' : '255,255,255'},${(0.18 + rnd() * 0.3).toFixed(2)})"/>`;
-  }
-  for (let i = 0; i < 2; i++) {
-    const sx = rnd() * 380, sy = rnd() * 380;
-    out += `<path d="M${sx.toFixed(0)} ${sy.toFixed(0)} q ${(rnd() * 14 - 7).toFixed(1)} ${(rnd() * 10 - 5).toFixed(1)} ${(rnd() * 22 - 11).toFixed(1)} ${(rnd() * 16 - 8).toFixed(1)}" stroke="rgba(70,60,50,0.16)" stroke-width="0.5" fill="none"/>`;
-  }
-  return `url("data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="400" height="400">${out}</svg>`)}")`;
-}
-
 const css = `
 /* ---- Physical paper: the note sits inside the window with room around it
    for its shadow and for a pin that pokes out past the paper's edge. ---- */
 :root.paper-note .glass { overflow: visible; border-radius: 0; }
 :root.paper-note .glass > .layer { display: none; }
-.note.real { inset: 20px 14px 22px 12px; --curl: 24px; }
-.note.real { transform: rotate(var(--tilt, 0deg)); }
+.note.real { inset: 20px 14px 22px 12px; }
 .note.real .paper, .note.real .paper.on {
   border-radius: 1.5px; opacity: 1;
-  /* The bottom-right corner is curled up, so the paper is cut away there. */
-  clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--curl)), calc(100% - var(--curl)) 100%, 0 100%);
   background:
     radial-gradient(140% 70% at 30% -15%, rgba(255,255,255,0.36), transparent 55%),
     linear-gradient(180deg, rgba(0,0,0,0.05), rgba(0,0,0,0.0) 3px, rgba(255,255,255,0.08) 3px, rgba(0,0,0,0) 17%),
     linear-gradient(185deg, rgba(255,255,255,0) 55%, rgba(0,0,0,0.05) 85%, rgba(0,0,0,0.11) 100%),
-    linear-gradient(90deg, rgba(0,0,0,0.035), rgba(0,0,0,0) 6%, rgba(0,0,0,0) 94%, rgba(0,0,0,0.04)),
-    var(--dust), ${GRAIN}, ${FIBRE},
     var(--paper);
-  background-size: auto, auto, auto, auto, 400px 400px, 180px 180px, 520px 260px, auto;
-  background-blend-mode: normal, normal, normal, normal, normal, multiply, multiply, normal;
   box-shadow: 0 0.5px 0 rgba(255,255,255,0.65) inset, 0 -0.5px 0 rgba(0,0,0,0.12) inset;
 }
 /* Shadows live on a box behind the paper so the curled corner can cut the paper. */
 .note.real .lift {
   position: absolute; inset: 0; pointer-events: none; z-index: -1;
-  clip-path: polygon(-40px -40px, calc(100% + 40px) -40px, calc(100% + 40px) calc(100% - var(--curl) + 6px), calc(100% - var(--curl) + 6px) calc(100% + 40px), -40px calc(100% + 40px));
   box-shadow:
     0 0 0 0.5px rgba(0,0,0,0.10),
     0 1px 1.5px rgba(0,0,0,0.2),
@@ -82,21 +52,13 @@ const css = `
   box-shadow: 0 14px 12px rgba(0,0,0,0.30);
 }
 .note.real .lift::before { left: 8px; transform: rotate(-3.2deg); }
-.note.real .lift::after { right: 14px; transform: rotate(4.4deg); box-shadow: 0 18px 14px rgba(0,0,0,0.34); }
+.note.real .lift::after { right: 6px; transform: rotate(3.6deg); }
 .note:not(.real) .lift { display: none; }
-/* The curled-up corner: the paper's paler underside, folded over, with its own shadow. */
+/* The lifted corner catches a little light. */
 .note.real .curl {
-  position: absolute; right: 0; bottom: 0; width: var(--curl); height: var(--curl); pointer-events: none;
-  filter: drop-shadow(-2px -1px 2.5px rgba(0,0,0,0.22));
-}
-.note.real .curl::before {
-  content: ''; position: absolute; inset: 0;
-  clip-path: polygon(0 0, 100% 0, 0 100%);
-  border-bottom-right-radius: 60% 60%;
-  background:
-    linear-gradient(135deg, rgba(0,0,0,0.0) 0, rgba(0,0,0,0.0) 30%, rgba(255,255,255,0.55) 62%, rgba(0,0,0,0.10) 100%),
-    var(--paper);
-  filter: saturate(0.7) brightness(1.04);
+  position: absolute; right: 0; bottom: 0; width: 34px; height: 34px; pointer-events: none;
+  border-bottom-right-radius: 3px;
+  background: linear-gradient(315deg, rgba(255,255,255,0.0) 0, rgba(255,255,255,0.22) 30%, rgba(0,0,0,0.05) 52%, transparent 60%);
 }
 .note:not(.real) .curl { display: none; }
 /* Window buttons, revealed by hovering the top-left corner. */
@@ -398,11 +360,6 @@ export function mount(root, ctx) {
     // Paper notes are drawn as real paper; the glass note keeps the glass look.
     note.classList.toggle('real', !!p.bg);
     document.documentElement.classList.toggle('paper-note', !!p.bg);
-    note.style.setProperty('--dust', dust(ctx.widget.id || 'note'));
-    // Every note sits very slightly askew, the same way each time.
-    let t = 0;
-    for (const ch of ctx.widget.id || '') t = (t * 33 + ch.charCodeAt(0)) % 1000;
-    note.style.setProperty('--tilt', `${((t / 1000) * 1.2 - 0.6).toFixed(2)}deg`);
     note.classList.toggle('collapsed', !!c.collapsed);
     const pc = (PINS[c.pinColor] || PINS.red).c;
     pc.forEach((v, i) => note.style.setProperty(`--pin-${i + 1}`, v));
@@ -473,6 +430,7 @@ export function mount(root, ctx) {
   window.addEventListener('resize', fit);
   load();
   return {
+    noDoubleClickSettings: true,
     update: load,
     menu: () => [
       { label: 'Underline Selection', action: 'underline' },

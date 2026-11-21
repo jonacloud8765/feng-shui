@@ -100,8 +100,9 @@ and press ⌘U, ⌘B or ⌘I, or use the small bar that appears over a selection
 underline, bold or italicize it.
 Start a line with "- " for a bulleted list or "[] " for a checklist (or press
 ⌘⇧7 / ⌘⇧L), and click a box to tick it. Pin the note with washi tape, a
-pushpin (six colors), or nothing. Paper notes are drawn as real paper with grain,
-a little dust and a lifted-corner shadow; the Glass paper keeps the glass look.
+pushpin (six colors), or nothing. Paper notes are drawn as real paper with a
+lifted-corner shadow; the Glass paper keeps the glass look. Double-clicking a
+note selects text; use Customize… in the right-click menu for its settings.
 Hover the top-left corner for close (hide), fold and zoom buttons; drag the
 top-right corner to resize. Text scales with the note without changing its
 saved size. Three handwriting fonts are bundled: Homemade
