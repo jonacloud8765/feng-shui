@@ -1,272 +1,261 @@
 'use strict';
 
-// Feng Shui: rearranges a layout into a calm, balanced composition.
+// Feng Shui: turns a layout into a calm, deliberate dashboard that uses the
+// whole screen.
 //
-// One widget is the heart of the desktop and sits in the middle: the one
-// already nearest the centre, as long as it's a substantial widget, otherwise
-// the largest. Long, low widgets (a dock of apps, a world clock strip) rest in
-// a row beneath the heart. Everything else is shared between the left and the
-// right so both sides carry about the same visual weight; a side that's too
-// crowded for one column flows into two. Each group is centred top to bottom
-// with even breathing room. Sizes are kept where they fit and gently reduced
-// where they don't (never below a widget's minimum). The lower-right corner is
-// left clear for the Feng Shui button itself.
+// Every widget gets a share of the space that suits what it shows: content
+// that rewards room (Films, the Whiteboard, a custom page, a big photo) is
+// given a lot of it, glanceable readings (a clock, a counter, a dial) stay
+// compact. Widgets are set out in columns that run the full height of the
+// screen, like a designed grid: each column is as wide as its widgets need,
+// and each widget is as tall as its shape asks for. A widget with a share (the
+// corkboard) stands the full height of one side and covers at least that
+// fraction of the screen. Many arrangements are tried and scored on how well
+// each widget keeps its natural shape, gets the room it deserves and how much
+// of the screen is put to use. Each press can step to the next best one.
 
 const MARGIN = 32;
 const GAP = 22;
-const BUTTON = 56; // kept clear at the bottom for the Feng Shui button
+const BOTTOM = 24; // a little breathing room above the Dock edge
 const BAR = 40; // kept clear at the top for the layout bar
 
+// weight: how much room the widget deserves; aspect: the shape it looks best in
+// (width / height). A missing aspect means "keep the shape it has now".
+const PROFILE = {
+  films: { weight: 3.2, aspect: 0.82 },
+  board: { weight: 4.2, aspect: 1.65 },
+  page: { weight: 3, aspect: null },
+  image: { weight: 1.5, aspect: null },
+  cork: { weight: 2.6, aspect: 0.8 },
+  note: { weight: 1.2, aspect: 1.1, cap: [380, 380] },
+  neh: { weight: 1.4, aspect: 1.38, cap: [430, 320] },
+  doughcon: { weight: 1, aspect: 2.6, cap: [440, 170] },
+  weather: { weight: 1.1, aspect: 1.6, cap: [390, 245] },
+  worldclock: { weight: 1, aspect: 1.5, cap: [400, 270] },
+  clock: { weight: 0.85, aspect: 2, cap: [380, 190] },
+  watched: { weight: 0.9, aspect: 1.65, cap: [350, 215] },
+  stopwatch: { weight: 0.8, aspect: 1.8, cap: [340, 190] },
+  countdown: { weight: 0.8, aspect: 1.8, cap: [340, 190] },
+  random: { weight: 0.6, aspect: 1.2, cap: [230, 190] },
+  launcher: { weight: 1, aspect: 4.6, cap: [660, 140] },
+  nuke: { weight: 0.5, aspect: 1.25, cap: [230, 185] },
+};
+// A cap is the size past which a glanceable widget shows nothing more: it stays
+// compact and leaves the rest of the screen to the widgets that use it.
+const TOLERANCE = 1.3; // a cell may stretch a widget's shape by this much before it floats inside it
+
 const area = (s) => s.width * s.height;
+const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
 
-// Scale a size down to fit maxW x maxH, keeping its shape. A widget is never
-// made smaller than its minimum, so it may stay a little larger than asked.
-function fit(size, maxW, maxH, min) {
-  let k = Math.min(1, maxW / size.width, maxH / size.height);
-  k = Math.max(k, min.width / size.width, min.height / size.height);
-  return { width: Math.round(size.width * k), height: Math.round(size.height * k) };
-}
-
-// Choose the heart: nearest the centre among widgets at least half the size of
-// the largest one.
-// the largest one. Later variants try the next candidates (any widget at
-// least a third of the largest), so each press can find a new balance.
-function pickHeart(widgets, box, variant = 0) {
-  const biggest = Math.max(...widgets.map((w) => area(w.bounds)));
-  const cx = box.x + box.width / 2;
-  const cy = box.y + box.height / 2;
-  const dist = (w) => Math.hypot(w.bounds.x + w.bounds.width / 2 - cx, w.bounds.y + w.bounds.height / 2 - cy);
-  const near = widgets.filter((w) => area(w.bounds) >= biggest / 2).sort((a, b) => dist(a) - dist(b) || area(b.bounds) - area(a.bounds));
-  const more = widgets.filter((w) => !near.includes(w) && area(w.bounds) >= biggest / 3 && w.bounds.width / w.bounds.height < 2.6).sort((a, b) => area(b.bounds) - area(a.bounds));
-  const all = [...near, ...more];
-  return all[variant % all.length];
-}
-
-// How many different hearts a layout offers (each also comes mirrored).
-function variants(widgets) {
-  const free = widgets.filter((w) => !w.share);
-  if (!free.length) return 2;
-  const biggest = Math.max(...free.map((w) => area(w.bounds)));
-  const n = free.filter((w) => area(w.bounds) >= biggest / 2 || (area(w.bounds) >= biggest / 3 && w.bounds.width / w.bounds.height < 2.6)).length;
-  return Math.max(1, n) * 2;
-}
-
-// Every way of sharing items between n non-empty columns (small n and lists only).
-function* partitions(items, n) {
-  const pick = new Array(items.length).fill(0);
-  const total = n ** items.length;
-  for (let code = 0; code < total; code++) {
-    let c = code;
-    for (let i = 0; i < items.length; i++) { pick[i] = c % n; c = Math.floor(c / n); }
-    if (pick[0] !== 0) continue; // mirror images are the same layout
-    const cols = Array.from({ length: n }, () => []);
-    items.forEach((it, i) => cols[pick[i]].push(it));
-    if (cols.every((col) => col.length)) yield cols;
+function profile(w) {
+  const p = PROFILE[w.type] || {};
+  const now = w.bounds.width / w.bounds.height;
+  let weight = p.weight ?? Math.sqrt(area(w.bounds) / 60000);
+  // Photos differ a lot in importance; let their current size speak too.
+  let cap = p.cap ? { width: p.cap[0], height: p.cap[1] } : null;
+  if (w.type === 'image') {
+    weight *= clamp(Math.sqrt(area(w.bounds) / 90000), 0.6, 1.8);
+    cap = { width: Math.max(320, w.bounds.width * 2.2), height: Math.max(320, w.bounds.height * 2.2) };
   }
+  if (cap && w.max) cap = { width: Math.min(cap.width, w.max.width), height: Math.min(cap.height, w.max.height) };
+  return { weight, aspect: p.aspect || now, cap };
 }
 
-// Share a strip's width between columns: each gets at least its widest
-// minimum, and the rest in proportion to how wide its widgets want to be.
-function widthsFor(cols, avail) {
-  const mins = cols.map((col) => Math.max(...col.map((w) => w.min.width)));
-  const nat = cols.map((col) => Math.max(...col.map((w) => w.bounds.width)));
-  const spare = avail - mins.reduce((t, x) => t + x, 0);
-  if (spare < 0) return null;
-  const want = nat.reduce((t, x, i) => t + Math.max(0, x - mins[i]), 0) || 1;
-  return mins.map((m, i) => Math.min(nat[i], m + (spare * Math.max(0, nat[i] - m)) / want));
+// The largest rectangle of (about) the given shape inside a cell, within the
+// widget's minimum and maximum size.
+function fitCell(cell, aspect, min, max) {
+  const ca = cell.width / cell.height;
+  let width = cell.width;
+  let height = cell.height;
+  if (ca > aspect * TOLERANCE) width = height * aspect * TOLERANCE;
+  else if (ca < aspect / TOLERANCE) height = width / (aspect / TOLERANCE);
+  if (max) { width = Math.min(width, max.width); height = Math.min(height, max.height); }
+  width = Math.max(width, min.width);
+  height = Math.max(height, min.height);
+  return { width: Math.round(width), height: Math.round(height) };
 }
 
-// Lay out one column of items inside width x height; returns sizes and how much
-// they had to shrink (1 = not at all).
-function column(col, width, height) {
-  let s = col.map((w) => fit(w.bounds, width, height, w.min));
-  const sum = () => s.reduce((t, x) => t + x.height, 0);
-  for (let n = 0; n < 6 && sum() + GAP * (s.length - 1) > height; n++) {
-    const k = (height - GAP * (s.length - 1)) / sum();
-    s = s.map((x, j) => fit(x, x.width * k, x.height * k, col[j].min));
+// A small seeded random generator, so the same layout always gives the same answers.
+function rng(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// Scale a set of lengths to their total, but no length past its limit: what a
+// limited one can't take goes to the others.
+function spread(want, limit) {
+  const total = want.reduce((t, x) => t + x, 0);
+  const out = want.slice();
+  let free = out.map((_, i) => i);
+  for (let pass = 0; pass < want.length; pass++) {
+    const fixed = out.reduce((t, x, i) => t + (free.includes(i) ? 0 : x), 0);
+    const base = free.reduce((t, i) => t + want[i], 0);
+    if (!base) break;
+    let changed = false;
+    for (const i of free) out[i] = ((total - fixed) * want[i]) / base;
+    for (const i of free) if (out[i] > limit[i]) { out[i] = limit[i]; changed = true; }
+    if (!changed) break;
+    free = free.filter((i) => out[i] < limit[i]);
+    if (!free.length) break;
   }
-  const over = s.reduce((t, x) => t + x.height, 0) + GAP * (s.length - 1) > height + 1 || s.some((x) => x.width > width + 1);
-  // How much of each widget's size survives, counted per widget so a small one
-  // matters as much as a big one.
-  return { s, area: s.reduce((t, x, j) => t + x.width / col[j].bounds.width, 0), over };
+  return out;
 }
 
-// Order a column so its largest widget sits in the middle, like a mountain.
-function mountain(s) {
-  const idx = s.map((_, i) => i).sort((a, b) => area(s[b]) - area(s[a]));
-  const order = [];
-  idx.forEach((i, n) => (n % 2 ? order.unshift(i) : order.push(i)));
-  return order;
-}
-
-// Find the best way to stack one side as one to three columns. Fewer columns
-// win a near tie because they read calmer.
-function plan(items, strip) {
-  if (!items.length) return { cols: [], score: 0 };
-  let best = null;
-  const tries = items.length <= 5 ? Math.min(3, items.length) : Math.min(2, items.length);
-  for (let n = 1; n <= tries; n++) {
-    for (const parts of partitions(items, n)) {
-      const ws = widthsFor(parts, strip.width - GAP * (n - 1));
-      if (!ws && n > 1) continue;
-      const cols = parts.map((col, i) => ({ col, ...column(col, ws ? ws[i] : strip.width, strip.height) }));
-      const score = cols.reduce((t, c) => t + c.area, 0) * (cols.some((c) => c.over) ? 0.3 : 1) * (1 - 0.04 * (n - 1));
-      if (!best || score > best.score) best = { cols, score };
-    }
-  }
-  return best;
-}
-
-// Place a planned side inside its strip, packed against the heart.
-function side(best, strip, hugRight, out, bounds) {
-  if (!best.cols.length) return;
-  const widths = best.cols.map((c) => Math.max(...c.s.map((x) => x.width)));
-  const total = widths.reduce((t, x) => t + x, 0) + GAP * (widths.length - 1);
-  // Columns are packed against the heart; the outermost ends near the margin.
-  let x = hugRight ? strip.x : strip.x + strip.width - total;
-  x = Math.max(bounds.x, Math.min(x, bounds.x + bounds.width - total));
-  // The first column on the right / last on the left touches the heart; put
-  // the busiest (tallest) column there so the composition tapers outward.
-  const byHeight = [...best.cols.keys()].sort((a, b) => best.cols[b].s.reduce((t, q) => t + q.height, 0) - best.cols[a].s.reduce((t, q) => t + q.height, 0));
-  const slots = hugRight ? byHeight : [...byHeight].reverse();
-  for (const ci of slots) {
-    const { col, s } = best.cols[ci];
-    const cw = widths[ci];
-    const seq = mountain(s);
-    const h = seq.reduce((t, i) => t + s[i].height, 0) + GAP * (seq.length - 1);
-    let y = strip.y + Math.max(0, (strip.height - h) / 2);
-    for (const i of seq) {
-      out[col[i].id] = { x: Math.round(x + (cw - s[i].width) / 2), y: Math.round(y), ...s[i] };
-      y += s[i].height + GAP;
-    }
+// Lay out columns of items inside a region. Returns placements and a score
+// (lower is better).
+function layoutColumns(cols, region, totalWeight) {
+  const C = cols.length;
+  const availW = region.width - GAP * (C - 1);
+  // A column wants the width that lets its widgets keep their shapes at full
+  // height, and a share of the screen that matches its weight; blend the two.
+  const nat = cols.map((col) => (region.height - GAP * (col.length - 1)) / col.reduce((t, it) => t + 1 / it.aspect, 0));
+  const wt = cols.map((col) => col.reduce((t, it) => t + it.weight, 0));
+  const natSum = nat.reduce((t, x) => t + x, 0);
+  const wtSum = wt.reduce((t, x) => t + x, 0);
+  const widths = spread(cols.map((_, c) => availW * (0.55 * nat[c] / natSum + 0.45 * wt[c] / wtSum)),
+    cols.map((col) => (col.every((it) => it.cap) ? Math.max(...col.map((it) => it.cap.width)) : Infinity)));
+  const out = [];
+  let score = 0;
+  let used = 0;
+  let x = region.x;
+  cols.forEach((col, c) => {
+    const cw = widths[c];
+    const availH = region.height - GAP * (col.length - 1);
+    const inv = col.reduce((t, it) => t + 1 / it.aspect, 0);
+    const wsum = wt[c];
+    const heights = spread(col.map((it) => availH * (0.65 * (1 / it.aspect) / inv + 0.35 * it.weight / wsum)),
+      col.map((it) => (it.cap ? Math.min(it.cap.height, cw / it.aspect * TOLERANCE) : Infinity)));
+    // Whatever height is left over (a column of compact widgets) is shared out
+    // as even space around them, so they sit centred as a group.
+    const spare = Math.max(0, availH - heights.reduce((t, x) => t + x, 0));
+    let y = region.y + spare / (col.length + 1);
+    col.forEach((it, i) => {
+      const ch = heights[i];
+      const lim = it.cap ? { width: Math.min(it.cap.width, it.max ? it.max.width : Infinity), height: Math.min(it.cap.height, it.max ? it.max.height : Infinity) } : it.max;
+      const size = fitCell({ width: cw, height: ch }, it.aspect, it.min, lim);
+      // Too small for the widget: it would spill out of its cell.
+      if (size.width > cw + 1 || size.height > ch + 1) score += 25;
+      if (!it.cap) score += it.weight * Math.abs(Math.log(cw / ch / it.aspect)) * 1.2;
+      let share = (it.weight / totalWeight) * region.width * region.height;
+      if (it.cap) share = Math.min(share, area(it.cap));
+      const ratio = Math.log(Math.max(1, area(size)) / share);
+      // Content widgets that end up cramped cost the most: they are the point.
+      score += it.cap ? 0.8 * Math.abs(ratio) : 0.8 * Math.abs(ratio) + (ratio < 0 ? it.weight * 1.4 * -ratio : 0);
+      const width = Math.min(size.width, Math.round(cw));
+      const height = Math.min(size.height, Math.round(ch));
+      used += width * height * (it.cap ? 0.5 : 1);
+      out.push({ id: it.id, x: Math.round(x + (cw - width) / 2), y: Math.round(y + (ch - height) / 2), width, height });
+      y += ch + GAP + spare / (col.length + 1);
+    });
     x += cw + GAP;
-  }
+  });
+  // Reward putting the screen to use, and a calm number of columns.
+  score -= 6 * (used / (region.width * region.height));
+  score += 0.15 * C;
+  return { out, score };
 }
 
-// widgets: [{ id, bounds, min: {width,height} }]; work: {x,y,width,height}.
-// variant picks another heart (variant / 2) and mirrors odd variants.
+// The best few distinct arrangements of the free widgets in the region, best first.
+function candidates(items, region) {
+  const totalWeight = items.reduce((t, it) => t + it.weight, 0);
+  const results = [];
+  const seen = new Set();
+  const rand = rng(items.length * 7919 + Math.round(region.width));
+  const maxC = Math.min(5, items.length);
+  for (let C = 1; C <= maxC; C++) {
+    for (let trial = 0; trial < 500; trial++) {
+      // Heaviest first, each into the lightest column, with a little chance.
+      const order = items.map((it) => ({ it, k: it.weight * (0.6 + rand() * 0.8) })).sort((a, b) => b.k - a.k).map((o) => o.it);
+      const cols = Array.from({ length: C }, () => []);
+      const load = new Array(C).fill(0);
+      for (const it of order) {
+        let best = 0;
+        for (let c = 1; c < C; c++) if (load[c] + rand() * 0.6 < load[best]) best = c;
+        if (trial % 3 === 0) best = Math.floor(rand() * C);
+        cols[best].push(it);
+        load[best] += it.weight;
+      }
+      if (cols.some((col) => !col.length)) continue;
+      // Inside a column the heaviest widget sits in the middle.
+      for (const col of cols) {
+        col.sort((a, b) => b.weight - a.weight);
+        const m = [];
+        col.forEach((it, i) => (i % 2 ? m.unshift(it) : m.push(it)));
+        if (rand() < 0.3) m.reverse();
+        col.splice(0, col.length, ...m);
+      }
+      // The heaviest column in the middle of the screen.
+      const byLoad = cols.map((col) => ({ col, w: col.reduce((t, it) => t + it.weight, 0) })).sort((a, b) => b.w - a.w);
+      const arranged = [];
+      byLoad.forEach((o, i) => (i % 2 ? arranged.unshift(o.col) : arranged.push(o.col)));
+      if (rand() < 0.5) arranged.reverse();
+      const key = arranged.map((col) => col.map((it) => it.id).join(',')).join('|');
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const r = layoutColumns(arranged, region, totalWeight);
+      results.push({ ...r, group: arranged.map((col) => col.map((it) => it.id).sort().join(',')).sort().join('|') });
+    }
+  }
+  results.sort((a, b) => a.score - b.score);
+  // Keep the best of each distinct grouping so the next press shows something new.
+  const distinct = [];
+  const groups = new Set();
+  for (const r of results) {
+    if (groups.has(r.group)) continue;
+    groups.add(r.group);
+    distinct.push(r);
+    if (distinct.length >= 4) break;
+  }
+  return distinct;
+}
+
+function prepare(widgets, work) {
+  const box = { x: work.x + MARGIN, y: work.y + MARGIN + BAR, width: work.width - MARGIN * 2, height: work.height - MARGIN * 2 - BAR - BOTTOM };
+  const items = widgets.map((w) => ({ ...w, ...profile(w), min: w.min || { width: 80, height: 60 }, max: w.max }));
+  // A widget with a share (the corkboard) stands the full height of one side.
+  const anchored = items.filter((it) => it.share).map((it) => {
+    const width = clamp(Math.ceil((it.share * work.width * work.height) / box.height), it.min.width, box.width * 0.45);
+    return { ...it, size: { width: Math.round(width), height: Math.round(box.height) } };
+  });
+  const free = items.filter((it) => !it.share);
+  let region = { ...box };
+  const placed = {};
+  anchored.forEach((it, i) => {
+    const left = i % 2 === 0;
+    placed[it.id] = { x: left ? region.x : region.x + region.width - it.size.width, y: box.y, ...it.size };
+    region = { ...region, x: left ? region.x + it.size.width + GAP : region.x, width: region.width - it.size.width - GAP };
+  });
+  return { placed, free, region };
+}
+
+// widgets: [{ id, type, bounds, min, max?, share? }]; work: {x,y,width,height}.
+// variant picks the next best arrangement (variant / 2), mirrored on odd ones.
 // Returns { [id]: bounds }.
 function arrange(widgets, work, { variant = 0 } = {}) {
-  const out = compose(widgets, work, Math.floor(variant / 2));
-  if (variant % 2 === 0) return out;
-  // The mirror image: left becomes right.
-  for (const b of Object.values(out)) b.x = Math.round(2 * work.x + work.width - b.x - b.width);
+  if (!widgets.length) return {};
+  const { placed, free, region } = prepare(widgets, work);
+  const out = { ...placed };
+  if (free.length) {
+    const list = candidates(free, region);
+    const pick = list[Math.floor(variant / 2) % list.length];
+    for (const b of pick.out) out[b.id] = { x: b.x, y: b.y, width: b.width, height: b.height };
+  }
+  if (variant % 2 === 1) {
+    for (const b of Object.values(out)) b.x = Math.round(2 * work.x + work.width - b.x - b.width);
+  }
   return out;
 }
 
-function compose(widgets, work, heartIndex) {
-  const out = {};
-  if (!widgets.length) return out;
-  const box = { x: work.x + MARGIN, y: work.y + MARGIN + BAR, width: work.width - MARGIN * 2, height: work.height - MARGIN * 2 - BUTTON - BAR };
-  // A widget with a share (the corkboard) is grown to cover at least that
-  // fraction of the screen, standing the full height of one side.
-  widgets = widgets.map((w) => {
-    if (!w.share) return w;
-    const hgt = Math.round(box.height);
-    const wid = Math.ceil((w.share * work.width * work.height) / hgt);
-    const size = { width: Math.max(wid, w.min.width), height: hgt };
-    return { ...w, bounds: { ...w.bounds, ...size }, min: size, anchored: true };
-  });
-  const anchorW = Math.max(0, ...widgets.filter((w) => w.anchored).map((w) => w.bounds.width));
-  const heart = pickHeart(widgets.filter((w) => !w.anchored).length ? widgets.filter((w) => !w.anchored) : widgets, box, heartIndex);
-  let rest = widgets.filter((w) => w !== heart);
-
-  // Long, low widgets rest beneath the heart, at most two of them.
-  const low = rest.filter((w) => w.bounds.width / w.bounds.height >= 2.6).sort((a, b) => b.bounds.width - a.bounds.width).slice(0, 2);
-  rest = rest.filter((w) => !low.includes(w));
-
-  const heartMax = anchorW ? Math.min(box.width * 0.42, box.width - 2 * (anchorW + GAP)) : box.width * (rest.length ? 0.42 : 0.8);
-  const hs = fit(heart.bounds, heartMax, box.height * (low.length ? 0.66 : 0.82), heart.min);
-  const lows = low.map((w) => fit(w.bounds, anchorW ? heartMax : Math.max(hs.width * 1.25, w.min.width), box.height * 0.16, w.min));
-  const below = lows.reduce((t, s) => t + s.height + GAP, 0);
-
-  // With a crowded desk, one or two small, wide widgets (a clock, a counter)
-  // crown the heart in a row above it, using the space the middle has left.
-  let top = [];
-  let tops = [];
-  const free = box.height - hs.height - below - GAP;
-  if (rest.length >= 4 && free >= 70) {
-    const wide = rest.filter((w) => w.bounds.width / w.bounds.height >= 1.5 && w.min.height <= free);
-    const rowOf = (set) => {
-      const sizes = set.map((w) => fit(w.bounds, hs.width, free, w.min));
-      const k = Math.min(1, (hs.width - GAP * (set.length - 1)) / sizes.reduce((t, x) => t + x.width, 0));
-      const out = sizes.map((x, i) => fit(x, x.width * k, x.height * k, set[i].min));
-      const fits = out.reduce((t, x) => t + x.width, 0) + GAP * (set.length - 1) <= hs.width + 1 && out.every((x) => x.height <= free + 1);
-      const kept = out.reduce((t, x, i) => t + area(x) / area(set[i].bounds), 0);
-      return { set, out, fits, kept };
-    };
-    let best = null;
-    for (let i = 0; i < wide.length; i++) {
-      for (const set of [[wide[i]], ...wide.slice(i + 1).map((b) => [wide[i], b])]) {
-        const r = rowOf(set);
-        if (r.fits && (!best || r.kept > best.kept)) best = r;
-      }
-    }
-    if (best) { top = best.set; tops = best.out; }
-  }
-  rest = rest.filter((w) => !top.includes(w));
-
-  const rowH = tops.length ? Math.max(...tops.map((s) => s.height)) + GAP : 0;
-  const stack = rowH + hs.height + below;
-  const heartX = Math.round(box.x + (box.width - hs.width) / 2);
-  let y = Math.round(box.y + Math.max(0, (box.height - stack) / 2));
-  if (tops.length) {
-    const rowW = tops.reduce((t, s) => t + s.width, 0) + GAP * (tops.length - 1);
-    let x = box.x + (box.width - rowW) / 2;
-    top.forEach((w, i) => {
-      out[w.id] = { x: Math.round(x), y: Math.round(y + rowH - GAP - tops[i].height), ...tops[i] };
-      x += tops[i].width + GAP;
-    });
-    y += rowH;
-  }
-  out[heart.id] = { x: heartX, y, ...hs };
-  y += hs.height + GAP;
-  low.forEach((w, i) => {
-    out[w.id] = { x: Math.round(box.x + (box.width - lows[i].width) / 2), y, ...lows[i] };
-    y += lows[i].height + GAP;
-  });
-
-  // The sides are as wide as the widest thing in the middle allows.
-  const middle = Math.max(hs.width, ...lows.map((s) => s.width));
-  const midX = box.x + (box.width - middle) / 2;
-  const sideW = Math.max(0, midX - box.x - GAP);
-  // The anchored widget stands alone at the outer edge of its side.
-  const anchored = rest.filter((w) => w.anchored);
-  rest = rest.filter((w) => !w.anchored);
-
-  // Share the rest between left and right: try every split that keeps the
-  // two sides close in weight, and keep the one where widgets stay largest.
-  let leftStrip = { x: box.x, y: box.y, width: sideW, height: box.height };
-  let rightStrip = { x: midX + middle + GAP, y: box.y, width: sideW, height: box.height };
-  anchored.forEach((w, i) => {
-    const sz = { width: w.bounds.width, height: w.bounds.height };
-    if (i % 2 === 0) {
-      out[w.id] = { x: Math.round(leftStrip.x), y: Math.round(box.y + (box.height - sz.height) / 2), ...sz };
-      leftStrip = { ...leftStrip, x: leftStrip.x + sz.width + GAP, width: leftStrip.width - sz.width - GAP };
-    } else {
-      out[w.id] = { x: Math.round(rightStrip.x + rightStrip.width - sz.width), y: Math.round(box.y + (box.height - sz.height) / 2), ...sz };
-      rightStrip = { ...rightStrip, width: rightStrip.width - sz.width - GAP };
-    }
-  });
-  const total = rest.reduce((t, w) => t + area(w.bounds), 0);
-  let best = null;
-  const n = Math.min(rest.length, 12);
-  for (let mask = 0; mask < 1 << n; mask++) {
-    const L = rest.filter((_, i) => i < n && mask & (1 << i)).concat(rest.slice(n).filter((_, i) => i % 2 === 0));
-    const R = rest.filter((w) => !L.includes(w));
-    if (!anchored.length && Math.abs(L.length - R.length) > 2) continue;
-    const wl = L.reduce((t, w) => t + area(w.bounds), 0);
-    if (L.length && leftStrip.width < 80) continue;
-    if (R.length && rightStrip.width < 80) continue;
-    const pl = plan(L, leftStrip);
-    const pr = plan(R, rightStrip);
-    const score = pl.score + pr.score - (anchored.length ? 0 : 2 * Math.abs(wl / (total || 1) - 0.5));
-    if (!best || score > best.score) best = { score, pl, pr };
-  }
-  if (!best) best = { pl: plan(rest.slice(0, Math.ceil(rest.length / 2)), leftStrip), pr: plan(rest.slice(Math.ceil(rest.length / 2)), rightStrip) };
-  side(best.pl, leftStrip, false, out, box);
-  side(best.pr, rightStrip, true, out, box);
-  return out;
+// How many different arrangements a press can cycle through (each also mirrored).
+function variants(widgets, work = { x: 0, y: 25, width: 1440, height: 790 }) {
+  const { free, region } = prepare(widgets, work);
+  return free.length ? candidates(free, region).length * 2 : 2;
 }
 
 module.exports = { arrange, variants };

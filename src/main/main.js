@@ -62,10 +62,10 @@ function openSettings(focusWidgetId) {
 const fengTurn = new Map(); // layout id -> next variant
 function fengShui() {
   const fsh = require('./fengshui');
-  const widgets = store.widgets.filter((w) => w.visible).map((w) => ({ id: w.id, bounds: w.bounds, min: registry.TYPES[w.type].min, share: w.type === 'cork' ? 0.25 : 0 }));
+  const widgets = store.widgets.filter((w) => w.visible).map((w) => ({ id: w.id, type: w.type, bounds: w.bounds, min: registry.TYPES[w.type].min, max: registry.TYPES[w.type].max, share: w.type === 'cork' ? 0.25 : 0 }));
   if (!widgets.length) return;
   const work = screen.getPrimaryDisplay().workArea;
-  const total = fsh.variants(widgets);
+  const total = fsh.variants(widgets, work);
   const layoutId = store.layout.id;
   let v = fengTurn.get(layoutId) || 0;
   let placed = null;
