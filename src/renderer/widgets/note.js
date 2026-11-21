@@ -82,7 +82,9 @@ const css = `
 }
 .note:not(.real) .curl { display: none; }
 .note.real .tape { top: -9px; opacity: 0.9; background: linear-gradient(90deg, rgba(250,246,236,0.78), rgba(240,234,220,0.62)); box-shadow: 0 1px 2px rgba(0,0,0,0.14); }
-.note.real .pushpin { top: -20px; filter: drop-shadow(3px 6px 2.5px rgba(0,0,0,0.33)); }
+.note.real .pushpin { top: -13px; filter: drop-shadow(1.5px 3px 1.5px rgba(0,0,0,0.38)); }
+.note .pushpin .tip { display: none; }
+.note:not(.real) .pushpin .tip { display: inline; }
 .note:not(.real) .pushpin { top: 4px; }
 
 .note { position: absolute; inset: 0; display: flex; flex-direction: column; }
@@ -205,7 +207,9 @@ export function mount(root, ctx) {
     <defs><radialGradient id="pinhead" cx="35%" cy="30%" r="70%"><stop offset="0" style="stop-color:var(--pin-1)"/><stop offset="0.55" style="stop-color:var(--pin-2)"/><stop offset="1" style="stop-color:var(--pin-3)"/></radialGradient>
       <linearGradient id="pinneck" x1="0" x2="1"><stop offset="0" style="stop-color:var(--pin-3)"/><stop offset="0.45" style="stop-color:var(--pin-2)"/><stop offset="1" style="stop-color:var(--pin-3)"/></linearGradient>
       <linearGradient id="needle" x1="0" x2="1"><stop offset="0" stop-color="#6d7277"/><stop offset="0.5" stop-color="#e6e9ec"/><stop offset="1" stop-color="#7d8287"/></linearGradient></defs>
-    <path d="M10.2 17 L10.6 29.4 L11.4 29.4 L11.8 17 z" fill="url(#needle)"/>
+    <ellipse cx="11.6" cy="23.4" rx="1.6" ry="0.7" fill="rgba(0,0,0,0.35)"/>
+    <path d="M10.3 17 L10.7 23.2 L11.3 23.2 L11.7 17 z" fill="url(#needle)"/>
+    <path class="tip" d="M10.7 23 L10.9 29.4 L11.1 29.4 L11.3 23 z" fill="url(#needle)"/>
     <ellipse cx="11" cy="17" rx="6" ry="2.2" style="fill:var(--pin-3)"/>
     <path d="M7 9 h8 l1.5 7.4 h-11 z" fill="url(#pinneck)"/>
     <circle cx="11" cy="7.5" r="6.5" fill="url(#pinhead)"/>
@@ -358,7 +362,7 @@ export function mount(root, ctx) {
     const bodyFont = (fonts[c.font] || fonts.noteworthy).stack;
     note.style.setProperty('--note-font', bodyFont);
     note.style.setProperty('--title-font', fonts[c.titleFont]?.stack || bodyFont);
-    note.style.setProperty('--note-size', `${c.size}px`);
+    fit();
     note.classList.toggle('lined', !!c.lined);
     title.classList.toggle('hidden', !c.showTitle);
     // Older notes only had a tape on/off switch; carry "off" over once.
@@ -371,6 +375,22 @@ export function mount(root, ctx) {
     if (document.activeElement !== body && body.innerHTML !== html) body.innerHTML = clean(html);
     if (document.activeElement !== title && title.innerHTML !== (c.title || '')) title.innerHTML = clean(c.title || '');
   }
+  // Text follows the note's size without changing the saved text size: the
+  // size is remembered with the dimensions it was chosen at, and scaled from there.
+  function fit() {
+    const c = ctx.config;
+    const w = window.innerWidth, hgt = window.innerHeight;
+    let base = c.base;
+    if (!base || base.size !== c.size) {
+      base = { w, h: hgt, size: c.size };
+      ctx.setConfig({ base });
+    }
+    const f = Math.max(0.35, Math.min(3, Math.min(w / base.w, hgt / base.h)));
+    // Zoom keeps the wrapping identical, so shrinking reads like shrinking a photo of the note.
+    note.style.setProperty('--note-size', `${c.size}px`);
+    sheet.style.zoom = f.toFixed(3);
+  }
+  window.addEventListener('resize', fit);
   load();
   return {
     update: load,
