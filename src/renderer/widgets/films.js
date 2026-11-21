@@ -67,6 +67,27 @@ const css = `
 .films .filters input { flex: 1 1 90px; }
 .films .filters input::placeholder { color: inherit; opacity: 0.5; }
 .films .filters option { color: #111; }
+/* Shows: each show's seasons together, at half the movie poster size. */
+.films .shows { display: flex; flex-wrap: wrap; align-items: flex-start; gap: 12px 22px; }
+.films .show { flex: 0 1 auto; min-width: calc(var(--poster) * 1.2); max-width: 100%; }
+.films .show .items.seasons { display: flex; flex-wrap: wrap; }
+.films .show .items.seasons .item { width: calc(var(--poster) / 2); }
+.films .show-head { display: flex; align-items: center; gap: 6px; margin-bottom: 5px; min-width: 0; }
+.films .show-t { flex: 1; min-width: 0; text-align: left; }
+.films .show-head .meta { margin-top: 1px; }
+.films .playall { flex: none; width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; padding: 0; background: rgba(255,255,255,0.1); color: inherit; opacity: 0.7; transition: opacity 0.2s, background-color 0.2s; }
+.films .playall:hover { opacity: 1; background: rgba(255,255,255,0.18); }
+.films .playall svg { width: 9px; height: 9px; margin-left: 1px; }
+.films .items.seasons { grid-template-columns: repeat(auto-fill, minmax(calc(var(--poster) / 2), calc(var(--poster) / 2))); gap: 8px 7px; }
+.films.shelf .items.seasons .item { flex: 0 0 calc(var(--poster) / 2); }
+.films .seasons .art { border-radius: 4px; }
+.films .seasons .art .card { font-size: calc(10px * var(--scale)); padding: 4px; }
+.films .seasons .art .badge { width: 14px; height: 14px; top: 3px; right: 3px; }
+.films .seasons .art .badge svg { width: 7px; height: 7px; }
+.films .seasons .name { font-size: calc(9px * var(--scale)); letter-spacing: -0.01em; }
+.films .seasons .meta { font-size: calc(9px * var(--scale)); }
+.films.list .items.seasons { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+.films.list .seasons .art { width: 22px; }
 .films .progress { font-size: calc(10.5px * var(--scale)); opacity: 0.6; margin: -4px 0 8px; text-align: left; line-height: 1.4; }
 `;
 
@@ -232,14 +253,57 @@ export function mount(root, ctx) {
     scroll.scrollTop = top;
   }
 
-  // Movies on the left, a divider, then shows.
+  // Movies on the left, a divider, then shows. Every season of a show sits
+  // together under the show, first season first, at half the poster size.
   function downloads() {
     const movies = data.local.filter((x) => x.kind !== 'show');
-    const shows = data.local.filter((x) => x.kind === 'show');
-    const col = (label, list) => h('div.col', { style: { flex: `${Math.max(1, list.length)} 1 0` } },
-      h('h3', {}, label), h('div.items.local', {}, ...list.map(localItem)));
-    if (!movies.length || !shows.length) return h('div.items.local', {}, ...data.local.map(localItem));
-    return h('div.split', {}, col('Movies', movies), h('div.divider'), col('Shows', shows));
+    const shows = groupShows(data.local.filter((x) => x.kind === 'show'));
+    const showsBox = h('div.shows', {}, ...shows.map(showGroup));
+    if (!shows.length) return h('div.items.local', {}, ...movies.map(localItem));
+    if (!movies.length) return showsBox;
+    const seasons = shows.reduce((t, g) => t + g.length, 0);
+    return h('div.split', {},
+      h('div.col', { style: { flex: `${Math.max(1, movies.length)} 1 0` } }, h('h3', {}, 'Movies'), h('div.items.local', {}, ...movies.map(localItem))),
+      h('div.divider'),
+      h('div.col', { style: { flex: `${Math.max(1, Math.ceil(seasons / 2))} 1 0` } }, h('h3', {}, 'Shows'), showsBox));
+  }
+
+  // Seasons grouped by show; the most recently added show first.
+  function groupShows(list) {
+    const by = new Map();
+    for (const s of list) {
+      const k = s.showKey || s.title.toLowerCase();
+      if (!by.has(k)) by.set(k, []);
+      by.get(k).push(s);
+    }
+    const groups = [...by.values()].map((g) => g.sort((a, b) => (a.season ?? 0) - (b.season ?? 0)));
+    return groups.sort((a, b) => Math.max(...b.map((s) => s.added || 0)) - Math.max(...a.map((s) => s.added || 0)));
+  }
+
+  function showGroup(seasons) {
+    const title = seasons[0].title;
+    const episodes = seasons.reduce((t, s) => t + s.files.length, 0);
+    const bytes = seasons.reduce((t, s) => t + (s.size || 0), 0);
+    const all = seasons.flatMap((s) => s.files);
+    const play = h('button.playall', { title: `Play ${title} from the first season in VLC`, 'aria-label': `Play all of ${title} in VLC`, html: ICON_PLAY });
+    play.addEventListener('click', async () => { const err = await ctx.api.playFilm(all); if (err) flash(err); });
+    const meta = `${seasons.length === 1 ? `Season ${seasons[0].season}` : `${seasons.length} seasons`} · ${episodes} episode${episodes === 1 ? '' : 's'} · ${size(bytes)}`;
+    return h('div.show', {},
+      h('div.show-head', {}, h('div.show-t', {}, h('div.name', {}, title), h('div.meta', {}, meta)), play),
+      h('div.items.local.seasons', {}, ...seasons.map(seasonItem)));
+  }
+
+  function seasonItem(item) {
+    const box = art(`S${item.season}`, { local: item.art, remote: { show: item.title, season: item.season } });
+    box.append(h('div.badge', { html: ICON_PLAY }));
+    const n = item.files.length;
+    const btn = h('button.item', { title: `Play ${item.label} in VLC (${n} episode${n === 1 ? '' : 's'})`, 'aria-label': `Play ${item.label} in VLC` },
+      box, h('div.text', {}, h('div.name', {}, `S${item.season} · ${n} ep`)));
+    btn.addEventListener('click', async () => {
+      const err = await ctx.api.playFilm(item.files);
+      if (err) flash(err);
+    });
+    return btn;
   }
 
   function filters() {

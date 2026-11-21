@@ -10,6 +10,8 @@ const on = (channel) => (cb) => {
 
 contextBridge.exposeInMainWorld('morrow', {
   init: (id) => ipcRenderer.invoke('morrow:init', id),
+  about: () => ipcRenderer.invoke('morrow:about'),
+  openRepo: () => ipcRenderer.send('morrow:open-repo'),
   onWidget: on('morrow:widget'),
   onSettings: on('morrow:settings'),
   onDoc: on('morrow:doc'),
@@ -26,6 +28,9 @@ contextBridge.exposeInMainWorld('morrow', {
   onBar: on('morrow:bar'),
   barSize: (w) => ipcRenderer.send('morrow:bar-size', w),
   barFocus: () => ipcRenderer.send('morrow:bar-focus'),
+  barKeys: (on) => ipcRenderer.send('morrow:bar-keys', on),
+  barStep: (dir) => ipcRenderer.send('morrow:bar-step', dir),
+  onBarKeys: on('morrow:bar-keys'),
   openNuke: () => ipcRenderer.send('morrow:nuke-open'),
   saveLayout: (name) => ipcRenderer.send('morrow:save-layout', name),
   copy: (text) => ipcRenderer.send('morrow:copy', text),

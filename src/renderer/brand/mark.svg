@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="paper" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#f6f1e6"/>
+      <stop offset="1" stop-color="#e4dac6"/>
+    </linearGradient>
+    <linearGradient id="ink" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#26272b"/>
+      <stop offset="1" stop-color="#101114"/>
+    </linearGradient>
+    <filter id="lift" x="-10%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="0" dy="10" stdDeviation="14" flood-color="#000" flood-opacity="0.28"/>
+    </filter>
+  </defs>
+  <!-- Rice-paper tile on the macOS icon grid -->
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#paper)" filter="url(#lift)"/>
+  <rect x="101.5" y="101.5" width="821" height="821" rx="183.5" fill="none" stroke="#ffffff" stroke-opacity="0.65" stroke-width="3"/>
+  <!-- A thin brass ring holds the symbol -->
+  <circle cx="512" cy="512" r="318" fill="none" stroke="#c9a227" stroke-width="7"/>
+  <!-- Yin and yang: two equal halves turning around the centre -->
+  <circle cx="512" cy="512" r="286" fill="#f9f5ec"/>
+  <path d="M512 226 A286 286 0 0 1 512 798 A143 143 0 0 1 512 512 A143 143 0 0 0 512 226 Z" fill="url(#ink)"/>
+  <circle cx="512" cy="512" r="286" fill="none" stroke="#141518" stroke-width="10"/>
+  <!-- The seeds: ink in the light, cinnabar in the dark -->
+  <circle cx="512" cy="369" r="44" fill="#141518"/>
+  <circle cx="512" cy="655" r="44" fill="#c41e3a"/>
+</svg>

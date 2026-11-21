@@ -22,7 +22,7 @@ function iconFor(name) {
   if (/cinema|film|movie/.test(n)) return ICONS.cinema;
   if (/living|room/.test(n)) return ICONS.living;
   if (/criterion|closet|shelf|book/.test(n)) return ICONS.closet;
-  if (/8200|intel|osint|idf/.test(n)) return ICONS.intel;
+  if (/intel|osint|radar/.test(n)) return ICONS.intel;
   if (/school|class|study/.test(n)) return ICONS.school;
   if (/file|cabinet|folder/.test(n)) return ICONS.cabinet;
   return ICONS.grid;
@@ -63,16 +63,24 @@ function render() {
     setTimeout(() => { window.morrow.barFocus(); input.focus(); }, 30);
     return;
   }
+  document.body.classList.toggle('fs', state.skin === 'fengshui');
   for (const l of state.layouts) {
     const b = el('button', { className: `seg${l.id === state.active ? ' on' : ''}`, title: l.name });
     b.innerHTML = iconFor(l.name);
+    // In the Feng Shui skin its own tab carries the characters, like the kit's tab art.
+    if (state.skin === 'fengshui' && /feng|shui/i.test(l.name)) b.prepend(el('span', { className: 'han', textContent: '风水' }));
     b.append(el('span', { textContent: l.name }));
     b.setAttribute('aria-pressed', String(l.id === state.active));
-    b.addEventListener('click', () => { if (l.id !== state.active) { state.active = l.id; render(); window.morrow.switchLayout(l.id); } });
+    b.addEventListener('click', () => {
+      // A click also hands the bar the keyboard, so ← → can carry on from here.
+      if (!keys) window.morrow.barKeys(true);
+      if (l.id !== state.active) { state.active = l.id; render(); window.morrow.switchLayout(l.id); }
+    });
     bar.append(b);
   }
   bar.append(el('div', { className: 'sep' }));
   if (flash) bar.append(el('span', { className: 'note', textContent: flash }));
+  else if (keys) bar.append(el('span', { className: 'note keys', textContent: '← → to switch' }));
   const save = el('button', { className: 'seg icon', title: 'Save this arrangement as a new layout', ariaLabel: 'Save layout' });
   save.innerHTML = ICONS.save;
   save.addEventListener('click', () => { naming = true; render(); });
@@ -81,5 +89,32 @@ function render() {
 }
 
 window.morrow.onBar((s) => { state = s; if (!naming) render(); });
+
+// Layout switching mode (from the menu bar's Layout menu, or a click on the bar).
+let keys = false;
+function setKeys(on) {
+  if (keys === on) return;
+  keys = on;
+  document.body.classList.toggle('keys', on);
+  if (!naming) render();
+}
+window.morrow.onBarKeys(() => setKeys(true));
+window.addEventListener('focus', () => { if (document.body.classList.contains('keys')) keys = true; });
+window.addEventListener('blur', () => { if (keys) { setKeys(false); window.morrow.barKeys(false); } });
+window.addEventListener('keydown', (e) => {
+  if (naming) return;
+  if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    e.preventDefault();
+    const dir = e.key === 'ArrowRight' ? 1 : -1;
+    const i = state.layouts.findIndex((l) => l.id === state.active);
+    const next = state.layouts[(i + dir + state.layouts.length) % state.layouts.length];
+    if (next) { state.active = next.id; render(); }
+    setKeys(true);
+    window.morrow.barStep(dir);
+  } else if (e.key === 'Escape' || e.key === 'Enter') {
+    setKeys(false);
+    window.morrow.barKeys(false);
+  }
+});
 window.addEventListener('contextmenu', (e) => { e.preventDefault(); window.morrow.openSettings(); });
 render();

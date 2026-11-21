@@ -1,11 +1,12 @@
 'use strict';
 
 const path = require('path');
-const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen, clipboard, powerMonitor, shell, dialog } = require('electron');
+const { app, BrowserWindow, ipcMain, Menu, Tray, nativeImage, screen, clipboard, powerMonitor, powerSaveBlocker, shell, dialog } = require('electron');
 const { Store } = require('./store');
 const { WidgetWindows } = require('./windows');
 const { Runtime } = require('./runtime');
 const registry = require('../shared/registry');
+const brand = require('../shared/brand');
 const apps = require('./apps');
 const weather = require('./weather').createWeatherService();
 let pizzintService;
@@ -14,7 +15,10 @@ const pizzint = () => pizzintService || (pizzintService = require('./pizzint').c
 app.setName('Morrow');
 // A separate data folder (used for development and tests) also gets its own
 // single-instance lock, so it can run beside the everyday copy.
-if (process.env.MORROW_DATA_DIR) app.setPath('userData', path.resolve(process.env.MORROW_DATA_DIR));
+if (process.env.MORROW_DATA_DIR) {
+  app.setName('Morrow Dev'); // the lock follows the app name, so a dev copy never wakes the everyday one
+  app.setPath('userData', path.resolve(process.env.MORROW_DATA_DIR));
+}
 if (!app.requestSingleInstanceLock()) app.quit();
 
 let store;
@@ -55,12 +59,29 @@ function openSettings(focusWidgetId) {
   settingsWin.on('closed', () => { settingsWin = null; });
 }
 
+// About window ------------------------------------------------------------------
+
+let aboutWin = null;
+function openAbout() {
+  if (aboutWin && !aboutWin.isDestroyed()) { aboutWin.show(); aboutWin.focus(); app.focus({ steal: true }); return; }
+  aboutWin = new BrowserWindow({
+    width: 400, height: 520, resizable: false, minimizable: false, maximizable: false, fullscreenable: false,
+    title: `About ${brand.name}`, titleBarStyle: 'hiddenInset', trafficLightPosition: { x: 14, y: 14 },
+    backgroundColor: '#efe9dc', show: false,
+    webPreferences: { preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, sandbox: true },
+  });
+  aboutWin.loadFile(path.join(__dirname, '..', 'renderer', 'about.html'));
+  aboutWin.once('ready-to-show', () => { aboutWin.show(); app.focus({ steal: true }); });
+  aboutWin.on('closed', () => { aboutWin = null; });
+}
+
 // Feng Shui: rearrange the visible widgets of the current layout into balance.
 // Each press moves on to the next balanced composition (another heart, or the
 // mirror image), skipping any that would leave the desk as it already is, so
 // the command always visibly does something. Positions are unlocked for it.
 const fengTurn = new Map(); // layout id -> next variant
 function fengShui() {
+  if (windows.skin) return baguaArrange();
   const fsh = require('./fengshui');
   const widgets = store.widgets.filter((w) => w.visible).map((w) => ({ id: w.id, type: w.type, bounds: w.bounds, min: registry.TYPES[w.type].min, max: registry.TYPES[w.type].max, share: w.type === 'cork' ? 0.25 : 0 }));
   if (!widgets.length) return;
@@ -78,6 +99,20 @@ function fengShui() {
   if (store.doc.settings.locked) store.updateSettings({ locked: false });
   for (const [id, bounds] of Object.entries(placed)) store.updateWidget(id, { bounds });
 }
+
+// In the Feng Shui layout itself the desk is arranged by the bagua (see
+// bagua.js): zones, Five Elements and the balance rules. It runs the first time
+// the layout is opened and whenever "Feng Shui This Layout" is chosen there;
+// manual moves in between are kept.
+function baguaArrange() {
+  const widgets = store.widgets.filter((w) => w.visible).map((w) => ({ id: w.id, type: w.type, config: w.config, bounds: w.config.fsRolled ? { ...w.bounds, height: w.config.fsRolled } : w.bounds, min: registry.TYPES[w.type].min, max: registry.TYPES[w.type].max }));
+  if (!widgets.length) return;
+  const { placed } = require('./bagua').arrange(widgets, screen.getPrimaryDisplay().workArea);
+  if (store.doc.settings.locked) store.updateSettings({ locked: false });
+  for (const [id, bounds] of Object.entries(placed)) store.updateWidget(id, { bounds, config: { fsRolled: 0 } });
+  store.setLayoutMeta(store.layout.id, { fsArranged: BAGUA_VERSION });
+}
+const BAGUA_VERSION = 1;
 
 // launch.exe: the Nuke France widget's page, in its own small window next to
 // the briefcase. Its title bar drags it; Esc or clicking elsewhere closes it.
@@ -144,12 +179,36 @@ function addWidgetMenu() {
 }
 
 function layoutMenu() {
-  return store.doc.layouts.map((l) => ({
+  return [
+    { label: 'Switch with ← → Keys', toolTip: 'Use the left and right arrow keys to move between layouts. Esc or Return ends it.', click: () => layoutKeys(true) },
+    { type: 'separator' },
+    ...store.doc.layouts.map((l) => ({
     label: l.name,
     type: 'radio',
     checked: l.id === store.doc.activeLayoutId,
     click: () => store.switchLayout(l.id),
-  }));
+  })),
+  ];
+}
+
+// Layout switching mode: the layout bar takes the keyboard, and the left and
+// right arrow keys step through the layouts (wrapping round). Esc, Return or
+// clicking anywhere else ends it. Clicking the bar also starts it.
+function layoutKeys(on) {
+  windows.barKeys = !!on;
+  windows.syncBar();
+  const win = windows.barWin;
+  if (!on || !win || win.isDestroyed()) return;
+  app.focus({ steal: true });
+  win.focus();
+  win.webContents.send('morrow:bar-keys', true);
+}
+
+function stepLayout(dir) {
+  const list = store.doc.layouts;
+  const i = list.findIndex((l) => l.id === store.doc.activeLayoutId);
+  const next = list[(i + dir + list.length) % list.length];
+  if (next) store.switchLayout(next.id);
 }
 
 function widgetContextMenu(id, extra = []) {
@@ -185,6 +244,64 @@ function desktopToggle() {
   };
 }
 
+// Keep Mac Awake --------------------------------------------------------------
+// Like a caffeine app in the menu bar: stops the Mac from going to sleep,
+// for good or for a while. With "Allow Display Sleep" the screen may still
+// dim and sleep; only the Mac itself stays awake. Saved in settings.awake as
+// { on, until (ms, 0 = indefinitely), display (allow display sleep) }.
+let awakeBlocker = null;
+let awakeTimer = null;
+const AWAKE_FOR = [
+  ['Indefinitely', 0], ['15 Minutes', 15], ['30 Minutes', 30], ['1 Hour', 60], ['2 Hours', 120], ['5 Hours', 300], ['8 Hours', 480],
+];
+
+function applyAwake() {
+  const a = store.doc.settings.awake || {};
+  const live = !!a.on && (!a.until || a.until > Date.now());
+  const kind = a.display ? 'prevent-app-suspension' : 'prevent-display-sleep';
+  if (awakeBlocker !== null && (!live || awakeBlocker.kind !== kind)) {
+    if (powerSaveBlocker.isStarted(awakeBlocker.id)) powerSaveBlocker.stop(awakeBlocker.id);
+    awakeBlocker = null;
+  }
+  if (live && awakeBlocker === null) awakeBlocker = { id: powerSaveBlocker.start(kind), kind };
+  clearTimeout(awakeTimer);
+  if (a.on && !live) { store.updateSettings({ awake: { on: false, until: 0 } }); return; }
+  // A timed session ends by itself; the menu's countdown is refreshed each minute.
+  if (live && a.until) awakeTimer = setTimeout(() => (a.until <= Date.now() + 500 ? applyAwake() : (rebuildTray(), applyAwake())), Math.min(60000, a.until - Date.now()));
+  if (tray) tray.setImage(trayIcon(live));
+}
+
+function awakeFor(minutes) {
+  store.updateSettings({ awake: { on: true, until: minutes ? Date.now() + minutes * 60000 : 0, started: Date.now() } });
+}
+
+function awakeLabel() {
+  const a = store.doc.settings.awake || {};
+  if (!a.on) return 'Your Mac sleeps as usual';
+  if (!a.until) return 'Awake indefinitely';
+  const left = Math.max(0, Math.round((a.until - Date.now()) / 60000));
+  const at = new Date(a.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return `Awake until ${at} (${left >= 60 ? `${Math.floor(left / 60)} h ${left % 60} min` : `${left} min`} left)`;
+}
+
+function awakeMenu() {
+  const a = store.doc.settings.awake || {};
+  return [
+    { label: 'Keep Mac Awake', type: 'checkbox', checked: !!a.on, accelerator: 'Alt+Command+A', click: () => (a.on ? store.updateSettings({ awake: { on: false, until: 0 } }) : awakeFor(0)) },
+    {
+      label: 'Keep Awake For',
+      submenu: [
+        { label: awakeLabel(), enabled: false },
+        { type: 'separator' },
+        ...AWAKE_FOR.map(([label, m]) => ({ label, type: 'radio', checked: !!a.on && (m ? !!a.until && Math.abs(a.until - (a.started || 0) - m * 60000) < 1000 : !a.until), click: () => store.updateSettings({ awake: { on: true, until: m ? Date.now() + m * 60000 : 0, started: Date.now() } }) })),
+        { type: 'separator' },
+        { label: 'Allow Display Sleep', type: 'checkbox', checked: !!a.display, toolTip: 'The screen may dim and sleep, but the Mac stays awake.', click: () => store.updateSettings({ awake: { display: !a.display } }) },
+        ...(a.on ? [{ type: 'separator' }, { label: 'Let Mac Sleep Now', click: () => store.updateSettings({ awake: { on: false, until: 0 } }) }] : []),
+      ],
+    },
+  ];
+}
+
 function rebuildTray() {
   if (!tray) return;
   const s = store.doc.settings;
@@ -200,8 +317,10 @@ function rebuildTray() {
     { label: 'Feng Shui This Layout', click: () => fengShui() },
     { label: 'Save Layout As New…', click: () => windows.barWin?.webContents.executeJavaScript('document.querySelector(".seg.icon")?.click()') },
     { label: 'Show Layout Bar', type: 'checkbox', checked: (s.bar || {}).show !== false, click: () => store.updateSettings({ bar: { show: (s.bar || {}).show === false } }) },
+    ...awakeMenu(),
     { type: 'separator' },
     { label: 'Open Morrow…', accelerator: 'Command+,', click: () => openSettings() },
+    { label: `About ${brand.name}`, click: openAbout },
     { type: 'separator' },
     { label: 'Quit Morrow', accelerator: 'Command+Q', click: () => app.quit() },
   ]);
@@ -213,7 +332,8 @@ function toggleWidgets() {
 }
 
 // A small template image for the menu bar: a sun resting on the horizon.
-function trayIcon() {
+// While the Mac is kept awake the sun is filled in.
+function trayIcon(awake = false) {
   const size = 36; // drawn at 2x for an 18pt icon
   const buf = Buffer.alloc(size * size * 4);
   const cx = size / 2;
@@ -224,6 +344,7 @@ function trayIcon() {
       const d = Math.hypot(x + 0.5 - cx, y + 0.5 - cy);
       let a = 0;
       if (y + 0.5 < cy) a = Math.max(0, Math.min(1, 1.6 - Math.abs(d - r) * 0.9)); // arc
+      if (awake && y + 0.5 < cy && d < r) a = 1; // a risen, solid sun
       if (Math.abs(y + 0.5 - (cy + 2)) < 1.4 && Math.abs(x + 0.5 - cx) < size * 0.42) a = 1; // horizon
       const i = (y * size + x) * 4;
       buf[i + 3] = Math.round(a * 255);
@@ -240,7 +361,7 @@ function appMenu() {
       {
         label: 'Morrow',
         submenu: [
-          { role: 'about' },
+          { label: `About ${brand.name}`, click: openAbout },
           { type: 'separator' },
           { label: 'Settings…', accelerator: 'Command+,', click: () => openSettings() },
           { type: 'separator' },
@@ -256,6 +377,7 @@ function appMenu() {
         label: 'Widgets',
         submenu: [
           { label: 'Show or Hide Widgets', accelerator: 'Alt+Command+W', click: toggleWidgets },
+          { label: 'Keep Mac Awake', accelerator: 'Alt+Command+A', click: () => (store.doc.settings.awake?.on ? store.updateSettings({ awake: { on: false, until: 0 } }) : awakeFor(0)) },
           { label: 'Add Widget', submenu: addWidgetMenu() },
         ],
       },
@@ -273,7 +395,7 @@ function senderWidgetId(e) {
 
 function registerIpc() {
   ipcMain.handle('morrow:init', (e, id) => ({
-    widget: id ? store.widget(id) : null,
+    widget: id && store.widget(id) ? windows.payload(store.widget(id)) : null,
     settings: store.doc.settings,
     doc: id ? null : store.doc,
     registry,
@@ -281,6 +403,8 @@ function registerIpc() {
     nativeAvailable: require('./native').available,
   }));
 
+  ipcMain.handle('morrow:about', () => ({ ...brand, version: app.getVersion(), electron: process.versions.electron }));
+  ipcMain.on('morrow:open-repo', () => shell.openExternal(brand.repo));
   ipcMain.on('morrow:update-widget', (e, id, patch) => store.updateWidget(id || senderWidgetId(e), patch));
   ipcMain.on('morrow:gesture-start', (e, kind, edge) => windows.startGesture(senderWidgetId(e), kind, edge));
   ipcMain.on('morrow:gesture-end', () => windows.endGesture());
@@ -295,6 +419,9 @@ function registerIpc() {
   ipcMain.on('morrow:feng-shui', () => fengShui());
   ipcMain.on('morrow:bar-size', (e, w) => windows.sizeBar(w));
   ipcMain.on('morrow:bar-focus', () => { app.focus({ steal: true }); windows.barWin?.focus(); });
+  // Only the bar on screen may end the mode (an old bar being replaced blurs as it goes).
+  ipcMain.on('morrow:bar-keys', (e, on) => { if (BrowserWindow.fromWebContents(e.sender) === windows.barWin) layoutKeys(on); });
+  ipcMain.on('morrow:bar-step', (e, dir) => stepLayout(dir > 0 ? 1 : -1));
   ipcMain.on('morrow:save-layout', (e, name) => saveLayout(name));
   ipcMain.on('morrow:nuke-open', (e) => openNuke(BrowserWindow.fromWebContents(e.sender)));
   ipcMain.on('morrow:copy', (e, text) => clipboard.writeText(String(text)));
@@ -423,6 +550,7 @@ function applySettings(prev) {
   if (prev && prev.launchAtLogin !== s.launchAtLogin) {
     try { app.setLoginItemSettings({ openAtLogin: !!s.launchAtLogin }); } catch {}
   }
+  if (!prev || JSON.stringify(prev.awake) !== JSON.stringify(s.awake)) applyAwake();
   if (prev && (prev.windowMode !== s.windowMode || prev.allSpaces !== s.allSpaces)) {
     windows.arranging = false;
     windows.recreateAll();
@@ -453,6 +581,7 @@ app.whenReady().then(() => {
       windows.broadcast('morrow:settings', store.doc.settings);
     }
     windows.sync({ fade: kind === 'layout-switch' || kind === 'widgets' || kind === 'settings' });
+    if (kind === 'layout-switch' && windows.skin && store.layout.fsArranged !== BAGUA_VERSION) setTimeout(baguaArrange, 350);
     if (kind === 'widgets' || kind === 'layouts' || kind === 'layout-switch') {
       clearTimeout(images.timer);
       images.timer = setTimeout(() => images.cleanup(store.doc), 5000);
@@ -462,6 +591,7 @@ app.whenReady().then(() => {
   });
 
   windows.sync();
+  if (windows.skin && store.layout.fsArranged !== BAGUA_VERSION) setTimeout(baguaArrange, 1500);
   // Development aid: MORROW_FENG_TEST=ms runs Feng Shui once after launch.
   if (process.env.MORROW_FENG_TEST) setTimeout(fengShui, Number(process.env.MORROW_FENG_TEST));
   if (process.env.MORROW_SELFTEST) {
@@ -485,6 +615,7 @@ app.whenReady().then(() => {
   }
 
   if (process.env.MORROW_OPEN_SETTINGS) openSettings(process.env.MORROW_OPEN_SETTINGS);
+  if (process.env.MORROW_OPEN_ABOUT) openAbout();
   if (store.notice) dialog.showMessageBox({ type: 'warning', message: 'Configuration reset', detail: store.notice });
 
   screen.on('display-removed', () => windows.revalidateScreens());

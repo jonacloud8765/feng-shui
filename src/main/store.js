@@ -65,7 +65,9 @@ function normalizeWidget(raw, fallbackAppearance) {
     if (!Number.isFinite(w.bounds[k])) w.bounds[k] = k === 'width' || k === 'height' ? type.size[k] : 120;
   }
   w.bounds.width = Math.min(type.max.width, Math.max(type.min.width, Math.round(w.bounds.width)));
-  w.bounds.height = Math.min(type.max.height, Math.max(type.min.height, Math.round(w.bounds.height)));
+  // A widget rolled up to its title bar in the Feng Shui skin may be shorter than its minimum.
+  const minH = w.config && w.config.fsRolled ? 24 : type.min.height;
+  w.bounds.height = Math.min(type.max.height, Math.max(minH, Math.round(w.bounds.height)));
   return w;
 }
 
@@ -92,6 +94,8 @@ function normalizeDocument(raw) {
     doc.layouts = raw.layouts.filter(isObject).map((l) => ({
       id: l.id || newId(),
       name: String(l.name || 'Untitled'),
+      ...(l.skin ? { skin: String(l.skin) } : {}),
+      ...(l.fsArranged ? { fsArranged: l.fsArranged } : {}),
       widgets: (Array.isArray(l.widgets) ? l.widgets : [])
         .map((w) => normalizeWidget(w, doc.settings.appearance))
         .filter(Boolean)
@@ -214,6 +218,15 @@ class Store extends EventEmitter {
     this.doc.layouts.push(layout);
     this.changed('layouts');
     return layout;
+  }
+
+  // Small facts about a layout (such as when it was last arranged); saved
+  // quietly, without redrawing anything.
+  setLayoutMeta(id, patch) {
+    const l = this.doc.layouts.find((x) => x.id === id);
+    if (!l) return;
+    Object.assign(l, patch);
+    this.save();
   }
 
   renameLayout(id, name) {

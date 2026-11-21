@@ -148,6 +148,12 @@ async function scanFolder(folder, { minSizeMB = 100 } = {}) {
   return group(files, root);
 }
 
+// Seasons of one show share this key even when their files are named a little
+// differently ("Fargo (2014)", "Fargo US", "fargo").
+function showKey(title) {
+  return normalize(title).replace(/ (19|20)\d{2}$/, '').replace(/ (us|uk|au|nz|ca)$/, '').trim();
+}
+
 // One entry per film, and one per season of a show (its episodes in order).
 function group(files, root) {
   const out = new Map();
@@ -182,7 +188,10 @@ function group(files, root) {
   for (const item of out.values()) {
     item.files.sort((a, b) => (a.episode ?? 0) - (b.episode ?? 0) || a.path.localeCompare(b.path, undefined, { numeric: true }));
     item.files = item.files.map((f) => f.path);
-    if (item.kind === 'show') item.label = `${item.title} · Season ${item.season}`;
+    if (item.kind === 'show') {
+      item.label = `${item.title} · Season ${item.season}`;
+      item.showKey = showKey(item.title);
+    }
   }
   return [...out.values()].sort((a, b) => b.added - a.added);
 }
@@ -613,4 +622,4 @@ function createMovies(dataDir, { openExternal } = {}) {
   return { library, watchlist, poster, play, openFilm, openWatchlist, openProfile, details, watched, dir };
 }
 
-module.exports = { createMovies, parseTitle, normalize, slugify, parseFilmPage, parseWatchedCount, parseWatchlistPage, splitDisplayName, posterUrl, scanFolder, defaultFolder };
+module.exports = { createMovies, parseTitle, normalize, showKey, slugify, parseFilmPage, parseWatchedCount, parseWatchlistPage, splitDisplayName, posterUrl, scanFolder, defaultFolder };

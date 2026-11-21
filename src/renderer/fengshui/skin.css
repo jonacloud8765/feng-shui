@@ -1,0 +1,135 @@
+/* Feng Shui skin: Windows 95 chrome restyled as Chinese lacquer. It applies
+   only while the Feng Shui layout is active (body.fs); every other layout is
+   untouched. Frames are the same for every widget; only the element accent
+   (pinstripe, seal and corner motif) changes. */
+
+body.fs {
+  --fs-face: #c0c0c0;
+  --fs-client: #cdcdc9;
+  --fs-ink: #1a1a18;
+  --fs-title: #9b1b30;
+  --fs-title-hi: #c41e3a;
+  --fs-gold: #c9a227;
+  --fs-hi: #ffffff;
+  --fs-hi2: #dfdfdf;
+  --fs-lo: #808080;
+  --fs-lo2: #000000;
+  --fs-tb: 20px;
+  --el-wood: #2f6b4f;   --el-wood-hi: #7ba882;
+  --el-fire: #c41e3a;   --el-fire-hi: #e24a2a;
+  --el-earth: #c4a35a;  --el-earth-hi: #d4a017;
+  --el-metal: #a9abae;  --el-metal-hi: #d9c79a;
+  --el-water: #1b2a4a;  --el-water-hi: #16302b;
+  /* Widgets read their colours from these; on gray lacquer they become ink. */
+  --text: var(--fs-ink);
+  --accent: var(--fs-title);
+  --tint: transparent;
+  --radius: 0px;
+  color: var(--fs-ink);
+}
+body.fs.el-wood  { --fs-accent: var(--el-wood);  --fs-accent-hi: var(--el-wood-hi); }
+body.fs.el-fire  { --fs-accent: var(--el-fire);  --fs-accent-hi: var(--el-fire-hi); }
+body.fs.el-earth { --fs-accent: var(--el-earth); --fs-accent-hi: var(--el-earth-hi); }
+body.fs.el-metal { --fs-accent: var(--el-metal); --fs-accent-hi: var(--el-metal-hi); }
+body.fs.el-water { --fs-accent: var(--el-water); --fs-accent-hi: var(--el-water-hi); }
+
+body.fs .glass {
+  border-radius: 0;
+  background: var(--fs-face);
+  border: 1px solid var(--fs-lo2);
+  box-shadow:
+    inset 1px 1px 0 var(--fs-hi), inset 2px 2px 0 var(--fs-hi2),
+    inset -1px -1px 0 var(--fs-lo2), inset -2px -2px 0 var(--fs-lo);
+}
+body.fs .glass > .layer { display: none; }
+
+/* Title bar: red lacquer with a gold pinstripe, a seal, the name and two caption buttons. */
+.fs-title { display: none; }
+body.fs .fs-title {
+  position: absolute; top: 3px; left: 3px; right: 3px; height: var(--fs-tb); z-index: 6;
+  display: flex; align-items: center; gap: 5px; padding: 0 2px 0 3px;
+  background: linear-gradient(180deg, var(--fs-title-hi), var(--fs-title));
+  border-bottom: 1px solid var(--fs-gold);
+  color: #f5e6c8;
+  font: 700 12px/1 Verdana, Geneva, Tahoma, sans-serif;
+  letter-spacing: 0.01em;
+}
+.fs-seal {
+  flex: none; width: 15px; height: 15px; display: grid; place-items: center;
+  background: #f3e3c0; color: #b3202f; border: 1px solid #5a1010;
+  box-shadow: inset 0 0 0 1px var(--fs-gold);
+  font: 700 11px/1 "Songti SC", "STSong", "PingFang SC", serif;
+}
+.fs-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-shadow: 0 1px 0 rgba(0,0,0,0.35); }
+.fs-cap {
+  flex: none; width: 16px; height: 14px; padding: 0; display: grid; place-items: center;
+  background: var(--fs-face); color: #000; font: 700 10px/1 Verdana, Geneva, sans-serif;
+  box-shadow: inset 1px 1px 0 var(--fs-hi), inset -1px -1px 0 var(--fs-lo2), inset -2px -2px 0 var(--fs-lo);
+}
+.fs-cap:active { box-shadow: inset 1px 1px 0 var(--fs-lo2), inset 2px 2px 0 var(--fs-lo), inset -1px -1px 0 var(--fs-hi); }
+.fs-cap svg { width: 8px; height: 8px; }
+.fs-cap + .fs-cap { margin-left: -3px; }
+
+/* The client area: sunken, with the element pinstripe and corner motifs. */
+body.fs .content {
+  top: calc(var(--fs-tb) + 6px); left: 5px; right: 5px; bottom: 5px;
+  background: var(--fs-client);
+  overflow: hidden;
+}
+.fs-frame { display: none; }
+body.fs .fs-frame {
+  display: block; position: absolute; z-index: 4; pointer-events: none;
+  top: calc(var(--fs-tb) + 6px); left: 5px; right: 5px; bottom: 5px;
+  box-shadow: inset 1px 1px 0 var(--fs-lo), inset -1px -1px 0 var(--fs-hi);
+}
+body.fs .fs-frame::before {
+  content: ''; position: absolute; inset: 4px;
+  border: 2px solid var(--fs-accent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--fs-accent-hi) 55%, transparent);
+  opacity: 0.9;
+}
+.fs-motif { position: absolute; width: 16px; height: 16px; color: var(--fs-accent); }
+.fs-motif svg { width: 100%; height: 100%; display: block; }
+.fs-motif.tl { top: 2px; left: 2px; }
+.fs-motif.tr { top: 2px; right: 2px; transform: scaleX(-1); }
+.fs-motif.bl { bottom: 2px; left: 2px; transform: scaleY(-1); }
+.fs-motif.br { bottom: 2px; right: 2px; transform: scale(-1, -1); }
+/* Very small widgets keep only the pinstripe. */
+body.fs.tiny .fs-motif { display: none; }
+
+/* A custom page brings its own design (often light text on dark glass), so it
+   sits on a dark lacquer client instead of the gray one. */
+body.fs.t-page .content { background: #15171c; }
+
+/* A capped corkboard scrolls rather than shrinking its notes. */
+body.fs .cork.scrolls { overflow-x: hidden; overflow-y: auto; }
+
+/* Rolled up to the title bar (the _ button). */
+body.fs.rolled .content, body.fs.rolled .fs-frame, body.fs.rolled .handle { display: none; }
+
+/* Classic controls inside widgets: raised gray buttons, inverted when pressed. */
+body.fs .pill, body.fs .icon-btn {
+  border-radius: 0; color: var(--fs-ink); background: var(--fs-face);
+  box-shadow: inset 1px 1px 0 var(--fs-hi), inset -1px -1px 0 var(--fs-lo2), inset -2px -2px 0 var(--fs-lo);
+}
+body.fs .pill:active, body.fs .icon-btn:active { transform: none; box-shadow: inset 1px 1px 0 var(--fs-lo2), inset 2px 2px 0 var(--fs-lo), inset -1px -1px 0 var(--fs-hi); }
+body.fs input.field { border-radius: 0; background: #fff; color: var(--fs-ink); box-shadow: inset 1px 1px 0 var(--fs-lo), inset 2px 2px 0 var(--fs-lo2), inset -1px -1px 0 var(--fs-hi); }
+body.fs .label, body.fs .info { opacity: 0.85; }
+body.fs .handle.se::after { border-color: var(--fs-lo); }
+
+/* Jade and brush cursors. */
+body.fs, body.fs * {
+  cursor: image-set("cur-pointer.png" 1x, "cur-pointer@2x.png" 2x) 2 1, default;
+}
+body.fs button, body.fs a, body.fs [data-interactive], body.fs [role="button"], body.fs .fs-cap {
+  cursor: image-set("cur-hand.png" 1x, "cur-hand@2x.png" 2x) 9 1, pointer;
+}
+body.fs input, body.fs textarea, body.fs [contenteditable="true"], body.fs [contenteditable=""] {
+  cursor: image-set("cur-ibeam.png" 1x, "cur-ibeam@2x.png" 2x) 16 16, text;
+}
+body.fs canvas, body.fs .ink, body.fs .wb .surface {
+  cursor: image-set("cur-brush.png" 1x, "cur-brush@2x.png" 2x) 2 30, crosshair;
+}
+body.fs.busy, body.fs.busy * {
+  cursor: image-set("cur-wait.png" 1x, "cur-wait@2x.png" 2x) 16 16, wait;
+}

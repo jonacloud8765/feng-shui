@@ -6,18 +6,10 @@ const fs = require('fs');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
-const html = `<!doctype html><html><body style="margin:0;background:transparent">
-<div style="position:absolute;left:100px;top:100px;width:824px;height:824px;border-radius:185px;overflow:hidden;
-  background:radial-gradient(120% 90% at 25% 0%, #2a3557 0%, #121a30 55%, #0a0f1d 100%);
-  box-shadow: inset 0 3px 0 rgba(255,255,255,0.28), inset 0 0 0 2px rgba(255,255,255,0.12)">
-  <div style="position:absolute;left:212px;top:250px;width:400px;height:400px;border-radius:50%;
-    background:radial-gradient(circle at 38% 32%, #fff7e6 0%, #ead7b2 35%, #b8955d 100%);
-    box-shadow:0 0 120px rgba(234,215,178,0.45)"></div>
-  <div style="position:absolute;left:0;right:0;top:520px;bottom:0;
-    background:linear-gradient(180deg, rgba(20,28,50,0.55), rgba(10,15,29,0.92));
-    backdrop-filter: blur(30px); box-shadow: inset 0 2px 0 rgba(255,255,255,0.35)"></div>
-  <div style="position:absolute;left:0;right:0;top:0;height:420px;background:linear-gradient(180deg, rgba(255,255,255,0.12), transparent)"></div>
-</div></body></html>`;
+// The mark (a yin-yang on rice paper, ringed in brass) lives in
+// src/renderer/brand/mark.svg and is drawn on the macOS icon grid.
+const svg = fs.readFileSync(path.join(__dirname, '..', 'src', 'renderer', 'brand', 'mark.svg'), 'utf8');
+const html = `<!doctype html><html><body style="margin:0;background:transparent">${svg.replace('<svg ', '<svg width="1024" height="1024" ')}</body></html>`;
 
 app.whenReady().then(async () => {
   const win = new BrowserWindow({ width: 1024, height: 1024, show: false, transparent: true, frame: false, webPreferences: { offscreen: true } });

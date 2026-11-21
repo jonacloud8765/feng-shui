@@ -47,3 +47,10 @@ test('film pages yield genres, rating, popularity and length', () => {
   assert.strictEqual(parseWatchedCount('<h1 class="section-heading"><span class="tooltip" title="1,040&nbsp;films">Watched</span></h1>'), 1040);
   assert.strictEqual(parseWatchedCount('<p>nothing</p>'), null);
 });
+
+test('seasons of one show share a key however the files name it', () => {
+  const { showKey } = require('../src/main/movies');
+  assert.strictEqual(showKey('Fargo (2014)'.replace(/[()]/g, '')), showKey('Fargo'));
+  assert.strictEqual(showKey('The Office US'), showKey('Office'));
+  assert.strictEqual(showKey("It's Always Sunny in Philadelphia"), showKey('Its Always Sunny in Philadelphia'));
+});

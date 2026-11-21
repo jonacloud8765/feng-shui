@@ -1,4 +1,5 @@
 import { applyAppearance, fileUrl } from './appearance.js';
+import { applySkin, trackSkin } from './fengshui/skin.js';
 
 const id = new URLSearchParams(location.search).get('id');
 const glass = document.getElementById('glass');
@@ -18,6 +19,8 @@ function applyLook() {
   const img = registry.TYPES[widget.type].imageSupport && ap.image;
   imageLayer.style.backgroundImage = img ? `url("${fileUrl(ap.image)}")` : '';
   imageLayer.style.display = img ? '' : 'none';
+  applySkin(widget, { id, api: window.morrow });
+  trackSkin(widget);
 }
 
 const ctx = {

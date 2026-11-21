@@ -27,6 +27,7 @@ const path = require('path');
 const { BrowserWindow, screen } = require('electron');
 const { TYPES } = require('../shared/registry');
 const native = require('./native');
+const bagua = require('./bagua');
 
 const SNAP = 10;
 const GAP = 12;
@@ -38,8 +39,11 @@ function paperNote(widget) {
   if (widget.type === 'image' && widget.config.frame && widget.config.frame !== 'glass') return true;
   return widget.type === 'note' && (widget.config.paper || 'butter') !== 'glass';
 }
-const materialOf = (widget) => (paperNote(widget) ? 'none' : widget.appearance.material);
-const shadowOf = (widget) => !paperNote(widget) && !!widget.appearance.shadow;
+// The Feng Shui layout draws its own lacquer frames, so its widgets get no
+// native blur or shadow either. Every other layout is untouched.
+let skinned = false;
+const materialOf = (widget) => (skinned || paperNote(widget) ? 'none' : widget.appearance.material);
+const shadowOf = (widget) => !skinned && !paperNote(widget) && !!widget.appearance.shadow;
 
 class WidgetWindows {
   constructor(store, { onContextMenu } = {}) {
@@ -60,9 +64,20 @@ class WidgetWindows {
     return this.store.doc.settings.windowMode === 'desktop' && !native.available;
   }
 
+  get skin() {
+    return bagua.isFengShuiLayout(this.store.layout) ? 'fengshui' : null;
+  }
+
+  // What a widget window is sent: the widget, plus how the skin draws it.
+  payload(widget) {
+    return { ...widget, skin: this.skin ? bagua.skinFor(widget, TYPES[widget.type]?.name) : null };
+  }
+
   // Bring the visible set of windows in line with the active layout.
   sync({ fade = false } = {}) {
     const { settings } = this.store.doc;
+    skinned = !!this.skin;
+    this.syncWallpaper();
     this.syncFengShui();
     this.syncBar();
     const wanted = new Map(this.store.widgets.filter((w) => w.visible).map((w) => [w.id, w]));
@@ -175,7 +190,7 @@ class WidgetWindows {
         win.setBounds(t, true);
       }
     }
-    win.webContents.send('morrow:widget', widget);
+    win.webContents.send('morrow:widget', this.payload(widget));
   }
 
   // Round the native blur to the widget's own corner radius.
@@ -183,6 +198,31 @@ class WidgetWindows {
     const r = widget.appearance.radius;
     if (materialOf(widget) === 'none' || win.widgetRadius === r) return;
     if (native.setCornerRadius(win, r)) win.widgetRadius = r;
+  }
+
+  // The Feng Shui layout's wallpaper: rice paper and ink wash on a window at
+  // the desktop level, under the desktop icons and every widget. The real
+  // wallpaper is never changed, so leaving the layout restores it at once.
+  syncWallpaper() {
+    const want = this.store.doc.settings.widgetsVisible && !!this.skin;
+    let win = this.wallWin;
+    if (!want) {
+      if (win && !win.isDestroyed()) win.destroy();
+      this.wallWin = null;
+      return;
+    }
+    if (win && !win.isDestroyed()) return;
+    const d = screen.getPrimaryDisplay();
+    win = this.wallWin = new BrowserWindow({
+      ...d.bounds, show: false, frame: false, transparent: false, backgroundColor: '#e9e6dc', hasShadow: false,
+      resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false, focusable: false,
+      skipTaskbar: true, type: 'desktop', title: 'Feng Shui wallpaper', enableLargerThanScreen: true,
+      webPreferences: { contextIsolation: true, sandbox: true },
+    });
+    win.setIgnoreMouseEvents(true);
+    win.setVisibleOnAllWorkspaces(!!this.store.doc.settings.allSpaces, { visibleOnFullScreen: false, skipTransformProcessType: true });
+    win.loadFile(path.join(__dirname, '..', 'renderer', 'fengshui', 'wallpaper.html'));
+    win.once('ready-to-show', () => { if (!win.isDestroyed()) win.showInactive(); });
   }
 
   // The Feng Shui button: a small round window in the lower-right corner of
@@ -222,34 +262,39 @@ class WidgetWindows {
   // main display, on the same layer as the widgets. It sizes itself to fit.
   syncBar() {
     const { settings, layouts, activeLayoutId } = this.store.doc;
-    const want = settings.widgetsVisible && (settings.bar || {}).show !== false;
+    // While switching layouts with the keys the bar shows even if it is set to hidden.
+    const want = (settings.widgetsVisible && (settings.bar || {}).show !== false) || !!this.barKeys;
     const mode = this.mode;
     let win = this.barWin;
-    if (win && !win.isDestroyed() && (!want || win.barMode !== mode)) { win.destroy(); win = this.barWin = null; }
+    const skin = this.skin;
+    if (win && !win.isDestroyed() && (!want || win.barMode !== mode || win.barSkin !== skin)) { win.destroy(); win = this.barWin = null; }
     if (!want) return;
-    const state = { layouts: layouts.map((l) => ({ id: l.id, name: l.name })), active: activeLayoutId };
+    const state = { layouts: layouts.map((l) => ({ id: l.id, name: l.name })), active: activeLayoutId, skin };
     if (win && !win.isDestroyed()) { win.webContents.send('morrow:bar', state); return; }
     const a = screen.getPrimaryDisplay().workArea;
     const H = 34;
     win = this.barWin = new BrowserWindow({
       x: a.x + a.width - 420 - 12, y: a.y + 10, width: 420, height: H,
-      show: false, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: true,
-      vibrancy: 'hud', visualEffectState: 'active', roundedCorners: true,
+      show: false, frame: false, transparent: true, backgroundColor: '#00000000', hasShadow: !skin,
+      vibrancy: skin ? undefined : 'hud', visualEffectState: 'active', roundedCorners: !skin,
       resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false,
       skipTaskbar: true, acceptFirstMouse: true, type: mode === 'desktop-type' ? 'desktop' : undefined, title: 'Layouts',
       webPreferences: { preload: path.join(__dirname, '..', 'preload.js'), contextIsolation: true, sandbox: true },
     });
     win.barMode = mode;
+    win.barSkin = skin;
     win.barState = state;
     if (mode === 'float') win.setAlwaysOnTop(true, 'floating');
     win.setVisibleOnAllWorkspaces(!!settings.allSpaces, { visibleOnFullScreen: false, skipTransformProcessType: true });
     if (mode === 'desktop') native.setDesktopLevel(win, true);
-    native.setCornerRadius(win, H / 2);
+    if (!skin) native.setCornerRadius(win, H / 2);
     win.loadFile(path.join(__dirname, '..', 'renderer', 'bar.html'));
-    win.webContents.once('did-finish-load', () => win.webContents.send('morrow:bar', this.store.doc && { layouts: this.store.doc.layouts.map((l) => ({ id: l.id, name: l.name })), active: this.store.doc.activeLayoutId }));
+    win.webContents.once('did-finish-load', () => win.webContents.send('morrow:bar', this.store.doc && { layouts: this.store.doc.layouts.map((l) => ({ id: l.id, name: l.name })), active: this.store.doc.activeLayoutId, skin: this.skin }));
     win.once('ready-to-show', () => {
-      win.showInactive();
-      native.setCornerRadius(win, H / 2);
+      // A bar rebuilt mid-way through keyboard switching (the Feng Shui skin
+      // comes and goes with its layout) picks the keyboard straight back up.
+      if (this.barKeys) { win.show(); win.focus(); win.webContents.send('morrow:bar-keys', true); } else win.showInactive();
+      if (!skin) native.setCornerRadius(win, H / 2);
       if (mode === 'desktop') native.setDesktopLevel(win, true);
     });
   }
@@ -263,7 +308,7 @@ class WidgetWindows {
     const b = win.getBounds();
     if (b.width === w) return;
     win.setBounds({ x: a.x + a.width - w - 12, y: a.y + 10, width: w, height: b.height });
-    native.setCornerRadius(win, b.height / 2);
+    if (!win.barSkin) native.setCornerRadius(win, b.height / 2);
   }
 
   broadcast(channel, payload) {

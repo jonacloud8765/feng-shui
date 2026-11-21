@@ -197,8 +197,12 @@ export function mount(root, ctx) {
   function fitLayer() {
     const d = design();
     if (!d.w || !d.h || !board.clientWidth) return;
-    scale = Math.min(board.clientWidth / d.w, board.clientHeight / d.h);
-    const ox = (board.clientWidth - d.w * scale) / 2, oy = (board.clientHeight - d.h * scale) / 2;
+    // In the Feng Shui layout the board is kept small, so it fits its width
+    // and scrolls instead of shrinking the notes past reading.
+    const scroll = document.body.classList.contains('fs') && board.clientHeight / d.h < board.clientWidth / d.w;
+    scale = scroll ? board.clientWidth / d.w : Math.min(board.clientWidth / d.w, board.clientHeight / d.h);
+    const ox = (board.clientWidth - d.w * scale) / 2, oy = scroll ? 0 : (board.clientHeight - d.h * scale) / 2;
+    board.classList.toggle('scrolls', scroll);
     Object.assign(layer.style, { width: `${d.w}px`, height: `${d.h}px`, transform: `translate(${ox}px, ${oy}px) scale(${scale})` });
   }
   const orientBtn = (cls, tip, portrait) => h(`button.${cls}`, { title: tip, 'aria-label': tip, 'data-interactive': '', onmousedown: (e) => e.stopPropagation(), onclick: () => orient(portrait) }, h('i'));
