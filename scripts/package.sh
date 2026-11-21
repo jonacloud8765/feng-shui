@@ -1,11 +1,11 @@
 #!/bin/zsh
-# Builds dist/Morrow.app from the local Electron runtime. No Xcode needed:
-# it copies Electron.app, adds Morrow's code and icon, renames it and signs
+# Builds "dist/Feng Shui.app" (aka Morrow) from the local Electron runtime. No Xcode needed:
+# it copies Electron.app, adds the app's code and icon, renames it and signs
 # it ad hoc so macOS will run it on this Mac.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-APP=dist/Morrow.app
+APP="dist/Feng Shui.app"
 RES="$APP/Contents/Resources"
 PLIST="$APP/Contents/Info.plist"
 
@@ -24,7 +24,7 @@ if [[ -f native/build/Release/morrow_native.node ]]; then
 fi
 cp build/icon.icns "$RES/electron.icns"
 
-# Morrow is in English (with Hebrew for local text); drop Chromium's other
+# Feng Shui is in English (with Hebrew for local text); drop Chromium's other
 # interface languages, which are about 47 MB together.
 KEEP=(en en_GB he Base)
 for dir in "$RES" "$APP/Contents/Frameworks/Electron Framework.framework/Versions/A/Resources"; do
@@ -34,15 +34,15 @@ for dir in "$RES" "$APP/Contents/Frameworks/Electron Framework.framework/Version
   done
 done
 
-plutil -replace CFBundleName -string Morrow "$PLIST"
-plutil -replace CFBundleDisplayName -string Morrow "$PLIST"
+plutil -replace CFBundleName -string "Feng Shui" "$PLIST"
+plutil -replace CFBundleDisplayName -string "Feng Shui" "$PLIST"
 plutil -replace CFBundleIdentifier -string app.morrow.desktop "$PLIST"
 plutil -replace CFBundleShortVersionString -string "$(node -p "require('./package.json').version")" "$PLIST"
-# No Dock icon at launch; Morrow shows one only if "Show in Dock" is on.
+# No Dock icon at launch; Feng Shui shows one only if "Show in Dock" is on.
 plutil -replace LSUIElement -bool true "$PLIST"
 plutil -replace LSApplicationCategoryType -string public.app-category.productivity "$PLIST"
-plutil -replace NSLocationUsageDescription -string "Morrow uses your location only when you ask it to show local weather." "$PLIST"
-plutil -replace NSLocationWhenInUseUsageDescription -string "Morrow uses your location only when you ask it to show local weather." "$PLIST"
+plutil -replace NSLocationUsageDescription -string "Feng Shui uses your location only when you ask it to show local weather." "$PLIST"
+plutil -replace NSLocationWhenInUseUsageDescription -string "Feng Shui uses your location only when you ask it to show local weather." "$PLIST"
 
 codesign --force --deep --sign - "$APP" >/dev/null 2>&1
 echo "Built $APP"

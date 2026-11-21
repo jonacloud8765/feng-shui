@@ -101,6 +101,9 @@ body.fs.tiny .fs-motif { display: none; }
    sits on a dark lacquer client instead of the gray one. */
 body.fs.t-page .content { background: #15171c; }
 
+/* The title bar already names the Films panel. */
+body.fs .films header .title { display: none; }
+
 /* A capped corkboard scrolls rather than shrinking its notes. */
 body.fs .cork.scrolls { overflow-x: hidden; overflow-y: auto; }
 

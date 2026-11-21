@@ -322,8 +322,8 @@ const TYPES = {
     fields: [],
   },
   nuke: {
-    name: 'Nuke France',
-    description: 'A briefcase that opens launch.exe, a joke 90s launch sequence.',
+    name: 'NF Widget',
+    description: 'A briefcase that opens launch.exe, a joke 90s launch sequence. NF stands for what you think it does.',
     size: { width: 190, height: 160 },
     min: { width: 110, height: 90 },
     max: { width: 600, height: 500 },

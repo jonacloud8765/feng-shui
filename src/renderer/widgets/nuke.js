@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
 
-// Nuke France: a green hard-shell briefcase with the trefoil on its lid.
+// NF Widget ("Nuke France", a joke): a green hard-shell briefcase with the trefoil on its lid.
 // Click it and the case pops open on launch.exe, a tongue-in-cheek
 // 90s-Windows launch sequence. Nothing ever leaves the computer.
 

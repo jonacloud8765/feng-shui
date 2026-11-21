@@ -412,7 +412,7 @@ function pageField(w) {
   return row('HTML file', h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
     h('span', { style: { opacity: 0.75 } }, w.config.name || 'None chosen'),
     h('button.btn', { onclick: pick }, w.config.file ? 'Replace…' : 'Choose…')),
-  'A single self-contained file. Morrow keeps its own copy, so the original can move.');
+  'A single self-contained file. Feng Shui keeps its own copy, so the original can move.');
 }
 
 function folderField(w, f) {
@@ -446,7 +446,7 @@ function photoField(w) {
     row('Photo', h('span', { style: { display: 'flex', gap: '8px' } },
       h('button.btn.primary', { onclick: pick }, c.file ? 'Change…' : 'Choose…'),
       c.file ? h('button.btn', { onclick: () => { editWidget(w.id, { config: { file: '', name: '', aspect: null } }); render(); } }, 'Remove') : null),
-      c.file ? `${c.name || 'Photo'} · Morrow keeps its own copy, so moving the original is fine.` : 'Or drag a photo from Finder or Photos onto the widget.'),
+      c.file ? `${c.name || 'Photo'} · Feng Shui keeps its own copy, so moving the original is fine.` : 'Or drag a photo from Finder or Photos onto the widget.'),
     ...(c.file ? [row('Match the photo’s shape', h('button.btn', { onclick: match }, 'Fit frame'), 'Sets the height so the whole photo fits without cropping.')] : []));
 }
 
@@ -733,7 +733,7 @@ function generalPage() {
   };
   return [
     h('h1', {}, 'General'),
-    h('p.subtitle', {}, 'How Morrow behaves on your Mac.'),
+    h('p.subtitle', {}, 'How Feng Shui (aka Morrow) behaves on your Mac.'),
     h('h2', {}, 'Desktop'),
     h('div.group', {},
       row('Keep widgets on the desktop', toggle(s.windowMode === 'desktop', (v) => { editSettings({ windowMode: v ? 'desktop' : 'normal' }); render(); }, 'Keep widgets on the desktop'),
@@ -742,7 +742,7 @@ function generalPage() {
       row('Show on all Spaces', toggle(s.allSpaces, (v) => editSettings({ allSpaces: v }), 'Show on all Spaces'), 'Widgets never appear over full-screen apps.'),
       row('Snap to edges and other widgets', toggle(s.snapping, (v) => editSettings({ snapping: v }), 'Snapping')),
       row('Lock positions', toggle(s.locked, (v) => editSettings({ locked: v }), 'Lock positions'), 'Prevents accidental moves and resizes.'),
-      row('Show widgets', toggle(s.widgetsVisible, (v) => { editSettings({ widgetsVisible: v }); render(); }, 'Show widgets'), 'Shortcut: ⌥⌘W while Morrow is active, or the menu bar icon.'),
+      row('Show widgets', toggle(s.widgetsVisible, (v) => { editSettings({ widgetsVisible: v }); render(); }, 'Show widgets'), 'Shortcut: ⌥⌘W while Feng Shui is active, or the menu bar icon.'),
     ),
     h('h2', {}, 'Layouts and Feng Shui'),
     h('div.group', {},
@@ -755,8 +755,8 @@ function generalPage() {
     ),
     h('h2', {}, 'App'),
     h('div.group', {},
-      row('Show in Dock', toggle(s.showDock, (v) => editSettings({ showDock: v }), 'Show in Dock'), 'Off by default. Morrow keeps running and is always available from the sun icon in the menu bar.'),
-      row('Open at login', toggle(s.launchAtLogin, (v) => editSettings({ launchAtLogin: v }), 'Open at login'), 'Works once Morrow is packaged as an app. See the README.'),
+      row('Show in Dock', toggle(s.showDock, (v) => editSettings({ showDock: v }), 'Show in Dock'), 'Off by default. Feng Shui keeps running and is always available from the sun icon in the menu bar.'),
+      row('Open at login', toggle(s.launchAtLogin, (v) => editSettings({ launchAtLogin: v }), 'Open at login'), 'Works once Feng Shui is packaged as an app. See the README.'),
     ),
   ];
 }

@@ -129,7 +129,7 @@ class Store extends EventEmitter {
       // Keep the damaged file for the user instead of silently overwriting it.
       const backup = this.file.replace(/\.json$/, `.corrupt-${Date.now()}.json`);
       try { fs.renameSync(this.file, backup); } catch {}
-      this.notice = `Morrow couldn't read its saved configuration, so it started fresh. The old file was kept at ${backup}.`;
+      this.notice = `Feng Shui couldn't read its saved configuration, so it started fresh. The old file was kept at ${backup}.`;
       return emptyDocument();
     }
   }

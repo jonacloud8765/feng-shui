@@ -12,7 +12,10 @@ const weather = require('./weather').createWeatherService();
 let pizzintService;
 const pizzint = () => pizzintService || (pizzintService = require('./pizzint').createPizzint(app.getPath('userData')));
 
-app.setName('Morrow');
+// The app is called Feng Shui (it was Morrow). Its data stays where Morrow
+// kept it, so nothing set up before the rename is lost.
+app.setName(brand.name);
+if (!process.env.MORROW_DATA_DIR) app.setPath('userData', path.join(app.getPath('appData'), 'Morrow'));
 // A separate data folder (used for development and tests) also gets its own
 // single-instance lock, so it can run beside the everyday copy.
 if (process.env.MORROW_DATA_DIR) {
@@ -45,7 +48,7 @@ function openSettings(focusWidgetId) {
     height: 720,
     minWidth: 820,
     minHeight: 560,
-    title: 'Morrow',
+    title: brand.name,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 18 },
     vibrancy: 'sidebar',
@@ -369,10 +372,10 @@ function rebuildTray() {
     { label: 'Show Layout Bar', type: 'checkbox', checked: (s.bar || {}).show !== false, click: () => store.updateSettings({ bar: { show: (s.bar || {}).show === false } }) },
     ...awakeMenu(),
     { type: 'separator' },
-    { label: 'Open Morrow…', accelerator: 'Command+,', click: () => openSettings() },
+    { label: `Open ${brand.name}…`, accelerator: 'Command+,', click: () => openSettings() },
     { label: `About ${brand.name}`, click: openAbout },
     { type: 'separator' },
-    { label: 'Quit Morrow', accelerator: 'Command+Q', click: () => app.quit() },
+    { label: `Quit ${brand.name}`, accelerator: 'Command+Q', click: () => app.quit() },
   ]);
   tray.setContextMenu(menu);
 }
@@ -409,7 +412,7 @@ function appMenu() {
   Menu.setApplicationMenu(
     Menu.buildFromTemplate([
       {
-        label: 'Morrow',
+        label: brand.name,
         submenu: [
           { label: `About ${brand.name}`, click: openAbout },
           { type: 'separator' },
@@ -622,7 +625,7 @@ app.whenReady().then(() => {
   const refreshApps = async () => { const list = await visibleApps(); if (JSON.stringify(list) !== JSON.stringify(runningApps)) { runningApps = list; rebuildTray(); } };
   refreshApps();
   setInterval(refreshApps, 60000);
-  tray.setToolTip('Morrow');
+  tray.setToolTip(`${brand.name} (aka ${brand.aka})`);
   rebuildTray();
 
   let prevSettings = JSON.parse(JSON.stringify(store.doc.settings));

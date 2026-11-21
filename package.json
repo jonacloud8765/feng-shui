@@ -1,13 +1,13 @@
 {
-  "name": "morrow",
+  "name": "feng-shui",
   "version": "0.1.0",
-  "description": "Glass desktop widgets for macOS",
+  "description": "Feng Shui (aka Morrow): calm desktop widgets for macOS",
   "main": "src/main/main.js",
   "scripts": {
     "start": "electron .",
     "dev": "MORROW_DATA_DIR=./.devdata electron .",
     "native": "cd native && npx --yes node-gyp rebuild --target=$(node -p \"require('electron/package.json').version\") --dist-url=https://electronjs.org/headers",
-    "postinstall": "npm run native || echo 'Morrow: native helper not built; the app still runs without it.'",
+    "postinstall": "npm run native || echo 'Feng Shui: native helper not built; the app still runs without it.'",
     "test": "node --test test/*.test.js test/*.test.mjs",
     "selftest": "rm -rf .selftestdata && MORROW_DATA_DIR=./.selftestdata MORROW_SELFTEST=1 electron .",
     "package": "./scripts/package.sh",
@@ -19,6 +19,6 @@
   "devDependencies": {
     "electron": "^44.7.0"
   },
-  "productName": "Morrow",
+  "productName": "Feng Shui",
   "private": true
 }

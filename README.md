@@ -1,22 +1,32 @@
-# Morrow
+<p align="center">
+  <img src="docs/screenshots/icon.png" width="128" alt="Feng Shui icon: a yin-yang on rice paper">
+</p>
 
-Glass desktop widgets for macOS: clocks, countdowns, weather, world clocks, an
-app launcher, sticky notes, photos and a few small toys, each floating on the
-desktop with real macOS blur. Free and open source under the MIT license.
+<h1 align="center">Feng Shui <sub>(aka Morrow)</sub></h1>
 
-Requires macOS and Node.js. No Xcode needed.
+<p align="center">Calm desktop widgets for macOS.<br>
+Clocks, weather, films, notes, a corkboard and a few small toys, each a window of its own, arranged so the desktop feels balanced.</p>
 
-## Overview
+<p align="center"><img src="docs/screenshots/feng-shui-layout.jpg" alt="The Feng Shui layout: lacquer-framed widgets arranged on a bagua grid over an ink-wash wallpaper"></p>
 
-Each widget is its own native window with real
-macOS blur behind it. You can move, resize and restyle every widget, and save
-different arrangements as layouts.
+Feng Shui is the new name for Morrow. The app, the menus and the About window
+say Feng Shui; the data folder, the bundle id and the source keep the Morrow
+name, so an existing install upgrades in place with nothing lost. Free and open
+source under the MIT licence.
 
-Built with Electron (HTML, CSS and JavaScript) plus a tiny optional AppKit
-helper. **No Xcode needed.** The Command Line Tools that come with macOS are
-enough to build the helper.
+| | |
+| --- | --- |
+| <img src="docs/screenshots/desk-layout.jpg" alt="A glass desk layout with clock, weather, world clock, notes and launcher"> | <img src="docs/screenshots/films-cinema.jpg" alt="The Films widget showing movies and TV seasons grouped by show"> |
+| **Desk.** Glass widgets with real macOS blur. | **Cinema.** Films, with each show's seasons gathered together. |
+| <img src="docs/screenshots/situation-room.jpg" alt="A layout with a corkboard, whiteboard and status gauges"> | <img src="docs/screenshots/about.png" alt="The About window"> |
+| **Situation Room.** Corkboard, whiteboard and gauges. | **About.** |
 
-## Run it
+Screenshots are taken from the running app with demo data.
+
+## Install
+
+Requires macOS and Node.js. No Xcode needed: the Command Line Tools that come
+with macOS are enough to build the small native helper.
 
 ```sh
 git clone https://github.com/jonacloud8765/morrow.git
@@ -25,17 +35,34 @@ npm install      # first time only; also builds the native helper
 npm start
 ```
 
-To build a double-clickable app instead:
+To build a double-clickable app:
 
 ```sh
-npm run package  # creates dist/Morrow.app (signed ad hoc for this Mac)
+npm run package  # creates "dist/Feng Shui.app" (signed ad hoc for this Mac)
 ```
 
-Drag `dist/Morrow.app` into Applications if you want. "Open at login" only
-works from the packaged app.
+Drag it into Applications. "Open at login" only works from the packaged app.
 
-Morrow lives in the menu bar (the sun on the horizon icon). From there you can
-show or hide all widgets (⌥⌘W), add widgets, switch layouts and open settings.
+Feng Shui lives in the menu bar (the sun on the horizon icon). From there you
+can show or hide all widgets (⌥⌘W), add widgets, switch layouts, keep the Mac
+awake and open settings.
+
+## What's new
+
+- **The Feng Shui skin.** A layout named "Feng Shui" gets red-lacquer frames,
+  an element seal on every widget (木 火 土 金 水), an ink-wash wallpaper,
+  brush cursors and a bagua arrangement. Other layouts are untouched.
+- **Shows grouped in Films.** Episodes and seasons of the same show sit
+  together in order, even when they came from different folders, with smaller
+  season thumbnails beside the movie posters and a Play All button.
+- **Arrow keys for layouts.** Choose Switch with ← → Keys in the layout menu,
+  or click the layout bar, then use ← and → to move between layouts. Esc or
+  Return finishes.
+- **Keep Mac Awake.** A menu-bar toggle under Show Layout Bar, with session
+  details, an End Current Session button, and sessions that last indefinitely,
+  for some minutes or hours, until a time, while an app is running or while a
+  file is downloading. It can allow the display to sleep. ⌥⌘A toggles it.
+- **About window.** Version, the features at a glance and a link to the source.
 
 ## Using widgets
 
@@ -49,24 +76,25 @@ show or hide all widgets (⌥⌘W), add widgets, switch layouts and open setting
 - **Layouts:** each layout keeps its own widgets, positions, sizes and styles.
 
 Widgets: Clock, Countdown, Random Number, Stopwatch, App Launcher,
-Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget, Corkboard, Nuke France,
+Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget, Corkboard, NF Widget,
 Whiteboard, DEFCON and Nothing Ever Happens.
 
 ## Where things are saved
 
 `~/Library/Application Support/Morrow/morrow-config.json`. Changes are written
-within a moment. If the file is damaged, Morrow keeps the damaged copy next to
+within a moment. If the file is damaged, Feng Shui keeps the damaged copy next to
 it (`morrow-config.corrupt-<time>.json`), starts fresh and tells you.
 
 ## Films
 
 The Films widget shows the videos in a folder (your Movies folder unless you
 choose another) under **Already downloaded**, then the rest of a public
-Letterboxd watchlist. Episodes are grouped into one entry per season.
+Letterboxd watchlist. Episodes are grouped by show, then by season in order.
 
 - **Play:** click a downloaded film to open it in [VLC](https://www.videolan.org/vlc/).
   A season opens as a playlist. If VLC isn't installed, the widget says so.
-- **Downloads:** films on the left, a divider, then shows.
+- **Downloads:** Movies, then Shows. Each show has a header with a Play All
+  button and its seasons as half-size thumbnails.
 - **Sections:** show downloads, the watchlist, or both, with an optional heading,
   so one widget can be a "Ready to watch" panel and another a watchlist shelf.
 - **Watchlist:** enter your Letterboxd username in the widget's settings. The
@@ -83,7 +111,7 @@ Letterboxd watchlist. Episodes are grouped into one entry per season.
 - **Artwork:** a poster or thumbnail image next to a video (`<name>.jpg`,
   `poster.jpg`, `folder.jpg`, `cover.jpg`) is used first. Otherwise the poster
   comes from Letterboxd, or for shows from [TVmaze](https://www.tvmaze.com/)
-  (the season's poster when there is one). Posters are saved in Morrow's data folder under `films/`.
+  (the season's poster when there is one). Posters are saved in the app's data folder under `films/`.
 - **Settings:** watch folder, username, layout (poster grid, shelves or list),
   poster size, whether to show the rest of the watchlist, and a size limit that
   skips small clips.
@@ -146,8 +174,9 @@ refresh button; a forced refresh is throttled to one request every twenty
 seconds. A failed request keeps the last good reading, kept on disk, and marks
 it stale. Nothing is shown until a real reading has arrived.
 
-## Nuke France
+## NF Widget
 
+Part of Feng Shui, not a separate app. NF stands for what you think it does.
 A green briefcase with the trefoil on its lid. Click it to open launch.exe, a
 joke 90s-Windows launch sequence, in a small window beside it. Drag it by its
 title bar; Esc or a click elsewhere closes it. It is a gag page and makes no
@@ -167,7 +196,7 @@ with a few curated looks instead of a wall of options: pick one under Style in
 the widget's settings. The Photo looks are frames: Glass, Polaroid, Gallery
 Frame, Film Poster (the caption becomes the title) and Borderless.
 
-## Feng Shui
+## Rebalancing a layout
 
 The yin-yang in the lower-right corner of the desktop rebalances the current
 layout: the widget nearest the middle stays the heart, wide low widgets rest
@@ -176,11 +205,14 @@ left and right so both sides carry the same weight, with even spacing and
 nothing overlapping. Right-click it for settings. In General settings you can
 show it (it's off by default), or swap the yin-yang for an ink dragon.
 The corkboard always gets at least a quarter of the screen. The tray menu has the same
-action as Feng Shui This Layout.
+action as Feng Shui This Layout. On the Feng Shui layout it uses the bagua
+arrangement instead: a 3×3 grid on an 8-point rhythm, each widget placed by its
+element, with no widget over 22% of the screen, no more than a 2.5× size gap,
+and Fire never outweighing Water.
 
 ## Custom Widget
 
-Turns any self-contained HTML file into a widget. Morrow copies the file into
+Turns any self-contained HTML file into a widget. Feng Shui copies the file into
 its own data folder, so the original can move or be deleted. The page keeps
 its own scripts, storage and web notifications. Drag the handle that appears
 at the top on hover to move it, or right-click the handle for the widget menu.
@@ -204,8 +236,8 @@ Window handling lives in `src/main/windows.js`. Choose a placement under
 
 | Mode | What it does | Trade-offs |
 | --- | --- | --- |
-| **Beside your windows** (default) | Normal window level. Widgets sit on the desktop and your apps cover them as usual. Clicking a widget brings it forward. | Widgets count as Morrow windows, so Stage Manager may group them, and ⌘-Tab to Morrow raises them. |
-| **On the desktop layer** | The native helper places widgets just above desktop icons and below every app (`kCGDesktopIconWindowLevel + 1`). Widgets stay clickable and stay put during Mission Control. | Any app window covers them. Without the native helper, Morrow falls back to Electron's `desktop` window type, which macOS doesn't send clicks to, so you edit via **Arrange Widgets** in the menu bar. |
+| **Beside your windows** (default) | Normal window level. Widgets sit on the desktop and your apps cover them as usual. Clicking a widget brings it forward. | Widgets count as app windows, so Stage Manager may group them, and ⌘-Tab to Feng Shui raises them. |
+| **On the desktop layer** | The native helper places widgets just above desktop icons and below every app (`kCGDesktopIconWindowLevel + 1`). Widgets stay clickable and stay put during Mission Control. | Any app window covers them. Without the native helper, Feng Shui falls back to Electron's `desktop` window type, which macOS doesn't send clicks to, so you edit via **Arrange Widgets** in the menu bar. |
 | **Always on top** | Floating level. | Covers other apps. It's opt-in. |
 
 With **Show on all Spaces** on, widgets follow you to every desktop Space. They
@@ -225,7 +257,7 @@ things Electron can't:
    API stops at 32 pixels on macOS.
 
 `npm install` builds it with the Command Line Tools (`npm run native` rebuilds
-it). If it's missing, Morrow still runs with the fallbacks described above.
+it). If it's missing, Feng Shui still runs with the fallbacks described above.
 
 ## Tests
 
