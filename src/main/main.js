@@ -245,58 +245,108 @@ function desktopToggle() {
 }
 
 // Keep Mac Awake --------------------------------------------------------------
-// Like a caffeine app in the menu bar: stops the Mac from going to sleep,
-// for good or for a while. With "Allow Display Sleep" the screen may still
-// dim and sleep; only the Mac itself stays awake. Saved in settings.awake as
-// { on, until (ms, 0 = indefinitely), display (allow display sleep) }.
+// Laid out like a caffeine app's menu: the current session's details, its
+// options, "End Current Session", then the ways to start a new one. Saved in
+// settings.awake as { on, mode: indefinitely|until|app|download, until (ms),
+// app (name), started (ms), display (allow display sleep) }.
 let awakeBlocker = null;
 let awakeTimer = null;
-const AWAKE_FOR = [
-  ['Indefinitely', 0], ['15 Minutes', 15], ['30 Minutes', 30], ['1 Hour', 60], ['2 Hours', 120], ['5 Hours', 300], ['8 Hours', 480],
-];
+let runningApps = [];
+const DOWNLOADING = /\.(crdownload|download|part|partial|opdownload)$/i;
 
-function applyAwake() {
+function visibleApps() {
+  return new Promise((resolve) => {
+    require('child_process').execFile('/usr/bin/lsappinfo', ['visibleProcessList'], { timeout: 3000 }, (err, out) => {
+      if (err) return resolve([]);
+      const names = [...String(out).matchAll(/"([^"]+)"/g)].map((m) => m[1].replace(/_/g, ' ').replace(/[‎‏]/g, '').trim());
+      resolve([...new Set(names)].filter((n) => n && !/^(Electron|Morrow|Morrow Dev|Feng Shui)$/.test(n)).sort((a, b) => a.localeCompare(b)));
+    });
+  });
+}
+
+function downloadsInProgress() {
+  try {
+    return require('fs').readdirSync(app.getPath('downloads')).some((f) => DOWNLOADING.test(f));
+  } catch { return false; }
+}
+
+function endAwake() { store.updateSettings({ awake: { on: false, until: 0, mode: '', app: '' } }); }
+function startAwake(patch) { store.updateSettings({ awake: { on: true, until: 0, app: '', mode: 'indefinitely', ...patch, started: Date.now() } }); }
+
+// Whether the session should still be running, checked each time it is applied.
+async function awakeStillWanted(a) {
+  if (!a.on) return false;
+  if (a.mode === 'until' || (a.until && !a.mode)) return a.until > Date.now();
+  if (a.mode === 'app') return (await visibleApps()).includes(a.app);
+  if (a.mode === 'download') return downloadsInProgress() || Date.now() - (a.started || 0) < 60000;
+  return true;
+}
+
+async function applyAwake() {
   const a = store.doc.settings.awake || {};
-  const live = !!a.on && (!a.until || a.until > Date.now());
+  const live = await awakeStillWanted(a);
+  if (a.on && !live) { endAwake(); return; }
   const kind = a.display ? 'prevent-app-suspension' : 'prevent-display-sleep';
-  if (awakeBlocker !== null && (!live || awakeBlocker.kind !== kind)) {
+  if (awakeBlocker && (!live || awakeBlocker.kind !== kind)) {
     if (powerSaveBlocker.isStarted(awakeBlocker.id)) powerSaveBlocker.stop(awakeBlocker.id);
     awakeBlocker = null;
   }
-  if (live && awakeBlocker === null) awakeBlocker = { id: powerSaveBlocker.start(kind), kind };
+  if (live && !awakeBlocker) awakeBlocker = { id: powerSaveBlocker.start(kind), kind };
   clearTimeout(awakeTimer);
-  if (a.on && !live) { store.updateSettings({ awake: { on: false, until: 0 } }); return; }
-  // A timed session ends by itself; the menu's countdown is refreshed each minute.
-  if (live && a.until) awakeTimer = setTimeout(() => (a.until <= Date.now() + 500 ? applyAwake() : (rebuildTray(), applyAwake())), Math.min(60000, a.until - Date.now()));
+  // Check again in a while: a timed session's clock, an app quitting, a download finishing.
+  if (live && a.mode !== 'indefinitely') {
+    const wait = a.mode === 'until' ? Math.max(1000, Math.min(60000, a.until - Date.now())) : 30000;
+    awakeTimer = setTimeout(() => { rebuildTray(); applyAwake(); }, wait);
+  }
   if (tray) tray.setImage(trayIcon(live));
 }
 
-function awakeFor(minutes) {
-  store.updateSettings({ awake: { on: true, until: minutes ? Date.now() + minutes * 60000 : 0, started: Date.now() } });
+const hm = (t) => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+function left(ms) {
+  const m = Math.max(0, Math.round(ms / 60000));
+  return m >= 60 ? `${Math.floor(m / 60)} h ${m % 60} min` : `${m} min`;
 }
 
-function awakeLabel() {
-  const a = store.doc.settings.awake || {};
-  if (!a.on) return 'Your Mac sleeps as usual';
-  if (!a.until) return 'Awake indefinitely';
-  const left = Math.max(0, Math.round((a.until - Date.now()) / 60000));
-  const at = new Date(a.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-  return `Awake until ${at} (${left >= 60 ? `${Math.floor(left / 60)} h ${left % 60} min` : `${left} min`} left)`;
+function awakeDetails(a) {
+  if (!a.on) return [{ label: 'No session: your Mac sleeps as usual', enabled: false }];
+  const rows = {
+    indefinitely: ['Time remaining: indefinite', 'Activation: Indefinitely'],
+    until: [`Time remaining: ${left(a.until - Date.now())}`, `Activation: until ${hm(a.until)}`],
+    app: ['Time remaining: while the app runs', `Activation: while ${a.app} is running`],
+    download: ['Time remaining: until downloads finish', 'Activation: while a file is downloading'],
+  }[a.mode || (a.until ? 'until' : 'indefinitely')];
+  return rows.map((label) => ({ label, enabled: false }));
 }
 
 function awakeMenu() {
   const a = store.doc.settings.awake || {};
+  const now = new Date();
+  // "Until" offers the next few whole and half hours.
+  const until = [];
+  const t = new Date(now);
+  t.setMinutes(now.getMinutes() < 30 ? 30 : 60, 0, 0);
+  while (until.length < 8) { if (t - now > 10 * 60000) until.push(new Date(t)); t.setMinutes(t.getMinutes() + 30); }
+  const appItems = runningApps.length
+    ? runningApps.map((name) => ({ label: name, click: () => startAwake({ mode: 'app', app: name }) }))
+    : [{ label: 'No apps found', enabled: false }];
   return [
-    { label: 'Keep Mac Awake', type: 'checkbox', checked: !!a.on, accelerator: 'Alt+Command+A', click: () => (a.on ? store.updateSettings({ awake: { on: false, until: 0 } }) : awakeFor(0)) },
+    { label: 'Keep Mac Awake', type: 'checkbox', checked: !!a.on, accelerator: 'Alt+Command+A', click: () => (a.on ? endAwake() : startAwake({})) },
     {
-      label: 'Keep Awake For',
+      label: 'Keep Awake Options',
       submenu: [
-        { label: awakeLabel(), enabled: false },
-        { type: 'separator' },
-        ...AWAKE_FOR.map(([label, m]) => ({ label, type: 'radio', checked: !!a.on && (m ? !!a.until && Math.abs(a.until - (a.started || 0) - m * 60000) < 1000 : !a.until), click: () => store.updateSettings({ awake: { on: true, until: m ? Date.now() + m * 60000 : 0, started: Date.now() } }) })),
+        { label: 'Current Session Details', enabled: false },
+        ...awakeDetails(a).map((r) => ({ ...r, label: `   ${r.label}` })),
         { type: 'separator' },
         { label: 'Allow Display Sleep', type: 'checkbox', checked: !!a.display, toolTip: 'The screen may dim and sleep, but the Mac stays awake.', click: () => store.updateSettings({ awake: { display: !a.display } }) },
-        ...(a.on ? [{ type: 'separator' }, { label: 'Let Mac Sleep Now', click: () => store.updateSettings({ awake: { on: false, until: 0 } }) }] : []),
+        { label: 'End Current Session', enabled: !!a.on, click: endAwake },
+        { type: 'separator' },
+        { label: 'Start New Session', enabled: false },
+        { label: 'Indefinitely', click: () => startAwake({ mode: 'indefinitely' }) },
+        { label: 'Minutes', submenu: [5, 10, 15, 30, 45].map((m) => ({ label: `${m} minutes`, click: () => startAwake({ mode: 'until', until: Date.now() + m * 60000 }) })) },
+        { label: 'Hours', submenu: [1, 2, 3, 4, 5, 6, 8, 12].map((hr) => ({ label: `${hr} hour${hr > 1 ? 's' : ''}`, click: () => startAwake({ mode: 'until', until: Date.now() + hr * 3600000 }) })) },
+        { label: 'Until', submenu: until.map((d) => ({ label: `${hm(d)}${d.getDate() !== now.getDate() ? ' tomorrow' : ''}`, click: () => startAwake({ mode: 'until', until: d.getTime() }) })) },
+        { label: 'While App Is Running', submenu: appItems },
+        { label: 'While File Is Downloading', toolTip: 'Stays awake while anything in Downloads is still downloading.', click: () => startAwake({ mode: 'download' }) },
       ],
     },
   ];
@@ -377,7 +427,7 @@ function appMenu() {
         label: 'Widgets',
         submenu: [
           { label: 'Show or Hide Widgets', accelerator: 'Alt+Command+W', click: toggleWidgets },
-          { label: 'Keep Mac Awake', accelerator: 'Alt+Command+A', click: () => (store.doc.settings.awake?.on ? store.updateSettings({ awake: { on: false, until: 0 } }) : awakeFor(0)) },
+          { label: 'Keep Mac Awake', accelerator: 'Alt+Command+A', click: () => (store.doc.settings.awake?.on ? endAwake() : startAwake({})) },
           { label: 'Add Widget', submenu: addWidgetMenu() },
         ],
       },
@@ -568,6 +618,10 @@ app.whenReady().then(() => {
   appMenu();
 
   tray = new Tray(trayIcon());
+  // The "While App Is Running" list is kept fresh in the background.
+  const refreshApps = async () => { const list = await visibleApps(); if (JSON.stringify(list) !== JSON.stringify(runningApps)) { runningApps = list; rebuildTray(); } };
+  refreshApps();
+  setInterval(refreshApps, 60000);
   tray.setToolTip('Morrow');
   rebuildTray();
 
