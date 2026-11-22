@@ -781,6 +781,55 @@ const poster = new T.ShaderMaterial({
   room.add(g);
 }
 
+// Framed photos hung salon-style on the left wall, above the couch and beside the window.
+const photoWall = new T.Group();
+room.add(photoWall);
+const PHOTO = { z0: WIN.z1 + 0.25, z1: Z1 - 0.75, y0: 1.05, y1: 2.28, gap: 0.08 };
+function setPhotos(list) {
+  const sig = JSON.stringify(list);
+  if (sig === setPhotos.sig) return;
+  setPhotos.sig = sig;
+  for (const o of [...photoWall.children]) { photoWall.remove(o); o.traverse((c) => { c.geometry?.dispose(); if (c.material?.map) c.material.map.dispose(); }); }
+  const n = Math.min(list.length, 12);
+  if (!n) return;
+  // Outer size of a frame, as a multiple of the photo: mat and frame for gallery, a deep bottom for polaroids.
+  const pad = (st) => st === 'polaroid' ? { s: 0.07, b: 0.2 } : st === 'bare' ? { s: 0, b: 0 } : { s: 0.12, b: 0.12 };
+  const items = list.slice(0, n).map((p) => { const d = pad(p.style); const a = clamp(p.aspect, 0.4, 2.6); return { ...p, a, d, outer: (a + 2 * d.s) / (1 + d.s + d.b) }; });
+  const rows = n <= 3 ? 1 : n <= 6 ? 2 : 3;
+  const per = Math.ceil(n / rows), W = PHOTO.z1 - PHOTO.z0, H = PHOTO.y1 - PHOTO.y0;
+  const rowH = Math.min(0.56, (H - PHOTO.gap * (rows - 1)) / rows);
+  const out = [];
+  for (let r = 0; r < rows; r++) {
+    const row = items.slice(r * per, r * per + per);
+    if (!row.length) continue;
+    const sum = row.reduce((t, it) => t + it.outer, 0);
+    const h = Math.min(rowH, (W - PHOTO.gap * (row.length - 1)) / sum);
+    let z = (PHOTO.z0 + PHOTO.z1) / 2 - (sum * h + PHOTO.gap * (row.length - 1)) / 2;
+    const yc = PHOTO.y1 - rowH / 2 - r * (rowH + PHOTO.gap);
+    for (const it of row) { const w = it.outer * h; out.push({ it, z: z + w / 2, y: yc, w, h }); z += w + PHOTO.gap; }
+  }
+  const black = new T.MeshStandardMaterial({ color: '#191716', roughness: 0.55 });
+  const paper = new T.MeshStandardMaterial({ color: '#f1ede4', roughness: 0.9 });
+  for (const { it, z, y, w, h } of out) {
+    const g = new T.Group(); g.position.set(X0 + 0.005, y, z); photoWall.add(g);
+    const ph = h / (1 + it.d.s + it.d.b), pw = ph * it.a;
+    if (it.style !== 'bare') {
+      if (it.style === 'gallery') add(g, box(0.03, h + 0.03, w + 0.03), black, 0.015, 0, 0);
+      add(g, box(0.032, h, w), paper, 0.017, 0, 0);
+    }
+    const mat = new T.MeshStandardMaterial({ color: '#ffffff', roughness: 0.6, emissive: '#ffffff', emissiveIntensity: 0.12 });
+    const pic = add(g, new T.PlaneGeometry(pw, ph), mat, 0.036, (it.d.b - it.d.s) * ph / 2, 0, 0, PI / 2, 0);
+    pic.castShadow = false;
+    loader.load(it.url, (tex) => {
+      tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = 8;
+      // Cover the frame: crop whichever side is too long.
+      const ia = tex.image.width / tex.image.height;
+      if (ia > it.a) { tex.repeat.set(it.a / ia, 1); tex.offset.set((1 - it.a / ia) / 2, 0); } else { tex.repeat.set(1, ia / it.a); tex.offset.set(0, (1 - ia / it.a) / 2); }
+      mat.map = tex; mat.emissiveMap = tex; mat.needsUpdate = true;
+    });
+  }
+}
+
 // Fairy lights: scallops above the window and along the top of the back wall, one across the ceiling.
 const fairy = { bulbs: null, lights: [], mat: new T.MeshBasicMaterial({ color: '#ffffff' }) };
 {
@@ -2207,6 +2256,7 @@ addEventListener('message', (e) => {
     settings.autoplay = m.autoplay !== false;
     if (typeof m.avatar === 'string') loadAvatar(m.avatar);
     if (typeof m.furniture === 'string') loadFurniture(m.furniture);
+    if (Array.isArray(m.photos)) setPhotos(m.photos);
     if (m.view && m.view !== settings.view) setView(m.view, false);
   } else if (m.type === 'crates' && Array.isArray(m.crates)) {
     const sig = JSON.stringify(m.crates.map((c) => c && (c.error || (c.tracks || []).map((t) => t.id).join(','))));

@@ -28,7 +28,9 @@ export function mount(root, ctx) {
   let ready = false;
   let crates = null;
   const post = (msg) => { if (ready) frame.contentWindow?.postMessage(msg, '*'); };
-  const settings = () => ({ view: ctx.config.view, autoplay: ctx.config.autoplay !== false, avatar: ctx.config.avatar ? fileUrl(ctx.config.avatar) : '', furniture: ctx.config.furniture ? fileUrl(ctx.config.furniture) : '' });
+  const settings = () => ({ view: ctx.config.view, autoplay: ctx.config.autoplay !== false, avatar: ctx.config.avatar ? fileUrl(ctx.config.avatar) : '', furniture: ctx.config.furniture ? fileUrl(ctx.config.furniture) : '',
+    // Framed photos on the wall above the couch: [{ file, aspect, style }].
+    photos: (Array.isArray(ctx.config.photos) ? ctx.config.photos : []).filter((p) => p && p.file).map((p) => ({ url: fileUrl(p.file), aspect: Number(p.aspect) || 1.5, style: p.style || 'gallery' })) });
   const key = () => [ctx.config.crate1, ctx.config.crate2, ctx.config.crate3].join('|');
   let loadedKey = '';
 
