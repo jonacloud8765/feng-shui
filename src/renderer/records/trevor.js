@@ -102,7 +102,7 @@ export function createTrevor(env) {
   }
 
   function visit() {
-    if (!ready() || S.state !== 'away' || !env.canVisit()) return false;
+    if (!ready() || S.state !== 'away' || !env.canVisit() || S.canState === 'carried') return false;
     const p = spawn();
     Object.assign(S, { state: 'enter', t: 0, x: p.x, z: p.z, h: -PI / 2, speed: 0, released: false, hit: false, lookW: 0 });
     S.goal = throwSpot();
@@ -505,10 +505,14 @@ export function createTrevor(env) {
     stepCan(dt);
   }
 
+  // Someone else picks the can up: from now on they move it, until it's gone.
+  function takeCan() { if (S.canState !== 'rest') return null; S.canState = 'carried'; return can; }
+  function dropCan() { S.canState = 'none'; can.visible = false; }
   function clearCan() { if (S.canState === 'rest' || S.canState === 'rolling') { S.canState = 'none'; can.visible = false; } }
 
   return {
-    load, loadCan, visit, update, clearCan,
+    load, loadCan, visit, update, clearCan, takeCan, dropCan,
+    canPos(out) { return out.copy(S.pos); },
     get state() { return S.state; },
     get canState() { return S.canState; },
     get active() { return S.state !== 'away'; },
@@ -517,6 +521,12 @@ export function createTrevor(env) {
     body(out) { return S.state === 'away' ? null : out.set(S.x, 0, S.z); },
     radius: 0.32,
     _elbow: () => { if (!B) return null; const a = B.RightArm.getWorldPosition(new T.Vector3()), b = B.RightForeArm.getWorldPosition(new T.Vector3()), c = B.RightHand.getWorldPosition(new T.Vector3()); return { up: b.clone().sub(a).normalize().toArray().map((v) => +v.toFixed(2)), fo: c.clone().sub(b).normalize().toArray().map((v) => +v.toFixed(2)), lenU: +a.distanceTo(b).toFixed(3), lenF: +b.distanceTo(c).toFixed(3), foreType: B.RightForeArm.type, foreParent: B.RightForeArm.parent.name, h: S.h }; },
+    // Test hook: lay the can at rest on its side at (x, y, z).
+    _putCan: (x, y, z, yaw = 0) => {
+      S.pos.set(x, y + CAN_R, z); S.vel.set(0, 0, 0); S.canState = 'rest';
+      can.visible = true; can.position.copy(S.pos);
+      can.quaternion.setFromEuler(new T.Euler(0, yaw, Math.PI / 2));
+    },
     _debug: () => ({ state: S.state, t: +S.t.toFixed(2), x: +S.x.toFixed(2), z: +S.z.toFixed(2), h: +S.h.toFixed(2), can: S.canState, pos: S.pos.toArray().map((v) => +v.toFixed(2)), hit: S.hit, next: +S.nextVisit.toFixed(1) }),
   };
 }

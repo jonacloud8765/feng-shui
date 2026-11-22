@@ -13,6 +13,7 @@
 import * as T from './three.js';
 import { createSmoking } from './smoke.js';
 import { createTrevor } from './trevor.js';
+import { createGuest } from './guest.js';
 import { buildSkeleton } from './skeleton.js';
 
 const $ = (s) => document.querySelector(s);
@@ -1927,7 +1928,7 @@ const trevor = createTrevor({
   obstacles: canObstacles,
   target: avatarTarget,
   feet: (out) => (body.lie > 0.5 ? null : out.set(body.x, 0, body.z)),
-  canVisit: () => !body.exiting && dream.st === 'none' && !ui.settings,
+  canVisit: () => !body.exiting && dream.st === 'none' && !ui.settings && !guest.active,
   onHit: (dir) => { body.hitT = 1; body.hitDir = dir; camKick = 1; },
   sfx: (n) => sfx(n),
   error: (m) => showError(m),
@@ -1954,6 +1955,26 @@ function canObstacles() {
   return out;
 }
 let camKick = 0;
+let guestPickup = 'auto'; // her pickup: 'auto', 'kneel' or 'bend'
+// She comes in after Trevor's gone and picks his can up.
+const guest = createGuest({
+  T, room,
+  door: { x: X1, z0: DOOR.z0, z1: DOOR.z1 },
+  findPath: (a, b) => findPath(a, b),
+  free: (x, z) => navFree(...navCell(x, z)),
+  // Inside furniture or outside the walls (for where her knees, feet and hand go).
+  solid: (x, y, z) => x < X0 + 0.04 || x > X1 - 0.04 || z < Z0 + 0.04 || z > Z1 - 0.04
+    || canObstacles().some((o) => x > o.min[0] - 0.04 && x < o.max[0] + 0.04 && z > o.min[2] - 0.04 && z < o.max[2] + 0.04 && y < o.max[1] + 0.03),
+  pickupMode: () => guestPickup,
+  feet: (out) => (body.lie > 0.5 ? null : out.set(body.x, 0, body.z)),
+  canState: () => trevor.canState,
+  canPos: (out) => trevor.canPos(out),
+  takeCan: () => trevor.takeCan(),
+  dropCan: () => trevor.dropCan(),
+  canCome: () => !trevor.active && !body.exiting && dream.st === 'none',
+  sfx: (n) => sfx(n),
+  error: (m) => showError(m),
+});
 // Smoke: from the middle seat straight away; from another seat he slides over first.
 function smoke() {
   if (smoking.busy || body.state !== 'seated') return;
@@ -3301,10 +3322,13 @@ function frame() {
   stepBody(dt, t);
   smoking.update(gamePaused() ? 0 : dt, t);
   trevor.update(gamePaused() ? 0 : dt * (window.__tslow ?? 1), t);
+  if (trevor.canState === 'rest' && !trevor.active && !guest.active) guest.canSettled();
+  guest.update(gamePaused() ? 0 : dt * (window.__tslow ?? 1), t);
   stepDream(gamePaused() ? 0 : dt * (window.__dslow ?? 1));
   // You can't walk through Trevor.
-  if (trevor.body(tmpV2) && upright()) {
-    const dx = body.x - tmpV2.x, dz = body.z - tmpV2.z, d = Math.hypot(dx, dz), r = trevor.radius + 0.22;
+  for (const who of [trevor, guest]) {
+    if (!who.body(tmpV2) || !upright()) continue;
+    const dx = body.x - tmpV2.x, dz = body.z - tmpV2.z, d = Math.hypot(dx, dz), r = who.radius + 0.22;
     if (d < r && d > 1e-4) { body.x = tmpV2.x + dx / d * r; body.z = tmpV2.z + dz / d * r; }
   }
   lightsK += ((lightsOn ? 1 : 0) - lightsK) * (1 - Math.exp(-dt * 5));
@@ -3330,6 +3354,8 @@ addEventListener('message', (e) => {
     if (typeof m.cigarettes === 'string') smoking.loadBox(m.cigarettes);
     if (typeof m.trevor === 'string') trevor.load(m.trevor);
     if (typeof m.beer === 'string') trevor.loadCan(m.beer);
+    if (typeof m.guest === 'string') guest.load(m.guest);
+    if (typeof m.guestPickup === 'string') guestPickup = m.guestPickup;
     if (m.view && m.view !== settings.view) setView(m.view, false);
   } else if (m.type === 'crates' && Array.isArray(m.crates)) {
     const sig = JSON.stringify(m.crates.map((c) => c && (c.error || (c.tracks || []).map((t) => t.id).join(','))));
@@ -3365,6 +3391,10 @@ if (params.get('debug')) {
     elbow: () => trevor._elbow(),
     tperf: () => { const a = performance.now(); for (let i = 0; i < 10; i++) trevor.update(0.016, 1); const b = performance.now(); for (let i = 0; i < 3; i++) composer.render(0.016); return { upd: (b - a) / 10, render: (performance.now() - b) / 3 }; },
     visit: () => trevor.visit(),
+    guest: () => guest._debug(),
+    come: (mode) => guest.come(mode),
+    putCan: (x, y, z, yaw) => trevor._putCan(x, y, z, yaw),
+    obstacles: () => canObstacles(),
     jump: () => { lookOutside(); },
     dream: () => ({ ...dream, mode }),
     dance: () => ({ to: body.danceTo, w: +body.dance.toFixed(2), can: canDance(), state: body.state, busy: smoking.busy, mode }),

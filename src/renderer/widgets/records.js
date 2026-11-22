@@ -34,6 +34,9 @@ export function mount(root, ctx) {
     // Trevor, the visitor who throws a beer can at you, and his can (both .glb).
     trevor: ctx.config.trevor ? fileUrl(ctx.config.trevor) : '',
     beer: ctx.config.beer ? fileUrl(ctx.config.beer) : '',
+    // The woman who comes in to pick Trevor's can up (.glb; only her figure is used).
+    guest: ctx.config.guest ? fileUrl(ctx.config.guest) : '',
+    guestPickup: ctx.config.guestPickup || 'auto',
     // Film posters on the wall behind the couch: [{ file, title }].
     posters: (Array.isArray(ctx.config.posters) ? ctx.config.posters : []).filter((p) => p && p.file).map((p) => ({ url: fileUrl(p.file), title: String(p.title || '') })),
     photos: (Array.isArray(ctx.config.photos) ? ctx.config.photos : []).filter((p) => p && p.file).map((p) => ({ url: fileUrl(p.file), aspect: Number(p.aspect) || 1.5, style: p.style || 'gallery' })) });

@@ -338,7 +338,7 @@ const TYPES = {
     min: { width: 560, height: 360 },
     max: { width: 2600, height: 1600 },
     // Each crate holds one SoundCloud profile: a link like soundcloud.com/name, or just the name.
-    config: { crate1: '', crate2: '', crate3: '', view: 'third', autoplay: true, avatar: '', avatarName: '', furniture: '', furnitureName: '', photos: [], posters: [], cigarettes: '', trevor: '', beer: '' },
+    config: { crate1: '', crate2: '', crate3: '', view: 'third', autoplay: true, avatar: '', avatarName: '', furniture: '', furnitureName: '', photos: [], posters: [], cigarettes: '', trevor: '', beer: '', guest: '', guestPickup: 'auto' },
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 14, padding: 0 },
     fields: [
       { key: 'crate1', label: 'Left crate', placeholder: 'soundcloud.com/your-name', hint: 'A SoundCloud profile link, or just the name.' },
