@@ -63,12 +63,14 @@ const grade = new T.ShaderPass({
 });
 composer.addPass(grade);
 
+let baseFov = 50, fovBoost = 0;
 function resize() {
   const w = Math.max(1, innerWidth), h = Math.max(1, innerHeight);
   renderer.setSize(w, h, false);
   composer.setSize(w, h);
   camera.aspect = w / h;
-  camera.fov = w / h < 1.25 ? 60 : 50;
+  baseFov = w / h < 1.25 ? 60 : 50;
+  camera.fov = baseFov + (fovBoost || 0);
   camera.updateProjectionMatrix();
 }
 addEventListener('resize', resize);
@@ -238,6 +240,47 @@ function skyTex(night) {
   });
 }
 
+// Dense high-rise towers outside the window, drawn in layers for parallax:
+// concrete and glass by day, a wall of lit flats by night.
+function towerTex(night, seed, { w = 1024, h = 1024, count = 9, minW = 0.08, maxW = 0.2, topMin = 0.05, topMax = 0.45, cell = 14, fill = 1, tone = 0 } = {}) {
+  return canvasTex(w, h, (ctx) => {
+    const rand = rng(seed);
+    const xs = [];
+    let x = -rand() * 40;
+    while (x < w && xs.length < count * 3) { const bw = w * (minW + rand() * (maxW - minW)); if (rand() < fill) xs.push([x, bw]); x += bw + w * rand() * 0.03; }
+    for (const [x0, bw] of xs) {
+      const top = h * (topMin + rand() * (topMax - topMin));
+      const hue = rand();
+      const base = night ? [14 + tone, 15 + tone, 22 + tone] : [150 + hue * 40 - tone * 3, 148 + hue * 30 - tone * 3, 140 + hue * 20 - tone * 3];
+      ctx.fillStyle = rgb(...base);
+      ctx.fillRect(x0, top, bw, h - top);
+      // Rooftop clutter.
+      ctx.fillRect(x0 + bw * 0.2, top - h * 0.015, bw * 0.25, h * 0.015);
+      const cw = cell * (0.8 + rand() * 0.5), ch = cell * (1.1 + rand() * 0.4);
+      const litP = 0.22 + rand() * 0.3;
+      for (let y = top + ch * 0.6; y < h - ch * 0.4; y += ch) {
+        // Floor slabs and balconies.
+        ctx.fillStyle = night ? 'rgba(40,38,48,0.9)' : `rgba(${base[0] - 30},${base[1] - 30},${base[2] - 28},0.8)`;
+        ctx.fillRect(x0, y + ch * 0.72, bw, ch * 0.12);
+        for (let wx = x0 + cw * 0.3; wx < x0 + bw - cw * 0.7; wx += cw) {
+          const r = rand();
+          if (night) {
+            if (r < litP) {
+              const k = rand();
+              ctx.fillStyle = k < 0.06 ? `rgba(255,120,190,0.95)` : k < 0.16 ? `rgba(150,215,255,0.9)` : `rgba(255,${185 + rand() * 50},${100 + rand() * 60},${0.75 + rand() * 0.25})`;
+            } else ctx.fillStyle = `rgba(${20 + rand() * 18},${22 + rand() * 18},${34 + rand() * 20},1)`;
+          } else {
+            ctx.fillStyle = r < 0.15 ? 'rgba(210,225,240,0.9)' : `rgba(${45 + rand() * 40},${55 + rand() * 40},${70 + rand() * 40},0.95)`;
+          }
+          ctx.fillRect(wx, y + ch * 0.12, cw * 0.62, ch * 0.55);
+          // An air conditioner here and there.
+          if (rand() < 0.12) { ctx.fillStyle = night ? 'rgba(60,60,66,1)' : 'rgba(205,205,200,1)'; ctx.fillRect(wx + cw * 0.05, y + ch * 0.55, cw * 0.32, ch * 0.18); }
+        }
+      }
+    }
+  });
+}
+
 // ---------------------------------------------------------------- more textures
 function swirlTex(w, h, colors, { seed = 1, turns = 3, rings = 13, shag = 0, oval = false, repeat } = {}) {
   return canvasTex(w, h, (ctx) => {
@@ -402,17 +445,30 @@ for (const [w, d, x, z] of [[RW, 0.02, 0, Z0 + 0.01], [0.02, RD, X1 - 0.01, 0], 
 }
 const skyDay = new T.MeshBasicMaterial({ map: skyTex(false), transparent: true });
 const skyNight = new T.MeshBasicMaterial({ map: skyTex(true), transparent: true, opacity: 0 });
-noShadow.add(add(room, new T.PlaneGeometry(7, 4.4), skyDay, X0 - 2.2, 1.5, -0.6, 0, PI / 2, 0));
-noShadow.add(add(room, new T.PlaneGeometry(7, 4.4), skyNight, X0 - 2.19, 1.5, -0.6, 0, PI / 2, 0));
+noShadow.add(add(room, new T.PlaneGeometry(26, 14), skyDay, X0 - 9, 4, -0.6, 0, PI / 2, 0));
+noShadow.add(add(room, new T.PlaneGeometry(26, 14), skyNight, X0 - 8.99, 4, -0.6, 0, PI / 2, 0));
+// Three layers of towers, far to near; we're high up, so they run down out of view.
+const cityLayers = [
+  { d: 7.5, w: 20, h: 13, y: 1.6, o: { count: 16, minW: 0.03, maxW: 0.07, topMin: 0.12, topMax: 0.5, cell: 7, tone: 0 } },
+  { d: 4.2, w: 11, h: 9, y: 0.6, o: { count: 7, minW: 0.08, maxW: 0.16, topMin: 0.0, topMax: 0.3, cell: 11, fill: 0.75, tone: 4 } },
+  { d: 2.0, w: 6.5, h: 7, y: 0.4, o: { count: 3, minW: 0.18, maxW: 0.34, topMin: -0.1, topMax: 0.12, cell: 22, fill: 0.5, tone: 8 } },
+].map((L, k) => {
+  const day = new T.MeshBasicMaterial({ map: towerTex(false, 300 + k, L.o), transparent: true, depthWrite: false });
+  const night = new T.MeshBasicMaterial({ map: towerTex(true, 300 + k, L.o), transparent: true, opacity: 0, depthWrite: false });
+  for (const [m, e] of [[day, 0], [night, 0.01]]) { const p = add(room, new T.PlaneGeometry(L.w, L.h), m, X0 - L.d + e, L.y, -0.6, 0, PI / 2, 0); p.renderOrder = -10 + k; noShadow.add(p); }
+  return { day, night };
+});
 
 // Shaggy swirl rug.
-add(room, new T.PlaneGeometry(3.1, 2.3), M.rug, 0, 0.012, -0.1, -PI / 2, 0, 0);
+const stock = {};
+stock.rug = add(room, new T.PlaneGeometry(3.1, 2.3), M.rug, 0, 0.012, -0.1, -PI / 2, 0, 0);
 
 // Low modular floor sofa: a rust velvet chaise on the left, cream bouclé to the right.
 const SOFA_Z = 1.6;
 {
   const g = new T.Group();
   g.position.set(0, 0, SOFA_Z);
+  stock.sofa = g;
   const mods = [[-0.78, M.velvet], [0, M.boucle], [0.78, M.boucle]];
   for (const [x, mat] of mods) {
     add(g, rbox(0.77, 0.3, 0.92, 0.1, 5), mat, x, 0.15, 0);
@@ -426,124 +482,15 @@ const SOFA_Z = 1.6;
   room.add(g);
 }
 
-// The listener, sitting on the middle module (seen from behind).
-const avatar = new T.Group();
-avatar.position.set(0, -0.15, SOFA_Z + 0.02);
-{
-  add(avatar, new T.CapsuleGeometry(0.17, 0.32, 6, 16), M.hoodie, 0, 0.82, 0.1, -0.22);
-  add(avatar, new T.SphereGeometry(0.2, 20, 14), M.hoodie, 0, 1.0, 0.15).scale.set(1.35, 0.55, 0.9);
-  add(avatar, cyl(0.05, 0.055, 0.1, 12), M.skin, 0, 1.08, 0.1);
-  add(avatar, new T.SphereGeometry(0.105, 24, 18), M.skin, 0, 1.2, 0.08).scale.set(1, 1.12, 1.05);
-  add(avatar, new T.SphereGeometry(0.113, 24, 18, 0, PI * 2, 0, PI * 0.58), M.hair, 0, 1.215, 0.095).scale.set(1, 1.1, 1.05);
-  add(avatar, new T.TorusGeometry(0.115, 0.012, 8, 28, PI), M.black, 0, 1.1, 0.1, PI / 2 - 0.4, 0, 0);
-  for (const s of [-1, 1]) {
-    add(avatar, new T.CapsuleGeometry(0.055, 0.28, 4, 10), M.hoodie, s * 0.23, 0.8, 0.04, 0.5, 0, s * 0.12);
-    add(avatar, new T.CapsuleGeometry(0.07, 0.4, 4, 10), M.denim, s * 0.11, 0.56, -0.17, PI / 2 - 0.15, 0, 0);
-    add(avatar, new T.CapsuleGeometry(0.055, 0.32, 4, 10), M.denim, s * 0.12, 0.36, -0.44, 0.35, 0, 0);
-    add(avatar, rbox(0.11, 0.07, 0.25, 0.03), M.sneaker, s * 0.12, 0.19, -0.55);
-  }
-}
-room.add(avatar);
-
-// A custom character (a standing .glb) can take the listener's place. It is
-// scaled to a person's height and bent at the hips and knees to sit.
-let customAvatar = null, avatarUrl = '';
-function sitDown(root) {
-  root.updateMatrixWorld(true);
-  const bbox = new T.Box3().setFromObject(root);
-  const size = bbox.getSize(new T.Vector3());
-  const s = 1.78 / size.y;
-  const H = size.y, y0 = bbox.min.y, hipY = y0 + H * 0.5, kneeY = y0 + H * 0.28;
-  const zc = (bbox.min.z + bbox.max.z) / 2, xc = (bbox.min.x + bbox.max.x) / 2;
-  const sm = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
-  const rot = (p, cy, cz, ang) => { const y = p.y - cy, z = p.z - cz; p.y = cy + y * Math.cos(ang) - z * Math.sin(ang); p.z = cz + y * Math.sin(ang) + z * Math.cos(ang); };
-  const thigh = -PI / 2, shin = PI * 0.32;
-  // Where the knee ends up once the thighs are forward.
-  const knee = new T.Vector3(0, kneeY, zc); rot(knee, hipY, zc, thigh);
-  const v = new T.Vector3(), inv = new T.Matrix4();
-  root.traverse((o) => {
-    if (!o.isMesh) return;
-    const g = o.geometry = o.geometry.clone();
-    const pos = g.attributes.position;
-    inv.copy(o.matrixWorld).invert();
-    for (let i = 0; i < pos.count; i++) {
-      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
-      const y = v.y;
-      if (y < hipY + H * 0.02) {
-        rot(v, hipY, zc, thigh * sm(hipY + H * 0.02, hipY - H * 0.05, y));
-        const k = sm(kneeY + H * 0.03, kneeY - H * 0.03, y);
-        if (k > 0) rot(v, knee.y, knee.z, shin * k);
-      }
-      v.applyMatrix4(inv);
-      pos.setXYZ(i, v.x, v.y, v.z);
-    }
-    pos.needsUpdate = true;
-    g.computeVertexNormals();
-    g.computeBoundingBox(); g.computeBoundingSphere();
-    o.castShadow = true; o.receiveShadow = true;
-    o.frustumCulled = false;
-  });
-  // Seat the hips on the cushion, facing the turntable.
-  const holder = new T.Group();
-  root.position.set(-xc, -hipY, -zc);
-  const inner = new T.Group();
-  inner.scale.setScalar(s);
-  inner.add(root);
-  inner.rotation.y = PI;
-  holder.add(inner);
-  holder.position.set(0, 0.4, SOFA_Z + 0.12);
-  return holder;
-}
-function loadAvatar(url) {
-  if (url === avatarUrl) return;
-  avatarUrl = url;
-  if (customAvatar) { room.remove(customAvatar); customAvatar = null; }
-  if (!url) { builtInAvatar.visible = true; return; }
-  new T.GLTFLoader().load(url, (gltf) => {
-    if (avatarUrl !== url) return;
-    customAvatar = sitDown(gltf.scene);
-    room.add(customAvatar);
-    builtInAvatar.visible = false;
-  }, undefined, () => { showError('That character model couldn’t be loaded.'); });
-}
-const builtInAvatar = avatar;
-
-// A guest (any standing .glb) in the doorway, facing into the room. A model that
-// brings its own door (a node named like "door") is fitted to the doorway.
-let guest = null, guestUrl = '';
-function loadGuest(url) {
-  if (url === guestUrl) return;
-  guestUrl = url;
-  if (guest) { room.remove(guest); guest = null; }
-  if (!url) return;
-  new T.GLTFLoader().load(url, (gltf) => {
-    if (guestUrl !== url) return;
-    const root = gltf.scene;
-    root.updateMatrixWorld(true);
-    const bb = new T.Box3().setFromObject(root), size = bb.getSize(new T.Vector3());
-    root.position.set(-(bb.min.x + bb.max.x) / 2, -bb.min.y, -(bb.min.z + bb.max.z) / 2);
-    root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
-    let hasDoor = false;
-    root.traverse((o) => { if (/door/i.test(o.name || '')) hasDoor = true; });
-    const inner = new T.Group(); inner.add(root); inner.scale.setScalar((hasDoor ? DOOR.h : 1.68) / size.y);
-    guest = new T.Group(); guest.add(inner);
-    guest.rotation.y = hasDoor ? 0 : -PI / 2;
-    room.add(guest);
-    guest.updateMatrixWorld(true);
-    const wb = new T.Box3().setFromObject(guest);
-    const cz = (DOOR.z0 + DOOR.z1) / 2;
-    guest.position.set(hasDoor ? X1 + 0.06 - wb.max.x : X1 - 0.25 - (wb.max.x + wb.min.x) / 2, 0, cz - (wb.max.z + wb.min.z) / 2);
-  }, undefined, () => { showError('The guest model couldn’t be loaded.'); });
-}
-
 // Low round oak coffee table, off to the right, where pulled records land.
-const TABLE = { x: 0.62, z: 0.42, y: 0.335, w: 0.74, d: 0.74 };
+const TABLE = { x: 0.64, z: 0.58, y: 0.335, w: 0.74, d: 0.74 };
 {
   const g = new T.Group();
   add(g, cyl(0.42, 0.42, 0.04, 48), M.oak, TABLE.x, 0.31, TABLE.z);
   add(g, cyl(0.3, 0.34, 0.29, 32), M.oak, TABLE.x, 0.145, TABLE.z);
   add(g, cyl(0.04, 0.036, 0.09, 24), M.ceramic, TABLE.x + 0.27, 0.375, TABLE.z + 0.18);
   room.add(g);
+  stock.table = g;
 }
 
 // Beanbag lounge chair by the window.
@@ -551,6 +498,7 @@ const TABLE = { x: 0.62, z: 0.42, y: 0.335, w: 0.74, d: 0.74 };
   const g = new T.Group();
   g.position.set(-1.75, 0, -0.55);
   g.rotation.y = 0.9;
+  stock.beanbag = g;
   const bean = M.boucle.clone(); bean.color.set('#dccbb2');
   add(g, new T.SphereGeometry(0.46, 32, 20), bean, 0, 0.2, 0).scale.set(1, 0.45, 1);
   add(g, new T.SphereGeometry(0.4, 32, 20), bean, 0, 0.44, 0.24).scale.set(1, 0.8, 0.5);
@@ -568,7 +516,6 @@ const shelfLeds = [];
   add(g, box(cw, 0.035, cd), M.oak, 0, CRED.y - 0.0175, CRED.z);
   add(g, box(cw, 0.03, cd), M.oak, 0, 0.1, CRED.z);
   for (const x of [-cw / 2 + 0.0175, -cw / 6, cw / 6, cw / 2 - 0.0175]) add(g, box(0.035, CRED.y - 0.1, cd), M.oak, x, 0.1 + (CRED.y - 0.1) / 2 - 0.02, CRED.z);
-  for (const x of [-cw / 3, 0, cw / 3]) add(g, box(cw / 3 - 0.06, 0.33, 0.005), new T.MeshStandardMaterial({ map: spinesTex, roughness: 0.7 }), x, 0.285, CRED.z + 0.12);
   for (const x of [-1.05, 1.05]) for (const z of [-0.17, 0.17]) add(g, cyl(0.018, 0.014, 0.085, 10), M.oak, x, 0.042, CRED.z + z);
   // Hi-fi stack: amplifier and cassette deck.
   add(g, box(0.44, 0.1, 0.3), M.black, -0.68, CRED.y + 0.05, CRED.z - 0.02);
@@ -577,7 +524,6 @@ const shelfLeds = [];
   add(g, new T.PlaneGeometry(0.43, 0.08), new T.MeshStandardMaterial({ map: faceTex('deck'), roughness: 0.4, metalness: 0.5, emissive: '#7dffa0', emissiveMap: faceTex('deck'), emissiveIntensity: 0 }), -0.68, CRED.y + 0.147, CRED.z + 0.111).userData.hifi = true;
   // A small plant and a few records leaning at the right end.
   add(g, cyl(0.07, 0.06, 0.13, 20), M.terracotta, 0.88, CRED.y + 0.065, CRED.z);
-  for (let i = 0; i < 4; i++) add(g, box(0.31, 0.31, 0.004), new T.MeshStandardMaterial({ color: ['#e9dcc0', '#9c4a26', '#2c2622', '#c08a2e'][i], roughness: 0.8 }), 0.52 + i * 0.012, CRED.y + 0.155, CRED.z + 0.02, 0, 0, -0.16);
   // Floating shelves.
   for (const [y, w, x] of [[1.28, 2.0, -0.1], [1.72, 1.5, 0.15]]) {
     add(g, box(w, 0.04, 0.26), M.oak, x, y, Z0 + 0.13);
@@ -938,14 +884,14 @@ room.traverse((o) => { if (o.userData.hifi) hifiMats.push(o.material); });
 
 // ---------------------------------------------------------------- crates & records
 const SLEEVE = 0.31, THICK = 0.0032;
-const CRATE = { w: 0.38, d: 0.38, h: 0.25, front: 0.15, z: -0.55, xs: [-0.8, 0, 0.8] };
+// The three crates sit in the console's cubbies, under the turntable.
+const CRATE = { w: 0.38, d: 0.38, h: 0.25, front: 0.15, z: CRED.z + 0.01, y: 0.118, xs: [-2.3 / 3, 0, 2.3 / 3] };
 const loader = new T.TextureLoader();
 loader.setCrossOrigin('anonymous');
 const sleeveGeo = new T.BoxGeometry(SLEEVE, SLEEVE, THICK);
 const crates = CRATE.xs.map((x, ci) => {
   const g = new T.Group();
-  g.position.set(x, 0.012, CRATE.z);
-  g.rotation.y = (ci - 1) * -0.06;
+  g.position.set(x, CRATE.y, CRATE.z);
   const tone = [[1, 1, 1], [0.86, 0.8, 0.74], [1.05, 0.95, 0.85]][ci];
   const wood = M.pine.clone(); wood.color.setRGB(...tone);
   const { w, d, h, front } = CRATE;
@@ -956,17 +902,594 @@ const crates = CRATE.xs.map((x, ci) => {
   add(g, box(w, front - 0.02, 0.018), wood, 0, (front - 0.02) / 2 + 0.01, d / 2 - 0.009);
   const plate = add(g, new T.PlaneGeometry(0.3, 0.098), new T.MeshStandardMaterial({ color: '#ffffff', roughness: 0.85 }), 0, 0.075, d / 2 + 0.001);
   plate.castShadow = false;
-  const hit = add(g, box(w + 0.04, h + 0.2, d + 0.04), new T.MeshBasicMaterial({ visible: false }), 0, (h + 0.2) / 2, 0);
+  const hit = add(g, box(w + 0.2, h + 0.1, d + 0.04), new T.MeshBasicMaterial({ visible: false }), 0, (h + 0.1) / 2, 0);
   hit.userData.crate = ci;
   g.traverse((o) => { if (o.isMesh && o !== hit) { o.castShadow = true; o.receiveShadow = true; } });
   room.add(g);
   return { ci, group: g, plate, hit, wood, data: null, recs: [], focus: 0 };
 });
 
+// ---------------------------------------------------------------- the listener
+// One set of pose numbers drives both characters: the built-in one (simple
+// shapes on joints) and a custom .glb (a standing mesh bent per vertex).
+// Angles: thigh/arm forward is positive, knee bend is positive, lean forward
+// is positive, twist turns the upper body like rotation.y.
+const SEAT = { x: 0, z: SOFA_Z + 0.03, h: 0 };
+const FRONT = { x: 0, z: SOFA_Z - 0.62 };
+const P = {
+  thigh: { L: 0, R: 0 }, knee: { L: 0, R: 0 }, armF: { L: 0, R: 0 }, armD: { L: -0.78, R: -0.78 },
+  lean: 0, twist: 0, breath: 0, armsOnly: false,
+};
+
+// Built-in listener: hoodie, jeans, headphones. Origin at the hips, facing -z.
+const avatar = new T.Group();
+const builtIn = { upper: new T.Group(), arms: {}, hips: {}, knees: {}, torso: null, chest: null, head: [] };
+{
+  const u = builtIn.upper;
+  avatar.add(u);
+  builtIn.torso = add(u, new T.CapsuleGeometry(0.17, 0.32, 6, 16), M.hoodie, 0, 0.27, 0.04, -0.12);
+  builtIn.chest = add(u, new T.SphereGeometry(0.2, 20, 14), M.hoodie, 0, 0.44, 0.06);
+  builtIn.chest.scale.set(1.35, 0.55, 0.9);
+  builtIn.head = [
+    add(u, cyl(0.05, 0.055, 0.1, 12), M.skin, 0, 0.52, 0.03),
+    add(u, new T.SphereGeometry(0.105, 24, 18), M.skin, 0, 0.64, 0.01),
+    add(u, new T.SphereGeometry(0.113, 24, 18, 0, PI * 2, 0, PI * 0.58), M.hair, 0, 0.655, 0.025),
+    add(u, new T.TorusGeometry(0.115, 0.012, 8, 28, PI), M.black, 0, 0.54, 0.03, PI / 2 - 0.4, 0, 0),
+  ];
+  builtIn.head[1].scale.set(1, 1.12, 1.05); builtIn.head[2].scale.set(1, 1.1, 1.05);
+  for (const [k, s] of [['L', -1], ['R', 1]]) {
+    const arm = new T.Group();
+    arm.position.set(s * 0.22, 0.4, 0.04);
+    add(arm, new T.CapsuleGeometry(0.055, 0.3, 4, 10), M.hoodie, s * 0.02, -0.2, 0, 0, 0, s * 0.08);
+    add(arm, new T.SphereGeometry(0.045, 12, 10), M.skin, s * 0.035, -0.4, 0);
+    u.add(arm); builtIn.arms[k] = arm;
+    const hip = new T.Group();
+    hip.position.set(s * 0.1, 0, 0);
+    add(hip, new T.CapsuleGeometry(0.075, 0.3, 4, 10), M.denim, 0, -0.21, 0);
+    const knee = new T.Group();
+    knee.position.set(0, -0.43, 0);
+    add(knee, new T.CapsuleGeometry(0.058, 0.3, 4, 10), M.denim, 0, -0.2, 0);
+    add(knee, rbox(0.11, 0.07, 0.25, 0.03), M.sneaker, 0, -0.42, -0.05);
+    hip.add(knee); avatar.add(hip);
+    builtIn.hips[k] = hip; builtIn.knees[k] = knee;
+  }
+}
+room.add(avatar);
+const builtInAvatar = avatar;
+builtIn.standHip = 0.9; builtIn.seatHip = 0.44; builtIn.seatKnee = 1.45;
+
+// A custom character (a standing .glb) takes the listener's place. It is
+// scaled to a person's height and bent per vertex at the hips, knees,
+// shoulders and waist. The arm weights follow the line from the shoulder to
+// the hand of a model in an A or T pose.
+let customAvatar = null, avatarUrl = '';
+const sm = (a, b, v) => { const t = clamp((v - a) / (b - a), 0, 1); return t * t * (3 - 2 * t); };
+function rigModel(root) {
+  root.updateMatrixWorld(true);
+  const bbox = new T.Box3().setFromObject(root);
+  const size = bbox.getSize(new T.Vector3());
+  const H = size.y, y0 = bbox.min.y, hipY = y0 + H * 0.5, kneeY = y0 + H * 0.28;
+  const zc = (bbox.min.z + bbox.max.z) / 2, xc = (bbox.min.x + bbox.max.x) / 2;
+  const S = { x: H * 0.09, y: y0 + H * 0.8, z: zc - H * 0.014 };
+  const armDir = new T.Vector2(0.27, -0.26).normalize();
+  const scale = 1.78 / H;
+  const rig = { H, xc, zc, hipY, kneeY, S, parts: [], standHip: 0.5 * 1.78, seatHip: 0.4, seatKnee: PI * 0.32 };
+  const v = new T.Vector3();
+  root.traverse((o) => {
+    if (!o.isMesh) return;
+    const g = o.geometry = o.geometry.clone();
+    g.computeVertexNormals();
+    const pos = g.attributes.position, nrm = g.attributes.normal, n = pos.count;
+    const base = new Float32Array(n * 3), nBase = new Float32Array(n * 3);
+    const wArm = new Float32Array(n), wUp = new Float32Array(n), wChest = new Float32Array(n);
+    const wThigh = new Float32Array(n), wKnee = new Float32Array(n), side = new Int8Array(n), shirt = new Float32Array(n);
+    let anyShirt = false;
+    const nm = new T.Matrix3().getNormalMatrix(o.matrixWorld);
+    for (let i = 0; i < n; i++) {
+      v.fromBufferAttribute(pos, i).applyMatrix4(o.matrixWorld);
+      base[i * 3] = v.x; base[i * 3 + 1] = v.y; base[i * 3 + 2] = v.z;
+      const y = v.y, fx = (v.x - xc) / H, fy = (y - y0) / H;
+      side[i] = fx < 0 ? -1 : 1;
+      const ax = Math.abs(fx) - S.x / H, ay = fy - (S.y - y0) / H;
+      const along = ax * armDir.x + ay * armDir.y;
+      const off = Math.hypot(ax - along * armDir.x, ay - along * armDir.y);
+      wArm[i] = sm(-0.005, 0.04, along) * (1 - sm(0.07, 0.1, off));
+      wUp[i] = sm(hipY + H * 0.01, hipY + H * 0.12, y);
+      wChest[i] = sm(0.58, 0.68, fy) * (1 - sm(0.74, 0.8, fy)) * (1 - sm(0.07, 0.1, Math.abs(fx))) * (v.z > S.z ? 1 : 0.3);
+      wThigh[i] = wArm[i] > 0.5 ? 0 : sm(hipY + H * 0.02, hipY - H * 0.05, y);
+      wKnee[i] = wArm[i] > 0.5 ? 0 : sm(kneeY + H * 0.03, kneeY - H * 0.03, y);
+      // A white tank top: from the waistband up, scooped at the neck, thin
+      // straps over the shoulders, open armholes so the arms stay bare.
+      if (settings.tank) {
+        const ax2 = Math.abs(fx), front = v.z > S.z;
+        const top = ax2 < 0.045 ? (front ? 0.735 : 0.775) : ax2 < 0.078 ? 0.835 : 0.765;
+        const m = sm(0.565, 0.575, fy) * (1 - sm(top - 0.006, top + 0.006, fy)) * (1 - sm(0.06, 0.16, wArm[i])) * (1 - sm(0.105, 0.12, ax2));
+        shirt[i] = m; if (m > 0) anyShirt = true;
+      }
+      v.fromBufferAttribute(nrm, i).applyMatrix3(nm).normalize();
+      nBase[i * 3] = v.x; nBase[i * 3 + 1] = v.y; nBase[i * 3 + 2] = v.z;
+    }
+    if (anyShirt) {
+      g.setAttribute('shirt', new T.BufferAttribute(shirt, 1));
+      const mat = o.material = o.material.clone();
+      mat.onBeforeCompile = (sh) => {
+        sh.vertexShader = 'attribute float shirt;\nvarying float vShirt;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvShirt = shirt;');
+        sh.fragmentShader = 'varying float vShirt;\n' + sh.fragmentShader
+          .replace('#include <map_fragment>', '#include <map_fragment>\nfloat lum = dot(diffuseColor.rgb, vec3(0.3, 0.59, 0.11));\ndiffuseColor.rgb = mix(diffuseColor.rgb, vec3(0.9, 0.89, 0.86) * (0.82 + 0.5 * lum), vShirt);')
+          .replace('#include <roughnessmap_fragment>', '#include <roughnessmap_fragment>\nroughnessFactor = mix(roughnessFactor, 0.92, vShirt);');
+      };
+    }
+    const inv = new T.Matrix4().copy(o.matrixWorld).invert();
+    const nInv = new T.Matrix3().getNormalMatrix(o.matrixWorld).invert();
+    let minY = Infinity; for (let i = 1; i < n * 3; i += 3) minY = Math.min(minY, base[i]);
+    rig.parts.push({ pos, nrm, base, nBase, wArm, wUp, wChest, wThigh, wKnee, side, inv, nInv, mesh: o, head: minY > y0 + H * 0.76 });
+    o.castShadow = true; o.receiveShadow = true;
+    o.frustumCulled = false;
+  });
+  // The holder's origin is the hips; the model faces +z, so turn it to face -z like the room's listener.
+  const holder = new T.Group();
+  root.position.set(-xc, -hipY, -zc);
+  const inner = new T.Group();
+  inner.scale.setScalar(scale);
+  inner.add(root);
+  inner.rotation.y = PI;
+  holder.add(inner);
+  holder.userData.rig = rig;
+  return holder;
+}
+function loadAvatar(url) {
+  if (url === avatarUrl) return;
+  avatarUrl = url;
+  if (customAvatar) { room.remove(customAvatar); customAvatar = null; }
+  if (!url) { builtInAvatar.visible = true; return; }
+  new T.GLTFLoader().load(url, (gltf) => {
+    if (avatarUrl !== url) return;
+    customAvatar = rigModel(gltf.scene);
+    room.add(customAvatar);
+    builtInAvatar.visible = false;
+  }, undefined, () => { showError('That character model couldn’t be loaded.'); });
+}
+
+// A furniture model (couch, coffee table, rug, already placed in room
+// coordinates, with its layout in the scene's extras) replaces the stock ones.
+let furniture = null, furnitureUrl = '';
+function loadFurniture(url) {
+  if (url === furnitureUrl) return;
+  furnitureUrl = url;
+  if (furniture) { room.remove(furniture); furniture = null; }
+  const stockOn = (on) => { for (const k of ['sofa', 'table', 'rug', 'beanbag']) stock[k].visible = on; };
+  if (!url) { stockOn(true); return; }
+  new T.GLTFLoader().load(url, (gltf) => {
+    if (furnitureUrl !== url) return;
+    const L = gltf.scene.userData.layout || gltf.scene.children[0]?.userData.layout;
+    if (!L) { showError('That furniture model has no room layout in it.'); return; }
+    furniture = gltf.scene;
+    furniture.traverse((o) => { if (o.isMesh) { o.castShadow = o.name !== 'rug'; o.receiveShadow = true; if (o.name === 'rug') o.position.y -= L.rug.y - 0.012; } });
+    room.add(furniture);
+    stockOn(false);
+    const { sofa: S, table: Tb } = L;
+    // An L couch: the long side along the front wall, the short side along the left one.
+    LAYOUT.sofa = [[S.minX, S.maxX, S.maxZ - S.depth, Z1], [X0, S.minX + S.depth, S.minZ, Z1]];
+    LAYOUT.table = { rect: [Tb.x - Tb.w / 2, Tb.x + Tb.w / 2, Tb.z - Tb.d / 2, Tb.z + Tb.d / 2] };
+    LAYOUT.beanbag = false;
+    Object.assign(TABLE, { x: Tb.x, z: Tb.z, y: Tb.y, w: Tb.w, d: Tb.d });
+    // He sits on the short arm facing into the room, so the corner camera sees him.
+    const armZ = (S.minZ + S.maxZ - S.depth) / 2, armX = S.minX + S.depth / 2;
+    Object.assign(SEAT, { x: armX + 0.04, z: armZ + 0.1, h: -PI / 2 });
+    Object.assign(FRONT, { x: S.minX + S.depth + 0.32, z: armZ + 0.1 });
+    Object.assign(LIE, { x: armX, z: armZ + 0.05, psi: PI, at: { x: armX + 1.6, y: 1.35, z: armZ + 0.9 } });
+    setLie();
+    LAYOUT.cam = { pos: new T.Vector3(X1 - 0.25, 2.45, Z1 - 0.15), at: new T.Vector3(-0.6, 0.1, -0.9) };
+    buildNav();
+    if (body.state === 'seated') { body.x = SEAT.x; body.z = SEAT.z; body.h = SEAT.h; }
+    for (const r of recs) if (r.state === 'table') { r.tablePose = tableSlot(); }
+  }, undefined, () => { showError('The furniture model couldn’t be loaded.'); });
+}
+
+// Bend the custom mesh into pose P. Model +x is the character's left.
+function poseCustom(rig) {
+  const { H, xc, zc, hipY, kneeY, S } = rig;
+  const rise = P.breath * 0.006 * H, swell = P.breath * 0.01 * H;
+  const sideK = { 1: 'L', [-1]: 'R' };
+  const trig = {};
+  for (const s of [1, -1]) {
+    const k = sideK[s];
+    const th = -P.thigh[k];
+    // Where the knee sits once the thigh has turned.
+    const ky = hipY + (kneeY - hipY) * Math.cos(th), kz = zc + (kneeY - hipY) * Math.sin(th);
+    trig[s] = { th, ky, kz, kn: P.knee[k], a: P.armD[k], b: -P.armF[k] };
+  }
+  const tw = P.twist, ln = P.lean;
+  for (const p of rig.parts) {
+    const { base, nBase, wArm, wUp, wChest, wThigh, wKnee, side: sd } = p;
+    const pa = p.pos.array, na = p.nrm.array, e = p.inv.elements, ne = p.nInv.elements;
+    const n = wArm.length;
+    for (let i = 0; i < n; i++) {
+      let x = base[i * 3], y = base[i * 3 + 1], z = base[i * 3 + 2];
+      let nx = nBase[i * 3], ny = nBase[i * 3 + 1], nz = nBase[i * 3 + 2];
+      const s = sd[i], g = trig[s];
+      const wt = wThigh[i];
+      if (wt > 0) {
+        const a = g.th * wt, ca = Math.cos(a), sa = Math.sin(a);
+        const yy = y - hipY, zz = z - zc;
+        y = hipY + yy * ca - zz * sa; z = zc + yy * sa + zz * ca;
+        const ny2 = ny * ca - nz * sa; nz = ny * sa + nz * ca; ny = ny2;
+        const wk = wKnee[i];
+        if (wk > 0) {
+          const b = g.kn * wk, cb = Math.cos(b), sb = Math.sin(b);
+          const y2 = y - g.ky, z2 = z - g.kz;
+          y = g.ky + y2 * cb - z2 * sb; z = g.kz + y2 * sb + z2 * cb;
+          const ny3 = ny * cb - nz * sb; nz = ny * sb + nz * cb; ny = ny3;
+        }
+      }
+      const wa = wArm[i];
+      if (wa > 0) {
+        // Lower the arm from the shoulder (in its own mirrored frame), then swing it.
+        const a = g.a * wa, ca = Math.cos(a), sa = Math.sin(a);
+        const u = s * (x - xc) - S.x, w = y - S.y;
+        x = xc + s * (S.x + u * ca - w * sa); y = S.y + u * sa + w * ca;
+        const nu = s * nx; nx = s * (nu * ca - ny * sa); ny = nu * sa + ny * ca;
+        const b = g.b * wa, cb = Math.cos(b), sb = Math.sin(b);
+        const yy = y - S.y, zz = z - S.z;
+        y = S.y + yy * cb - zz * sb; z = S.z + yy * sb + zz * cb;
+        const ny2 = ny * cb - nz * sb; nz = ny * sb + nz * cb; ny = ny2;
+      }
+      const wu = wUp[i];
+      if (wu > 0) {
+        y += rise * wu;
+        z += swell * wChest[i];
+        const t = tw * wu, ct = Math.cos(t), st = Math.sin(t);
+        const dx = x - xc, dz = z - zc;
+        x = xc + dx * ct + dz * st; z = zc - dx * st + dz * ct;
+        const nx2 = nx * ct + nz * st; nz = -nx * st + nz * ct; nx = nx2;
+        const l = ln * wu, cl = Math.cos(l), sl = Math.sin(l);
+        const yy = y - hipY, zz = z - zc;
+        y = hipY + yy * cl - zz * sl; z = zc + yy * sl + zz * cl;
+        const ny3 = ny * cl - nz * sl; nz = ny * sl + nz * cl; ny = ny3;
+      }
+      // First person at the shelf: only his arms and hands, the camera sits where his chest would be.
+      if (P.armsOnly && wa < 0.35) { x = xc; y = S.y; z = S.z; }
+      pa[i * 3] = e[0] * x + e[4] * y + e[8] * z + e[12];
+      pa[i * 3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
+      pa[i * 3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
+      na[i * 3] = ne[0] * nx + ne[3] * ny + ne[6] * nz;
+      na[i * 3 + 1] = ne[1] * nx + ne[4] * ny + ne[7] * nz;
+      na[i * 3 + 2] = ne[2] * nx + ne[5] * ny + ne[8] * nz;
+    }
+    p.pos.needsUpdate = true; p.nrm.needsUpdate = true;
+  }
+}
+function poseBuiltIn() {
+  const b = P.breath;
+  builtIn.torso.scale.set(1 + b * 0.015, 1 + b * 0.02, 1 + b * 0.035);
+  builtIn.chest.position.y = 0.44 + b * 0.008;
+  builtIn.upper.rotation.set(-P.lean, P.twist, 0, 'YXZ');
+  for (const k of ['L', 'R']) {
+    builtIn.hips[k].rotation.x = P.thigh[k];
+    builtIn.knees[k].rotation.x = -P.knee[k];
+    builtIn.arms[k].rotation.x = P.armF[k];
+  }
+}
+
+// ---------------------------------------------------------------- moving around
+// Walkable floor as a grid; furniture blocks cells (grown by the body's radius).
+const NAV = { cell: 0.08, x0: X0, z0: Z0, r: 0.2 };
+NAV.nx = Math.ceil((X1 + 0.6 - X0) / NAV.cell); NAV.nz = Math.ceil((Z1 - Z0) / NAV.cell);
+NAV.free = new Uint8Array(NAV.nx * NAV.nz);
+// What blocks the floor: the sofa (rects, also where a click means "the sofa"),
+// the coffee table, and the rest. A furniture model swaps the first two.
+const LAYOUT = {
+  sofa: [[-1.17, 1.17, SOFA_Z - 0.46, Z1], [-1.17, -0.39, SOFA_Z - 1.24, SOFA_Z]],
+  table: { circle: [TABLE.x, TABLE.z, 0.36] },
+  beanbag: true,
+  cam: null,
+};
+function buildNav() {
+  const rects = [...LAYOUT.sofa, [-1.2, 1.2, Z0, CRED.z + 0.24]];
+  if (LAYOUT.table.rect) rects.push(LAYOUT.table.rect);
+  const circles = [
+    [X0 + 0.42, Z0 + 0.45, 0.22], [-1.6, CRED.z + 0.05, 0.16], [1.6, CRED.z + 0.05, 0.16],
+    [1.45, SOFA_Z - 0.1, 0.16], [X1 - 0.4, 1.25, 0.28],
+  ];
+  if (LAYOUT.table.circle) circles.push(LAYOUT.table.circle);
+  if (LAYOUT.beanbag) circles.push([-1.75, -0.55, 0.5]);
+  const r = NAV.r;
+  for (let j = 0; j < NAV.nz; j++) for (let i = 0; i < NAV.nx; i++) {
+    const x = NAV.x0 + (i + 0.5) * NAV.cell, z = NAV.z0 + (j + 0.5) * NAV.cell;
+    const inRoom = x > X0 + r && x < X1 - r && z > Z0 + r && z < Z1 - r;
+    const inDoor = x >= X1 - r && x < X1 + 0.45 && z > DOOR.z0 + r && z < DOOR.z1 - r;
+    let ok = inRoom || inDoor;
+    if (ok) for (const [a, b, c, d] of rects) if (x > a - r && x < b + r && z > c - r && z < d + r) { ok = false; break; }
+    if (ok) for (const [cx, cz, cr] of circles) if (Math.hypot(x - cx, z - cz) < cr + r) { ok = false; break; }
+    NAV.free[j * NAV.nx + i] = ok ? 1 : 0;
+  }
+}
+buildNav();
+const isSofa = (p) => LAYOUT.sofa.some(([a, b, c, d]) => p.x > a - 0.05 && p.x < b + 0.05 && p.z > c - 0.05 && p.z < d + 0.05);
+const navCell = (x, z) => [clamp(Math.floor((x - NAV.x0) / NAV.cell), 0, NAV.nx - 1), clamp(Math.floor((z - NAV.z0) / NAV.cell), 0, NAV.nz - 1)];
+const navFree = (i, j) => i >= 0 && j >= 0 && i < NAV.nx && j < NAV.nz && NAV.free[j * NAV.nx + i] === 1;
+const navPoint = (i, j) => ({ x: NAV.x0 + (i + 0.5) * NAV.cell, z: NAV.z0 + (j + 0.5) * NAV.cell });
+function nearestFree(x, z) {
+  const [ci, cj] = navCell(x, z);
+  if (navFree(ci, cj)) return [ci, cj];
+  for (let r = 1; r < 40; r++) {
+    let best = null, bd = 1e9;
+    for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
+      if (Math.max(Math.abs(di), Math.abs(dj)) !== r || !navFree(ci + di, cj + dj)) continue;
+      const p = navPoint(ci + di, cj + dj), d = Math.hypot(p.x - x, p.z - z);
+      if (d < bd) { bd = d; best = [ci + di, cj + dj]; }
+    }
+    if (best) return best;
+  }
+  return [ci, cj];
+}
+function lineFree(a, b) {
+  const n = Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / (NAV.cell * 0.5));
+  for (let k = 0; k <= n; k++) { const [i, j] = navCell(lerp(a.x, b.x, k / n), lerp(a.z, b.z, k / n)); if (!navFree(i, j)) return false; }
+  return true;
+}
+// A* over the grid, then pull the path tight so he walks in straight lines.
+function findPath(from, to) {
+  const [si, sj] = nearestFree(from.x, from.z), [ti, tj] = nearestFree(to.x, to.z);
+  const N = NAV.nx * NAV.nz, start = sj * NAV.nx + si, goal = tj * NAV.nx + ti;
+  const g = new Float32Array(N).fill(Infinity), came = new Int32Array(N).fill(-1), closed = new Uint8Array(N);
+  const open = [start]; g[start] = 0;
+  const h = (k) => Math.hypot((k % NAV.nx) - ti, Math.floor(k / NAV.nx) - tj);
+  while (open.length) {
+    let bi = 0;
+    for (let k = 1; k < open.length; k++) if (g[open[k]] + h(open[k]) < g[open[bi]] + h(open[bi])) bi = k;
+    const cur = open.splice(bi, 1)[0];
+    if (cur === goal) break;
+    closed[cur] = 1;
+    const ci = cur % NAV.nx, cj = Math.floor(cur / NAV.nx);
+    for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) {
+      if (!di && !dj) continue;
+      const ni = ci + di, nj = cj + dj;
+      if (!navFree(ni, nj) || (di && dj && (!navFree(ci + di, cj) || !navFree(ci, cj + dj)))) continue;
+      const k = nj * NAV.nx + ni;
+      if (closed[k]) continue;
+      const ng = g[cur] + (di && dj ? 1.414 : 1);
+      if (ng < g[k]) { g[k] = ng; came[k] = cur; if (!open.includes(k)) open.push(k); }
+    }
+  }
+  if (came[goal] < 0 && goal !== start) return null;
+  const cells = [];
+  for (let k = goal; k >= 0; k = k === start ? -1 : came[k]) cells.unshift(navPoint(k % NAV.nx, Math.floor(k / NAV.nx)));
+  const pts = [{ x: from.x, z: from.z }];
+  for (const c of cells.slice(1)) pts.push(c);
+  if (navFree(ti, tj) && lineFree(cells[cells.length - 1], to)) pts.push({ x: to.x, z: to.z });
+  const out = [pts[0]];
+  let k = 0;
+  while (k < pts.length - 1) {
+    let j = pts.length - 1;
+    while (j > k + 1 && !lineFree(pts[k], pts[j])) j--;
+    out.push(pts[j]); k = j;
+  }
+  return out;
+}
+
+// Where he is and what he's doing. sit: 1 on the sofa, 0 standing. lie: 1 lying
+// along the sofa. crouch: 1 squatting at the record shelf.
+const body = {
+  x: SEAT.x, z: SEAT.z, h: 0, sit: 1, lie: 0, crouch: 0, crouchTo: 0, state: 'seated', path: [], speed: 0, phase: 0, stride: 0,
+  reach: 0, reachTo: 0, hold: 0, look: null, then: null, t: 0, from: null, to: null, faceTo: null, after: null, idle: 0, exiting: false,
+};
+const LIE = { x: 0.12, z: SOFA_Z - 0.02, psi: -PI / 2, at: { x: 0.6, y: 1.5, z: -1.6 } };
+const qTmp = new T.Quaternion(), qLie = new T.Quaternion(), qUp = new T.Quaternion(), eUp = new T.Euler();
+// Lying: tip the body onto its back (Rx), then point the head along LIE.psi.
+function setLie() { qLie.setFromEuler(new T.Euler(PI / 2, LIE.psi, 0, 'YXZ')); }
+setLie();
+const marker = add(room, new T.RingGeometry(0.11, 0.14, 40), new T.MeshBasicMaterial({ color: '#ffd9a8', transparent: true, opacity: 0, depthWrite: false }), 0, 0.006, 0, -PI / 2);
+noShadow.add(marker);
+const angleTo = (a, b) => { let d = (b - a) % (PI * 2); if (d > PI) d -= PI * 2; if (d < -PI) d += PI * 2; return d; };
+const headingFor = (dx, dz) => Math.atan2(-dx, -dz);
+const onSofa = () => ['seated', 'sitting', 'rising', 'lying', 'lyingDown', 'gettingUp'].includes(body.state);
+
+// Get him on his feet, whatever he's doing, then carry on.
+function getUp(then) {
+  if (body.state === 'lying' || body.state === 'lyingDown') { body.state = 'gettingUp'; body.t = 1 - body.lie; body.after = () => standUp(then); return; }
+  if (body.state === 'gettingUp') { body.after = () => standUp(then); return; }
+  if (body.state === 'seated' || body.state === 'sitting') { standUp(then); return; }
+  if (body.state === 'rising') { body.after = then; return; }
+  then();
+}
+function walkTo(target, then, faceTo) {
+  body.then = then || null;
+  body.faceTo = faceTo ?? null;
+  body.reachTo = 0; body.crouchTo = 0;
+  getUp(() => {
+    const path = findPath(body, target);
+    if (!path || path.length < 2) { arrive(); return; }
+    body.path = path.slice(1);
+    body.state = 'walking';
+    const end = path[path.length - 1];
+    marker.position.set(end.x, 0.006, end.z); marker.material.opacity = 0.9;
+  });
+}
+function arrive() {
+  body.state = 'standing'; body.path = [];
+  const done = body.then; body.then = null;
+  if (body.faceTo != null) { body.state = 'turning'; body.turnThen = done; return; }
+  done?.();
+}
+function standUp(then) {
+  body.state = 'rising'; body.t = 0; body.from = { x: body.x, z: body.z }; body.to = { ...FRONT }; body.after = then;
+}
+function sitOnSofa(then) {
+  if (body.state === 'seated') { then?.(); return; }
+  if (onSofa()) return;
+  walkTo(FRONT, () => { body.state = 'sitting'; body.t = 0; body.from = { x: body.x, z: body.z }; body.to = { x: SEAT.x, z: SEAT.z }; body.after = then || null; }, SEAT.h);
+}
+function lieDown() {
+  sitOnSofa(() => { body.state = 'lyingDown'; body.t = 0; });
+}
+
+// Keys held down for walking: WASD or the arrow keys.
+const held = new Set();
+const MOVE_KEYS = { w: 'f', arrowup: 'f', s: 'b', arrowdown: 'b', a: 'l', arrowleft: 'l', d: 'r', arrowright: 'r' };
+function moveInput() {
+  let f = 0, r = 0;
+  for (const k of held) { const m = MOVE_KEYS[k]; if (m === 'f') f += 1; if (m === 'b') f -= 1; if (m === 'l') r -= 1; if (m === 'r') r += 1; }
+  return { f: clamp(f, -1, 1), r: clamp(r, -1, 1) };
+}
+function tryMove(dx, dz) {
+  const ok = (x, z) => { const [i, j] = navCell(x, z); return navFree(i, j); };
+  if (ok(body.x + dx, body.z + dz)) { body.x += dx; body.z += dz; return Math.hypot(dx, dz); }
+  if (ok(body.x + dx, body.z)) { body.x += dx; return Math.abs(dx); }
+  if (ok(body.x, body.z + dz)) { body.z += dz; return Math.abs(dz); }
+  return 0;
+}
+
+function stepBody(dt, t) {
+  const WALK = 1.05, RUN = 1.3, TURN = 5.5;
+  body.idle += dt;
+  // Keyboard walking (only out in the room, not while browsing).
+  const inp = mode === 'room' && !body.exiting ? moveInput() : { f: 0, r: 0 };
+  if (inp.f || inp.r) {
+    body.idle = 0;
+    if (onSofa()) { if (body.state !== 'rising' && body.state !== 'gettingUp') getUp(() => { body.state = 'standing'; }); }
+    else if (['standing', 'walking', 'turning', 'manual'].includes(body.state)) {
+      body.state = 'manual'; body.path = []; body.then = null; body.faceTo = null; body.reachTo = 0; body.crouchTo = 0;
+    }
+  } else if (body.state === 'manual') body.state = 'standing';
+
+  const st = body.state;
+  if (st === 'rising' || st === 'sitting') {
+    body.t = Math.min(1, body.t + dt / 1.1);
+    const e = ease(body.t);
+    body.sit = st === 'rising' ? 1 - e : e;
+    body.x = lerp(body.from.x, body.to.x, e); body.z = lerp(body.from.z, body.to.z, e);
+    body.h += angleTo(body.h, SEAT.h) * (1 - Math.exp(-dt * 6));
+    if (body.t >= 1) {
+      body.state = st === 'rising' ? 'standing' : 'seated';
+      if (st === 'sitting') body.h = SEAT.h;
+      const a = body.after; body.after = null; a?.();
+    }
+  } else if (st === 'lyingDown' || st === 'gettingUp') {
+    body.t = Math.min(1, body.t + dt / 1.6);
+    body.lie = st === 'lyingDown' ? body.t : 1 - body.t;
+    if (body.t >= 1) {
+      body.state = st === 'lyingDown' ? 'lying' : 'seated';
+      const a = body.after; body.after = null; a?.();
+    }
+  } else if (st === 'walking') {
+    const tgt = body.path[0];
+    const dx = tgt.x - body.x, dz = tgt.z - body.z, d = Math.hypot(dx, dz);
+    const want = headingFor(dx, dz), turn = angleTo(body.h, want);
+    body.h += clamp(turn, -TURN * dt, TURN * dt);
+    const left = body.path.reduce((s, p, k) => s + (k ? Math.hypot(p.x - body.path[k - 1].x, p.z - body.path[k - 1].z) : d), 0);
+    // Slow down to turn sharply and to stop; speed up gently.
+    const vMax = WALK * clamp(1.2 - Math.abs(turn) * 0.8, 0.15, 1) * clamp(left / 0.45, 0.25, 1);
+    body.speed += (vMax - body.speed) * (1 - Math.exp(-dt * 5));
+    const step = Math.min(d, body.speed * dt);
+    if (d > 1e-4) { body.x += dx / d * step; body.z += dz / d * step; }
+    body.phase += step / 0.62 * PI;
+    if (d < 0.03) { body.path.shift(); if (!body.path.length) arrive(); }
+  } else if (st === 'turning') {
+    const turn = angleTo(body.h, body.faceTo);
+    body.h += clamp(turn, -3.5 * dt, 3.5 * dt);
+    body.phase += Math.abs(clamp(turn, -3.5 * dt, 3.5 * dt)) * 0.9;
+    if (Math.abs(turn) < 0.02) { body.state = 'standing'; body.faceTo = null; const a = body.turnThen; body.turnThen = null; a?.(); }
+  } else if (st === 'manual') {
+    let mx, mz;
+    if (settings.view === 'first') {
+      body.h -= inp.r * 2.4 * dt;
+      mx = -Math.sin(body.h) * inp.f; mz = -Math.cos(body.h) * inp.f;
+    } else {
+      // Relative to the camera: W is away from it, A and D to its left and right.
+      const cf = new T.Vector3(); camera.getWorldDirection(cf); cf.y = 0; cf.normalize();
+      mx = cf.x * inp.f - cf.z * inp.r; mz = cf.z * inp.f + cf.x * inp.r;
+    }
+    const m = Math.hypot(mx, mz);
+    if (m > 0.01) {
+      mx /= m; mz /= m;
+      const back = settings.view === 'first' && inp.f < 0;
+      if (!back) { const turn = angleTo(body.h, headingFor(mx, mz)); body.h += clamp(turn, -TURN * dt, TURN * dt); }
+      const vMax = (back ? 0.55 : RUN) * clamp(1.2 - Math.abs(angleTo(body.h, headingFor(mx, mz))) * (back ? 0 : 0.6), 0.2, 1);
+      body.speed += (vMax - body.speed) * (1 - Math.exp(-dt * 6));
+      const moved = tryMove(mx * body.speed * dt, mz * body.speed * dt);
+      body.phase += moved / 0.62 * PI * (back ? -1 : 1);
+      if (moved < body.speed * dt * 0.3) body.speed *= Math.exp(-dt * 10);
+    }
+  }
+  if (!['walking', 'manual'].includes(st)) body.speed *= Math.exp(-dt * 8);
+  const moving = st === 'walking' || st === 'manual' || st === 'turning';
+  body.stride += ((moving ? Math.max(clamp(body.speed / WALK, 0, 1.15), st === 'turning' ? 0.35 : 0) : 0) - body.stride) * (1 - Math.exp(-dt * 8));
+  body.reach += (body.reachTo - body.reach) * (1 - Math.exp(-dt * (body.reachTo > body.reach ? 5 : 3)));
+  body.crouch += (body.crouchTo - body.crouch) * (1 - Math.exp(-dt * 4));
+  body.hold += ((mode === 'inspect' ? 1 : 0) - body.hold) * (1 - Math.exp(-dt * 5));
+  marker.material.opacity *= Math.exp(-dt * (st === 'walking' ? 0.6 : 3));
+
+  // Out through the door on the right: leave the room for the Feng Shui layout.
+  if (body.x > X1 + 0.12 && !body.exiting) {
+    body.exiting = true;
+    $('#veil').textContent = 'Heading out…';
+    $('#veil').classList.remove('gone');
+    setTimeout(() => send({ type: 'exit' }), 700);
+    setTimeout(() => {
+      Object.assign(body, { x: SEAT.x, z: SEAT.z, h: SEAT.h, sit: 1, lie: 0, state: 'seated', path: [], speed: 0, exiting: false });
+      held.clear();
+      $('#veil').classList.add('gone');
+    }, 1800);
+  }
+
+  // Dozing off: left alone for a while, he goes and lies down on the sofa.
+  if (body.idle > 45 && mode === 'room' && (st === 'standing' || st === 'seated')) { body.idle = 0; lieDown(); }
+
+  // Pose numbers from the state.
+  const rig = customAvatar?.userData.rig || builtIn;
+  const s = ease(clamp(body.sit, 0, 1)), lie = ease(clamp(body.lie, 0, 1)), c = ease(clamp(body.crouch, 0, 1));
+  const a = 0.42 * Math.min(1, body.stride), ph = body.phase;
+  const swingL = a * Math.sin(ph), swingR = -swingL;
+  const legs = (swing, bend) => [lerp(lerp(lerp(swing, 1.3, c), PI / 2, s), 0.1, lie), lerp(lerp(lerp(bend, 2.2, c), rig.seatKnee, s), 0.22, lie)];
+  [P.thigh.L, P.knee.L] = legs(swingL, 1.15 * a * Math.max(0, Math.cos(ph)) + 0.04);
+  [P.thigh.R, P.knee.R] = legs(swingR, 1.15 * a * Math.max(0, -Math.cos(ph)) + 0.04);
+  P.breath = 0.5 - 0.5 * Math.cos(t * PI * 2 / (lie > 0.5 ? 6 : 4.6));
+  let reachSide = null, twist = 0;
+  if (body.reach > 0.001 && body.look) {
+    const want = headingFor(body.look.x - body.x, body.look.z - body.z);
+    twist = clamp(angleTo(body.h, want), -0.9, 0.9) * 0.6 * body.reach;
+    reachSide = angleTo(body.h, want) > 0.05 ? 'L' : 'R';
+  }
+  P.twist = twist;
+  P.lean = lerp(lerp(lerp(0.05 * body.stride, 0.42, c), -0.13, s), 0, lie) + body.reach * 0.55 * (1 - c) * (1 - lie) + P.breath * 0.012;
+  for (const k of ['L', 'R']) {
+    const walkArm = -0.55 * (k === 'L' ? swingL : swingR);
+    let f = lerp(lerp(lerp(walkArm, 0.5, c), 0.55, s), 0.3, lie), d = lerp(lerp(-0.8, -0.66, s), -0.86, lie);
+    if (k === reachSide) { f = lerp(f, lerp(lerp(1.25, 1.15, s), 0.75, c), body.reach); d = lerp(d, -0.45, body.reach); }
+    else f = lerp(f, f * 0.7, body.reach);
+    // Holding a record up to look at it: both hands out in front.
+    f = lerp(f, 1.2, body.hold); d = lerp(d, -0.5, body.hold);
+    P.armF[k] = f; P.armD[k] = d;
+  }
+  const standY = rig.standHip * Math.cos(a * Math.sin(ph)) - 0.012 * body.stride;
+  const hip = lerp(lerp(lerp(standY, 0.46, c), rig.seatHip, s), 0.45, lie);
+  const px = lerp(body.x, LIE.x, lie), pz = lerp(body.z, LIE.z, lie);
+  qUp.setFromEuler(eUp.set(0, body.h, 0));
+  qTmp.slerpQuaternions(qUp, qLie, lie);
+  for (const o of [customAvatar, builtInAvatar]) if (o) { o.position.set(px, hip, pz); o.quaternion.copy(qTmp); }
+  if (customAvatar?.visible) poseCustom(customAvatar.userData.rig);
+  else if (builtInAvatar.visible) poseBuiltIn();
+}
+// Where his eyes are, for the first-person view.
+function eyePose(out) {
+  const rig = customAvatar?.userData.rig || builtIn;
+  const s = ease(clamp(body.sit, 0, 1)), lie = ease(clamp(body.lie, 0, 1));
+  const y = lerp(rig.standHip + 0.76 + 0.015 * Math.sin(body.phase * 2) * Math.min(1, body.stride), rig.seatHip + 0.62, s);
+  const fx = -Math.sin(body.h), fz = -Math.cos(body.h);
+  out.pos.set(body.x + fx * 0.1, y, body.z + fz * 0.1);
+  out.at.set(body.x + fx * 2, y - lerp(0.35, 0.55, s), body.z + fz * 2);
+  if (lie > 0) {
+    out.pos.lerp(tmpV.set(LIE.x + Math.sin(LIE.psi) * 0.72, 0.62, LIE.z + Math.cos(LIE.psi) * 0.72), lie);
+    out.at.lerp(tmpV.set(LIE.at.x, LIE.at.y, LIE.at.z), lie);
+  }
+  return out;
+}
+
 let recs = [];
 let tableSeq = 0;
 const nowPlaying = { rec: null, playing: false, progress: 0, loading: false };
-const settings = { view: 'third', autoplay: true };
+const settings = { view: 'third', autoplay: true, tank: true };
 
 function setPlate(c) {
   const d = c.data;
@@ -1039,6 +1562,9 @@ function poseFor(r, out = { p: new T.Vector3(), q: new T.Quaternion() }) {
     out.p.copy(STAND); tmpE.set(-0.14, 0.18, 0); out.q.setFromEuler(tmpE);
   } else if (r.state === 'drag') {
     out.p.copy(drag.point); tmpE.set(-PI / 2 + 0.35, 0, drag.spin); out.q.setFromEuler(tmpE);
+  } else if (r.state === 'hand') {
+    out.p.set(body.x - Math.sin(body.h) * 0.4, 1.4, body.z - Math.cos(body.h) * 0.4);
+    out.q.setFromEuler(new T.Euler(-0.32, body.h, 0, 'YXZ'));
   }
   return out;
 }
@@ -1134,17 +1660,18 @@ function play(r) {
   disc.position.y = 0.12;
   scPlay(r.track.url);
   paintNow();
+  paintQueue();
 }
 function stopPlayback() {
   scPause();
   nowPlaying.rec = null; nowPlaying.playing = false; nowPlaying.progress = 0;
   disc.visible = false;
   paintNow();
+  paintQueue();
 }
 function playNext() {
   const cur = nowPlaying.rec;
-  const queued = recs.filter((r) => r.state === 'table').sort((a, b) => a.order - b.order);
-  let next = queued[0];
+  let next = queued()[0];
   if (!next && cur) {
     const list = crates[cur.ci].recs;
     for (let k = 1; k <= list.length; k++) { const c = list[(cur.i + k) % list.length]; if (c.state === 'crate' && c !== cur) { next = c; break; } }
@@ -1173,13 +1700,87 @@ function paintNow() {
 $('#pp').onclick = () => { if (nowPlaying.rec) scToggle(); };
 $('#nx').onclick = () => playNext();
 now.querySelector('.a').onclick = () => { const r = nowPlaying.rec; if (r) send({ type: 'open', url: r.track.url }); };
+
+// ---------------------------------------------------------------- queue
+// The queue is the records on the coffee table, in the order they'll play.
+// After it, autoplay carries on through the crate of the record that's playing.
+const queueBox = $('#queue'), queueList = queueBox.querySelector('ol');
+const queued = () => recs.filter((r) => r.state === 'table').sort((a, b) => a.order - b.order);
+function autoAfter(from, n) {
+  const out = [];
+  if (!from || !settings.autoplay) return out;
+  const list = crates[from.ci].recs;
+  for (let k = 1; k <= list.length && out.length < n; k++) { const c = list[(from.i + k) % list.length]; if (c.state === 'crate' && c !== nowPlaying.rec) out.push(c); }
+  return out;
+}
+function enqueue(r) {
+  if (r.state !== 'crate') return;
+  r.tablePose = tableSlot();
+  r.order = ++tableSeq;
+  moveTo(r, 'table', 1.15, 0.5);
+}
+function unqueue(r) { if (r.state === 'table') { r.order = 0; moveTo(r, 'crate', 0.9, 0.4); } }
+function reorder(r, to) {
+  const q = queued().filter((x) => x !== r);
+  q.splice(clamp(to, 0, q.length), 0, r);
+  q.forEach((x, i) => { x.order = i + 1; });
+  tableSeq = q.length;
+  paintQueue();
+}
+let dragItem = null;
+function paintQueue() {
+  const q = queued();
+  $('#qb b').textContent = q.length;
+  if (!document.body.classList.contains('q')) return;
+  queueList.textContent = '';
+  const item = (r, auto) => {
+    const li = document.createElement('li');
+    if (auto) li.className = 'auto';
+    li.innerHTML = `<img alt=""><div class="m"><div class="t"></div><div class="a"></div></div>`;
+    li.querySelector('img').src = r.track.art || '';
+    li.querySelector('.t').textContent = r.track.title;
+    li.querySelector('.a').textContent = crates[r.ci].data?.name || '';
+    const btn = (label, title, fn) => { const b = document.createElement('button'); b.textContent = label; b.title = title; b.onclick = (e) => { e.stopPropagation(); fn(); }; li.append(b); };
+    if (auto) {
+      btn('+', 'Add to the queue', () => { enqueue(r); roomHint(); });
+    } else {
+      btn('▶', 'Play now', () => play(r));
+      btn('✕', 'Put it back in its crate', () => { unqueue(r); roomHint(); });
+      li.draggable = true;
+      li.ondragstart = (e) => { dragItem = r; e.dataTransfer.effectAllowed = 'move'; };
+      li.ondragend = () => { dragItem = null; for (const x of queueList.children) x.classList.remove('drop'); };
+      li.ondragover = (e) => { if (!dragItem) return; e.preventDefault(); for (const x of queueList.children) x.classList.toggle('drop', x === li); };
+      li.ondrop = (e) => { e.preventDefault(); if (dragItem && dragItem !== r) reorder(dragItem, queued().filter((x) => x !== dragItem).indexOf(r)); };
+    }
+    li.ondblclick = () => play(r);
+    queueList.append(li);
+  };
+  if (!q.length) { const p = document.createElement('div'); p.className = 'empty'; p.textContent = 'Nothing queued. Pull records out of a crate to line them up.'; queueList.append(p); }
+  q.forEach((r) => item(r, false));
+  const last = q.length ? q[q.length - 1] : nowPlaying.rec;
+  const more = autoAfter(last, 4);
+  if (more.length) {
+    const sep = document.createElement('div'); sep.className = 'sep';
+    sep.textContent = `Then from ${crates[more[0].ci].data?.name || 'the crate'}`;
+    queueList.append(sep);
+    more.forEach((r) => item(r, true));
+  }
+}
+function toggleQueue(on) {
+  document.body.classList.toggle('q', on ?? !document.body.classList.contains('q'));
+  paintQueue();
+}
+$('#qb').onclick = () => toggleQueue();
+$('#qclear').onclick = () => { for (const r of queued()) unqueue(r); roomHint(); };
+
 function showError(t) { errBox.textContent = t; errBox.style.display = 'block'; clearTimeout(showError.t); showError.t = setTimeout(hideError, 7000); }
 function hideError() { errBox.style.display = 'none'; }
 function setHint(t) { hint.textContent = t; hint.style.opacity = t ? 1 : 0; }
 function roomHint() {
+  paintQueue();
   if (!recs.length) return setHint(crates.some((c) => c.data) ? 'Add SoundCloud links in settings to fill the crates' : 'Filling the crates…');
-  if (recs.some((r) => r.state === 'table')) return setHint('Drag a record onto the turntable');
-  if (!nowPlaying.rec) return setHint('Click a crate to flip through it');
+  if (!nowPlaying.rec && recs.some((r) => r.state === 'table')) return setHint('Drag a record onto the turntable');
+  if (!nowPlaying.rec) return setHint('Click the records under the turntable · walk with WASD or the arrow keys');
   setHint('');
 }
 function crateHint() {
@@ -1196,32 +1797,51 @@ let mode = 'room', activeCrate = -1;
 const look = { yaw: 0, pitch: 0 };
 const cam = { pos: new T.Vector3(), at: new T.Vector3(), tween: null };
 function viewPose() {
-  if (mode === 'crate') {
-    const g = crates[activeCrate].group;
-    const p = new T.Vector3(0, 0.68, 0.5).applyQuaternion(g.quaternion).add(g.position);
-    const at = new T.Vector3(0, 0.12, -0.04).applyQuaternion(g.quaternion).add(g.position);
-    return { pos: p, at };
+  if (mode === 'inspect') {
+    const fx = -Math.sin(body.h), fz = -Math.cos(body.h);
+    return { pos: new T.Vector3(body.x + fx * 0.04, 1.62, body.z + fz * 0.04), at: new T.Vector3(body.x + fx * 0.4, 1.36, body.z + fz * 0.4) };
   }
-  if (settings.view === 'first') return { pos: new T.Vector3(0, 1.03, SOFA_Z + 0.06), at: new T.Vector3(0, 0.7, -1.4) };
-  return { pos: new T.Vector3(0.5, 1.95, Z1 - 0.1), at: new T.Vector3(-0.1, 0.5, -1.6) };
+  if (mode === 'crate') {
+    const g = crates[activeCrate].group.position;
+    // 1st person: down over his hand at the records. 3rd: over his shoulder.
+    if (settings.view === 'first') return { pos: new T.Vector3(g.x + 0.06, 0.64, g.z + 0.46), at: new T.Vector3(g.x, 0.24, g.z + 0.04) };
+    const side = g.x > 0.1 ? -1 : 1;
+    return { pos: new T.Vector3(g.x + side * 1.05, 1.55, g.z + 1.95), at: new T.Vector3(g.x + side * 0.1, 0.4, g.z + 0.15) };
+  }
+  if (settings.view === 'first') return eyePose({ pos: new T.Vector3(), at: new T.Vector3() });
+  // Third person: high in the back corner, looking down over the room, and
+  // drifting after him when he's up and about.
+  if (LAYOUT.cam) {
+    const at = LAYOUT.cam.at.clone();
+    const up = 1 - clamp(body.sit, 0, 1);
+    at.x = lerp(at.x, lerp(at.x, body.x, 0.45), up); at.z = lerp(at.z, lerp(at.z, body.z - 0.4, 0.45), up);
+    return { pos: LAYOUT.cam.pos.clone(), at };
+  }
+  const at = new T.Vector3(-0.05, 0.05, -1.05);
+  const up = 1 - clamp(body.sit, 0, 1);
+  at.x = lerp(at.x, body.x * 0.55, up); at.z = lerp(at.z, lerp(-1.05, body.z - 0.6, 0.45), up);
+  return { pos: new T.Vector3(0.3, 2.42, Z1 - 0.06), at };
 }
-function goCamera(dur = 1.0) {
+function goCamera(dur = 1.0, delay = 0) {
   const to = viewPose();
-  cam.tween = { p0: cam.pos.clone(), a0: cam.at.clone(), p1: to.pos, a1: to.at, t: 0, dur };
+  cam.tween = { p0: cam.pos.clone(), a0: cam.at.clone(), p1: to.pos, a1: to.at, t: -delay / dur, dur };
 }
 function stepCamera(dt) {
   if (cam.tween) {
     const tw = cam.tween;
     tw.t += dt / tw.dur;
-    const e = ease(Math.min(1, tw.t));
+    const e = ease(clamp(tw.t, 0, 1));
     cam.pos.lerpVectors(tw.p0, tw.p1, e);
     cam.at.lerpVectors(tw.a0, tw.a1, e);
     if (tw.t >= 1) cam.tween = null;
   } else {
     const to = viewPose();
-    cam.pos.lerp(to.pos, 1 - Math.exp(-dt * 6));
-    cam.at.lerp(to.at, 1 - Math.exp(-dt * 6));
+    const k = mode === 'room' && settings.view === 'first' ? 14 : mode === 'room' ? 2.2 : 6;
+    cam.pos.lerp(to.pos, 1 - Math.exp(-dt * k));
+    cam.at.lerp(to.at, 1 - Math.exp(-dt * k));
   }
+  const boost = mode === 'room' && settings.view === 'third' ? 12 : 0;
+  if (Math.abs(fovBoost - boost) > 0.01) { fovBoost += (boost - fovBoost) * (1 - Math.exp(-dt * 3)); camera.fov = baseFov + fovBoost; camera.updateProjectionMatrix(); }
   camera.position.copy(cam.pos);
   const dir = tmpV.copy(cam.at).sub(cam.pos);
   const yaw = mode === 'room' ? look.yaw : 0, pitch = mode === 'room' ? look.pitch : 0;
@@ -1229,9 +1849,14 @@ function stepCamera(dt) {
   const right = new T.Vector3().crossVectors(dir, camera.up).normalize();
   dir.applyAxisAngle(right, pitch);
   camera.lookAt(cam.pos.clone().add(dir));
-  const showMe = settings.view !== 'first' || mode === 'crate';
+  const showMe = settings.view !== 'first' || mode === 'crate' || mode === 'inspect';
   builtInAvatar.visible = showMe && !customAvatar;
   if (customAvatar) customAvatar.visible = showMe;
+  // Up close in first person, only his body and hands show, not his head.
+  const noHead = (settings.view === 'first' && mode === 'crate') || (mode === 'inspect' && !cam.tween);
+  P.armsOnly = noHead;
+  for (const m of [...builtIn.head, builtIn.torso, builtIn.chest]) m.visible = !noHead;
+  if (customAvatar) for (const p of customAvatar.userData.rig.parts) if (p.head) p.mesh.visible = !noHead;
 }
 function setView(v, user) {
   if (v !== 'first' && v !== 'third') return;
@@ -1244,16 +1869,29 @@ function setView(v, user) {
 function enterCrate(ci) {
   const c = crates[ci];
   if (!c.data || c.data.error || !c.recs.length) { send({ type: 'settings' }); return; }
+  const fromRoom = mode === 'room';
   mode = 'crate'; activeCrate = ci;
   document.body.classList.add('crate');
   const first = c.recs.findIndex((r, i) => i >= c.focus && r.state === 'crate');
   if (first >= 0) c.focus = first;
-  goCamera(1.0);
+  body.look = { x: c.group.position.x, z: CRATE.z }; body.reachTo = 1; body.crouchTo = 1;
+  // He crouches down to the shelf, then the camera comes in.
+  goCamera(1.1, fromRoom ? 0.35 : 0);
   crateHint();
+}
+// Standing up, he walks over to the crate first; from the sofa he just reaches.
+function crateClick(ci) {
+  const c = crates[ci];
+  if (!c.data || c.data.error || !c.recs.length) { send({ type: 'settings' }); return; }
+  body.idle = 0;
+  const spot = { x: c.group.position.x, z: CRATE.z + 0.68 };
+  if (Math.hypot(body.x - spot.x, body.z - spot.z) < 0.12 && !onSofa()) { body.h = 0; enterCrate(ci); return; }
+  walkTo(spot, () => enterCrate(ci), 0);
 }
 function leaveCrate() {
   if (mode !== 'crate') return;
   mode = 'room'; activeCrate = -1;
+  body.reachTo = 0; body.crouchTo = 0;
   document.body.classList.remove('crate');
   goCamera(1.0);
   roomHint();
@@ -1304,6 +1942,7 @@ function showTip(e, html) {
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 canvas.addEventListener('pointerdown', (e) => {
+  body.idle = 0;
   if (e.button !== 0) return;
   canvas.focus();
   pointer(e);
@@ -1383,8 +2022,24 @@ canvas.addEventListener('pointerup', (e) => {
   if (!d || d.moved) return;
   const h = d.hit;
   if (mode === 'room') {
-    if (h.crate != null) enterCrate(h.crate);
-    else if (h.rec && h.rec.state === 'crate') enterCrate(h.rec.ci);
+    if (h.crate != null) crateClick(h.crate);
+    else if (h.rec && h.rec.state === 'crate') crateClick(h.rec.ci);
+    else if (!h.rec && !h.disc) {
+      // Anywhere else: he walks there; the sofa sits him back down.
+      const hitAt = ray.intersectObject(room, true).find((x) => x.object.isMesh && x.object !== marker && x.object.visible && !(x.object.material?.transparent) && !x.object.isInstancedMesh);
+      const p = hitAt?.point;
+      if (p && Math.abs(p.x) < X1 + 0.5 && Math.abs(p.z) < Z1) {
+        const sofaHit = isSofa(p);
+        // On the sofa: sit; seated already, stretch out; lying, sit back up.
+        if (sofaHit) {
+          if (body.state === 'seated') lieDown();
+          else if (body.state === 'lying') { body.state = 'gettingUp'; body.t = 0; body.after = null; }
+          else sitOnSofa();
+        } else walkTo({ x: p.x > X1 - 0.3 && p.z > DOOR.z0 && p.z < DOOR.z1 ? X1 + 0.4 : p.x, z: p.z });
+      }
+    }
+  } else if (mode === 'inspect') {
+    if (h.rec && h.rec === held_) endInspect('play');
   } else {
     const c = crates[activeCrate];
     if (h.rec && h.rec.ci === activeCrate && h.rec.state === 'crate') {
@@ -1405,25 +2060,58 @@ canvas.addEventListener('wheel', (e) => {
 let wheelAcc = 0;
 
 addEventListener('keydown', (e) => {
+  body.idle = 0;
+  const k = e.key.toLowerCase();
+  if (mode === 'room' && MOVE_KEYS[k] && !e.metaKey && !e.ctrlKey) { e.preventDefault(); held.add(k); return; }
+  if (mode === 'inspect' && held_) {
+    if (e.key === 'Enter') endInspect('play');
+    else if (e.key === 'q' || e.key === 'Q') endInspect('queue');
+    else if (e.key === 'Escape' || e.key === 'Backspace') endInspect('back');
+    return;
+  }
   if (e.key === 'Escape') leaveCrate();
   else if (e.key === 'v' || e.key === 'V') setView(settings.view === 'first' ? 'third' : 'first', true);
   else if (e.key === ' ') { e.preventDefault(); if (nowPlaying.rec) scToggle(); }
   else if (e.key === 'n' || e.key === 'N') playNext();
+  else if (e.key === 'q' || e.key === 'Q') toggleQueue();
   else if (mode === 'crate' && (e.key === 'ArrowDown' || e.key === 'ArrowRight')) flip(crates[activeCrate], crates[activeCrate].focus + 1);
   else if (mode === 'crate' && (e.key === 'ArrowUp' || e.key === 'ArrowLeft')) flip(crates[activeCrate], crates[activeCrate].focus - 1);
   else if (mode === 'crate' && e.key === 'Enter') { const c = crates[activeCrate]; if (c.recs[c.focus]) pull(c.recs[c.focus]); }
 });
 
+addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
+addEventListener('blur', () => held.clear());
+
 // Pull the front record out: it lands on the coffee table and the view returns to the room.
+// Pulling a record out: he stands up with it, and the view goes to his eyes
+// as he looks it over. Then: play it, queue it, or put it back.
+let held_ = null;
 function pull(r) {
-  r.tablePose = tableSlot();
-  r.order = ++tableSeq;
-  moveTo(r, 'table', 1.15, 0.5);
   const c = crates[r.ci];
-  leaveCrate();
+  held_ = r;
+  mode = 'inspect'; activeCrate = -1;
+  document.body.classList.remove('crate'); document.body.classList.add('inspect');
+  body.crouchTo = 0; body.reachTo = 0;
+  moveTo(r, 'hand', 1.1, 0.12);
   flip(c, c.focus + 1);
+  const ins = $('#inspect');
+  ins.querySelector('img').src = r.track.art || '';
+  ins.querySelector('.t').textContent = r.track.title;
+  ins.querySelector('.a').textContent = c.data?.name || '';
+  goCamera(1.2, 0.6);
+  setHint('');
+}
+function endInspect(next) {
+  const r = held_;
+  held_ = null;
+  document.body.classList.remove('inspect');
+  mode = 'room';
+  if (next === 'play') { play(r); goCamera(1.1); }
+  else if (next === 'queue') { r.tablePose = tableSlot(); r.order = ++tableSeq; moveTo(r, 'table', 1.0, 0.4); goCamera(1.1); }
+  else { moveTo(r, 'crate', 0.8, 0.1); enterCrate(r.ci); return; }
   roomHint();
 }
+for (const b of document.querySelectorAll('#inspect button')) b.onclick = () => { if (held_) endInspect(b.dataset.a); };
 
 // ---------------------------------------------------------------- day and night
 const dark = matchMedia('(prefers-color-scheme: dark)');
@@ -1446,6 +2134,7 @@ function applyMood(n, t, beat) {
   scene.environmentIntensity = lerp(0.42, 0.14, n);
   renderer.toneMappingExposure = lerp(1.0, 1.08, n);
   skyNight.opacity = n;
+  for (const L of cityLayers) { L.night.opacity = n; L.night.color.setScalar(1.35); L.day.color.setScalar(lerp(1.05, 0.25, n)); }
   skyDay.color.setScalar(lerp(1.5, 0.3, n));
   shaft.material.uniforms.uStrength.value = d;
   dust.pts.material.opacity = 0.55 * d + 0.08 * n;
@@ -1502,6 +2191,7 @@ function frame() {
 
   stepRecords(dt);
   stepCamera(dt);
+  stepBody(dt, t);
   if (nowPlaying.rec) now.querySelector('.bar i').style.width = `${(nowPlaying.progress * 100).toFixed(2)}%`;
   composer.render(dt);
   if (first) { first = false; setTimeout(() => $('#veil').classList.add('gone'), 250); }
@@ -1516,7 +2206,7 @@ addEventListener('message', (e) => {
   if (m.type === 'settings') {
     settings.autoplay = m.autoplay !== false;
     if (typeof m.avatar === 'string') loadAvatar(m.avatar);
-    if (typeof m.guest === 'string') loadGuest(m.guest);
+    if (typeof m.furniture === 'string') loadFurniture(m.furniture);
     if (m.view && m.view !== settings.view) setView(m.view, false);
   } else if (m.type === 'crates' && Array.isArray(m.crates)) {
     const sig = JSON.stringify(m.crates.map((c) => c && (c.error || (c.tracks || []).map((t) => t.id).join(','))));
@@ -1543,6 +2233,12 @@ if (params.get('debug')) {
     focused: () => { const c = crates[activeCrate]; return screenOf(c.recs[c.focus].mesh.position.clone().add(new T.Vector3(0, 0.1, 0))); },
     tableRec: () => { const r = recs.find((x) => x.state === 'table'); return r && screenOf(r.mesh.position); },
     platter: () => screenOf(platter.getWorldPosition(new T.Vector3()).add(new T.Vector3(0, 0.37, 0))),
+    grid: () => { let o = ''; for (let j = 0; j < NAV.nz; j++) { for (let i = 0; i < NAV.nx; i++) o += NAV.free[j * NAV.nx + i] ? '.' : '#'; o += '\n'; } return o; },
+    path: (ax, az, bx, bz) => ({ p: findPath({ x: ax, z: az }, { x: bx, z: bz }), free: NAV.free.reduce((s, v) => s + v, 0), n: NAV.free.length, s: nearestFree(ax, az), t: nearestFree(bx, bz) }),
+    screen: (x, y, z) => screenOf(new T.Vector3(x, y, z)),
+    doze: () => { body.idle = 1000; },
+    walk: (x, z) => walkTo({ x, z }),
+    body: () => ({ exiting: body.exiting, lie: +body.lie.toFixed(2), crouch: +body.crouch.toFixed(2), state: body.state, x: +body.x.toFixed(2), z: +body.z.toFixed(2), h: +body.h.toFixed(2), sit: +body.sit.toFixed(2), reach: +body.reach.toFixed(2) }),
     state: () => ({ mode, playing: nowPlaying.playing, rec: nowPlaying.rec?.track.title, progress: nowPlaying.progress, table: recs.filter((r) => r.state === 'table').length }),
   };
 }

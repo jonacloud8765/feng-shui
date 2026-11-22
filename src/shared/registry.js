@@ -338,7 +338,7 @@ const TYPES = {
     min: { width: 560, height: 360 },
     max: { width: 2600, height: 1600 },
     // Each crate holds one SoundCloud profile: a link like soundcloud.com/name, or just the name.
-    config: { crate1: '', crate2: '', crate3: '', view: 'third', autoplay: true, avatar: '', avatarName: '', guest: '', guestName: '' },
+    config: { crate1: '', crate2: '', crate3: '', view: 'third', autoplay: true, avatar: '', avatarName: '', furniture: '', furnitureName: '' },
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 14, padding: 0 },
     fields: [
       { key: 'crate1', label: 'Left crate', placeholder: 'soundcloud.com/your-name', hint: 'A SoundCloud profile link, or just the name.' },
@@ -346,8 +346,8 @@ const TYPES = {
       { key: 'crate3', label: 'Right crate', placeholder: 'soundcloud.com/another' },
       { key: 'view', label: 'View', type: 'choice', options: { third: 'From the couch', first: 'First person' } },
       { key: 'autoplay', label: 'Play the next record', type: 'toggle' },
-      { key: 'avatar', label: 'You', type: 'model', hint: 'A standing .glb character; the room sits it on the sofa.' },
-      { key: 'guest', label: 'Guest', type: 'model', hint: 'Someone standing by the hi-fi. Leave empty for an empty room.' },
+      { key: 'avatar', label: 'You', type: 'model', hint: 'A standing .glb character in an A or T pose; the room rigs it to sit, walk and reach.' },
+      { key: 'furniture', label: 'Couch & table', type: 'model', hint: 'A furniture .glb laid out for the Record Room (it carries its own layout).' },
     ],
   },
   cabinet: {

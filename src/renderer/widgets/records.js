@@ -28,7 +28,7 @@ export function mount(root, ctx) {
   let ready = false;
   let crates = null;
   const post = (msg) => { if (ready) frame.contentWindow?.postMessage(msg, '*'); };
-  const settings = () => ({ view: ctx.config.view, autoplay: ctx.config.autoplay !== false, avatar: ctx.config.avatar ? fileUrl(ctx.config.avatar) : '', guest: ctx.config.guest ? fileUrl(ctx.config.guest) : '' });
+  const settings = () => ({ view: ctx.config.view, autoplay: ctx.config.autoplay !== false, avatar: ctx.config.avatar ? fileUrl(ctx.config.avatar) : '', furniture: ctx.config.furniture ? fileUrl(ctx.config.furniture) : '' });
   const key = () => [ctx.config.crate1, ctx.config.crate2, ctx.config.crate3].join('|');
   let loadedKey = '';
 
@@ -51,6 +51,8 @@ export function mount(root, ctx) {
       ctx.setConfig({ view: m.view });
     } else if (m.type === 'settings') {
       ctx.api.openSettings(ctx.widget.id);
+    } else if (m.type === 'exit') {
+      ctx.api.recordsExit();
     } else if (m.type === 'open' && typeof m.url === 'string') {
       ctx.api.recordsOpen(m.url);
     }

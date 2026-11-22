@@ -585,6 +585,14 @@ function registerIpc() {
     const inputs = [w.config.crate1, w.config.crate2, w.config.crate3];
     return { ok: true, data: await soundcloud().crates(inputs, { force: !!force }) };
   });
+  // Walking out of the Record Room's door goes to the Feng Shui layout (or the next one).
+  ipcMain.on('fengshui:records-exit', (e) => {
+    const w = store.widgets.find((x) => x.id === senderWidgetId(e));
+    if (!w || w.type !== 'records') return;
+    const ls = store.doc.layouts, cur = store.layout;
+    const to = ls.find((l) => l !== cur && (/^feng shui$/i.test(l.name) || l.skin === 'fengshui')) || ls[(ls.indexOf(cur) + 1) % ls.length];
+    if (to && to !== cur) store.switchLayout(to.id);
+  });
   ipcMain.on('fengshui:records-open', (e, url) => {
     if (/^https:\/\/soundcloud\.com\/[^\s]*$/.test(String(url))) shell.openExternal(url);
   });
