@@ -66,6 +66,16 @@
     #browser .tabs { display: flex; gap: 4px; margin: 0 4px 8px; }
     #browser .tabs button { flex: 1; appearance: none; border: 0; border-radius: 9px; padding: 7px 4px; font: 600 11.5px/1.1 inherit; font-family: inherit; color: var(--dim); background: transparent; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
     #browser .tabs button.on { background: rgba(255,240,220,0.16); color: var(--ink); }
+    #browser .flow { position: relative; height: 214px; perspective: 760px; margin: 0 0 6px; overflow: hidden; flex: none; }
+    #browser .covers { position: absolute; inset: 0; transform-style: preserve-3d; }
+    #browser .covers img { position: absolute; left: 50%; top: 8px; width: 136px; height: 136px; margin-left: -68px; border-radius: 6px; object-fit: cover; background: #241f1a; cursor: pointer; box-shadow: 0 12px 26px rgba(0,0,0,0.5); transition: transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.4s, filter 0.4s; will-change: transform; }
+    #browser .covers img.out { filter: grayscale(1) brightness(0.55); }
+    #browser .covers img.c { animation: pull 0.55s cubic-bezier(0.2, 0.8, 0.2, 1); }
+    @keyframes pull { 0% { margin-top: -26px; } 60% { margin-top: 4px; } 100% { margin-top: 0; } }
+    #browser .cap { position: absolute; left: 6px; right: 6px; bottom: 4px; text-align: center; }
+    #browser .cap .t { font-weight: 650; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #browser .cap .a { color: var(--dim); font-size: 11.5px; margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #browser .cap .n { color: var(--dim); font-size: 10.5px; margin-top: 3px; letter-spacing: 0.08em; }
     #browser ol { list-style: none; margin: 0; padding: 0; overflow-y: auto; flex: 1; min-height: 0; }
     #browser li { display: flex; align-items: center; gap: 10px; padding: 6px; border-radius: 11px; cursor: pointer; }
     #browser li:hover { background: rgba(255,240,220,0.08); }
@@ -162,7 +172,7 @@
   <div class="hud glass" id="prompt"><kbd>E</kbd><span></span></div>
   <div class="hud glass" id="menu"></div>
   <div class="hud glass" id="seat"></div>
-  <div class="hud glass" id="browser"><div class="tabs"></div><ol></ol><div class="foot"><button class="act go" id="bplay" title="Put it on the turntable (Enter)">Play record</button><button class="act" id="bqueue" title="Line it up on the table">Queue</button><button class="act" id="bclose" title="Close (Esc)">Close</button></div></div>
+  <div class="hud glass" id="browser"><div class="tabs"></div><div class="flow"><div class="covers"></div><div class="cap"><div class="t"></div><div class="a"></div><div class="n"></div></div></div><ol></ol><div class="foot"><button class="act go" id="bplay" title="Put it on the turntable (Enter)">Play record</button><button class="act" id="bqueue" title="Line it up on the table">Queue</button><button class="act" id="bclose" title="Close (Esc)">Close</button></div></div>
   <div class="hud" id="settings"><div class="card glass">
     <h2>Paused</h2>
     <label>Camera sensitivity<input type="range" data-k="camSens" min="0.3" max="2" step="0.05"><output></output></label>

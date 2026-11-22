@@ -12,6 +12,7 @@
 
 import * as T from './three.js';
 import { createSmoking } from './smoke.js';
+import { buildSkeleton } from './skeleton.js';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -541,7 +542,6 @@ const shelfLeds = [];
   add(g, box(0.05, 0.36, 0.22), M.oak, -0.45, 1.48, Z0 + 0.13);
   [['#7d2f22', 0.24], ['#c7a35a', 0.27], ['#2e4d4a', 0.22], ['#d9d0bd', 0.25], ['#3b3b3b', 0.23], ['#9c4a26', 0.26]].forEach(([c, h], i) => add(g, box(0.035, h, 0.18), new T.MeshStandardMaterial({ color: c, roughness: 0.8 }), 0.25 + i * 0.04, 1.3 + h / 2, Z0 + 0.13, 0, 0, i === 5 ? -0.3 : 0));
   add(g, cyl(0.075, 0.06, 0.14, 20), M.ceramic, 0.65, 1.37, Z0 + 0.13);
-  add(g, box(0.9, 0.3, 0.2), new T.MeshStandardMaterial({ map: spinesTex, roughness: 0.7 }), -0.25, 1.89, Z0 + 0.12);
   add(g, cyl(0.07, 0.06, 0.13, 20), M.terracotta, 0.6, 1.805, Z0 + 0.13);
   // Framed gold record.
   add(g, box(0.5, 0.6, 0.03), M.black, 1.55, 1.62, Z0 + 0.015);
@@ -934,8 +934,11 @@ room.traverse((o) => { if (o.userData.hifi) hifiMats.push(o.material); });
 
 // ---------------------------------------------------------------- crates & records
 const SLEEVE = 0.31, THICK = 0.0032;
-// The three crates sit in the console's cubbies, under the turntable.
-const CRATE = { w: 0.38, d: 0.38, h: 0.25, front: 0.15, z: CRED.z + 0.01, y: 0.118, xs: [-2.3 / 3, 0, 2.3 / 3] };
+// His records stand spine-out on the upper floating shelf, one section per
+// crate (a SoundCloud artist or playlist), each section a row along the wall.
+// The old crate boxes are gone; a "crate" is now just a shelf section.
+const SHELF = { y: 1.718, z: Z0 + 0.155, spotZ: Z0 + 0.72 };
+const CRATE = { w: 0.38, d: 0.3, h: 0.25, front: 0.15, z: SHELF.z, y: SHELF.y, xs: [-0.42, -0.08, 0.26] };
 const loader = new T.TextureLoader();
 loader.setCrossOrigin('anonymous');
 const sleeveGeo = new T.BoxGeometry(SLEEVE, SLEEVE, THICK);
@@ -954,7 +957,10 @@ const crates = CRATE.xs.map((x, ci) => {
   plate.castShadow = false;
   const hit = add(g, box(w + 0.2, h + 0.1, d + 0.04), new T.MeshBasicMaterial({ visible: false }), 0, (h + 0.1) / 2, 0);
   hit.userData.crate = ci;
-  g.traverse((o) => { if (o.isMesh && o !== hit) { o.castShadow = true; o.receiveShadow = true; } });
+  hit.scale.set(0.55, 1, 1);
+  // Only the records show; the box is kept as the section's frame of reference.
+  g.traverse((o) => { if (o.isMesh && o !== hit) o.visible = false; });
+  g.rotation.y = -PI / 2;
   room.add(g);
   return { ci, group: g, plate, hit, wood, data: null, recs: [], focus: 0 };
 });
@@ -1108,6 +1114,8 @@ function rigModel(root) {
       if (Math.abs(x - xc) < H * 0.012 && fy > 0.897 && fy < 0.91 && z > mouthZ && p.wArm[i] === 0) { mouthZ = z; rig.mouth = { part: pi, i }; }
     }
   });
+  // A real skeleton: bones at his joints, every vertex skinned to them.
+  rig.skel = buildSkeleton(T, rig, root);
   // The holder's origin is the hips; the model faces +z, so turn it to face -z like the room's listener.
   const holder = new T.Group();
   root.position.set(-xc, -hipY, -zc);
@@ -1178,131 +1186,18 @@ function loadFurniture(url) {
 }
 
 // Bend the custom mesh into pose P. Model +x is the character's left.
-// Each frame: the joint angles once (rigTrig), then every vertex (bendVertex).
-function rigTrig(rig) {
-  const { H, zc, hipY, kneeY, S } = rig;
-  const sideK = { 1: 'L', [-1]: 'R' };
-  const tr = { rise: P.breath * 0.006 * H, swell: P.breath * 0.01 * H, tw: P.twist, ln: P.lean };
-  for (const s of [1, -1]) {
-    const k = sideK[s];
-    const th = -P.thigh[k];
-    // Where the knee sits once the thigh has turned.
-    const ky = hipY + (kneeY - hipY) * Math.cos(th), kz = zc + (kneeY - hipY) * Math.sin(th);
-    const a = P.armD[k], ca = Math.cos(a), sa = Math.sin(a);
-    // The elbow, once the arm has been lowered, and the hinge it bends on.
-    const eN = rig.elbowAt ? rig.elbowAt[s] * H : 0;
-    const ru = rig.armDir ? rig.armDir.x * eN : 0, rw = rig.armDir ? rig.armDir.y * eN : 0;
-    const eu = ru * ca - rw * sa, ew = ru * sa + rw * ca;
-    const dl = Math.hypot(eu, ew) || 1;
-    const dx = s * eu / dl, dy = ew / dl;
-    const ax = dy, ay = -dx, al = Math.hypot(ax, ay) || 1;
-    tr[s] = { th, ky, kz, kn: P.knee[k], a, b: -P.armF[k], el: P.elbow[k], ex: rig.xc + s * (S.x + eu), ey: S.y + ew, kx: ax / al, kyy: ay / al };
-  }
-  tr.hy = P.headYaw; tr.hp = P.headPitch;
-  return tr;
-}
-const BV = { x: 0, y: 0, z: 0, nx: 0, ny: 0, nz: 0 };
-function bendVertex(rig, tr, p, i, wantNormal) {
-  const { xc, zc, hipY, S } = rig;
-  const { base, nBase, wArm, wUp, wChest, wThigh, wKnee, wHead, wFore, side: sd } = p;
-  let x = base[i * 3], y = base[i * 3 + 1], z = base[i * 3 + 2];
-  let nx = 0, ny = 0, nz = 0;
-  if (wantNormal) { nx = nBase[i * 3]; ny = nBase[i * 3 + 1]; nz = nBase[i * 3 + 2]; }
-  const s = sd[i], g = tr[s];
-  const wt = wThigh[i];
-  if (wt > 0) {
-    const a = g.th * wt, ca = Math.cos(a), sa = Math.sin(a);
-    const yy = y - hipY, zz = z - zc;
-    y = hipY + yy * ca - zz * sa; z = zc + yy * sa + zz * ca;
-    const ny2 = ny * ca - nz * sa; nz = ny * sa + nz * ca; ny = ny2;
-    const wk = wKnee[i];
-    if (wk > 0) {
-      const b = g.kn * wk, cb = Math.cos(b), sb = Math.sin(b);
-      const y2 = y - g.ky, z2 = z - g.kz;
-      y = g.ky + y2 * cb - z2 * sb; z = g.kz + y2 * sb + z2 * cb;
-      const ny3 = ny * cb - nz * sb; nz = ny * sb + nz * cb; ny = ny3;
-    }
-  }
-  const wa = wArm[i];
-  if (wa > 0) {
-    // Lower the arm from the shoulder (in its own mirrored frame), bend the elbow, then swing it.
-    const a = g.a * wa, ca = Math.cos(a), sa = Math.sin(a);
-    const u = s * (x - xc) - S.x, w = y - S.y;
-    x = xc + s * (S.x + u * ca - w * sa); y = S.y + u * sa + w * ca;
-    const nu = s * nx; nx = s * (nu * ca - ny * sa); ny = nu * sa + ny * ca;
-    const wf = wFore[i];
-    if (wf > 0 && g.el) {
-      // Rodrigues about the hinge (kx, kyy, 0) through the elbow.
-      const th = g.el * wf, c = Math.cos(th), sn = Math.sin(th), kx = g.kx, ky = g.kyy;
-      const px = x - g.ex, py = y - g.ey, pz = z - S.z;
-      const kd = kx * px + ky * py;
-      x = g.ex + px * c + (ky * pz) * sn + kx * kd * (1 - c);
-      y = g.ey + py * c + (-kx * pz) * sn + ky * kd * (1 - c);
-      z = S.z + pz * c + (kx * py - ky * px) * sn;
-      const kn = kx * nx + ky * ny;
-      const nx2 = nx * c + (ky * nz) * sn + kx * kn * (1 - c);
-      const ny2 = ny * c + (-kx * nz) * sn + ky * kn * (1 - c);
-      nz = nz * c + (kx * ny - ky * nx) * sn; nx = nx2; ny = ny2;
-    }
-    const b = g.b * wa, cb = Math.cos(b), sb = Math.sin(b);
-    const yy = y - S.y, zz = z - S.z;
-    y = S.y + yy * cb - zz * sb; z = S.z + yy * sb + zz * cb;
-    const ny2 = ny * cb - nz * sb; nz = ny * sb + nz * cb; ny = ny2;
-  }
-  const wh = wHead ? wHead[i] : 0;
-  if (wh > 0 && (tr.hy || tr.hp)) {
-    // Turn and nod the head about the neck.
-    const ny0 = rig.neckY;
-    const t = tr.hy * wh, ct = Math.cos(t), st = Math.sin(t);
-    const dx = x - xc, dz = z - zc;
-    x = xc + dx * ct + dz * st; z = zc - dx * st + dz * ct;
-    const nx2 = nx * ct + nz * st; nz = -nx * st + nz * ct; nx = nx2;
-    const q = tr.hp * wh, cq = Math.cos(q), sq = Math.sin(q);
-    const yy = y - ny0, zz = z - zc;
-    y = ny0 + yy * cq - zz * sq; z = zc + yy * sq + zz * cq;
-    const ny3 = ny * cq - nz * sq; nz = ny * sq + nz * cq; ny = ny3;
-  }
-  const wu = wUp[i];
-  if (wu > 0) {
-    y += tr.rise * wu;
-    z += tr.swell * wChest[i];
-    const t = tr.tw * wu, ct = Math.cos(t), st = Math.sin(t);
-    const dx = x - xc, dz = z - zc;
-    x = xc + dx * ct + dz * st; z = zc - dx * st + dz * ct;
-    const nx2 = nx * ct + nz * st; nz = -nx * st + nz * ct; nx = nx2;
-    const l = tr.ln * wu, cl = Math.cos(l), sl = Math.sin(l);
-    const yy = y - hipY, zz = z - zc;
-    y = hipY + yy * cl - zz * sl; z = zc + yy * sl + zz * cl;
-    const ny3 = ny * cl - nz * sl; nz = ny * sl + nz * cl; ny = ny3;
-  }
-  // First person at the shelf: only his arms and hands, the camera sits where his chest would be.
-  if (P.armsOnly && wa < 0.35) { x = xc; y = S.y; z = S.z; }
-  BV.x = x; BV.y = y; BV.z = z; BV.nx = nx; BV.ny = ny; BV.nz = nz;
-  return BV;
-}
+// Each frame: the pose numbers become bone rotations; the GPU does the skinning.
 function poseCustom(rig) {
-  const tr = rigTrig(rig);
-  for (const p of rig.parts) {
-    const pa = p.pos.array, na = p.nrm.array, e = p.inv.elements, ne = p.nInv.elements;
-    const n = p.wArm.length;
-    for (let i = 0; i < n; i++) {
-      const { x, y, z, nx, ny, nz } = bendVertex(rig, tr, p, i, true);
-      pa[i * 3] = e[0] * x + e[4] * y + e[8] * z + e[12];
-      pa[i * 3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
-      pa[i * 3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
-      na[i * 3] = ne[0] * nx + ne[3] * ny + ne[6] * nz;
-      na[i * 3 + 1] = ne[1] * nx + ne[4] * ny + ne[7] * nz;
-      na[i * 3 + 2] = ne[2] * nx + ne[5] * ny + ne[8] * nz;
-    }
-    p.pos.needsUpdate = true; p.nrm.needsUpdate = true;
-  }
+  rig.skel.pose(P);
+  rig.skel.refresh();
 }
 // Where an anchor vertex (a hand, the mouth) is in the room, in the current pose P.
 function anchorWorld(ref, out = new T.Vector3()) {
   const rig = customAvatar?.userData.rig;
   if (!rig || !ref) return null;
-  const v = bendVertex(rig, rigTrig(rig), rig.parts[ref.part], ref.i, false);
-  return out.set(v.x, v.y, v.z).applyMatrix4(rig.root.matrixWorld);
+  rig.skel.pose(P);
+  rig.skel.refresh();
+  return rig.skel.anchor(ref, out);
 }
 function poseBuiltIn() {
   const b = P.breath;
@@ -1707,7 +1602,10 @@ function stepBody(dt, t) {
     let f = lerp(lerp(lerp(walkArm, 0.5, c), 0.28, s), 0.3 + (k === 'R' ? 0.6 * body.fidget : 0), lie), d = lerp(lerp(-0.8, -0.7, s), -0.86, lie);
     let el = lerp(lerp(0.12 + 0.25 * body.stride, 0.4, c), 0.95, s);
     el = lerp(el, k === 'R' ? 0.5 + 1.2 * body.fidget : 0.35, lie);
-    if (k === reachSide) { f = lerp(f, lerp(lerp(1.25, 1.15, s), 0.75, c), body.reach); d = lerp(d, -0.45, body.reach); el = lerp(el, 0.15, body.reach); }
+    const shelf = mode === 'crate' && shelfAim.sol;
+    if (shelf && k === shelfAim.k) { const q = shelfAim.sol; f = lerp(f, q.f, body.reach); d = lerp(d, q.d, body.reach); el = lerp(el, q.el, body.reach); }
+    else if (shelf) { f = lerp(f, 0.05, body.reach); d = lerp(d, -0.82, body.reach); el = lerp(el, 0.2, body.reach); }
+    else if (k === reachSide) { f = lerp(f, lerp(lerp(1.25, 1.15, s), 0.75, c), body.reach); d = lerp(d, -0.45, body.reach); el = lerp(el, 0.15, body.reach); }
     else f = lerp(f, f * 0.7, body.reach);
     // Holding a record up to look at it: both hands out in front.
     f = lerp(f, 1.2, body.hold); d = lerp(d, -0.5, body.hold); el = lerp(el, 0.25, body.hold);
@@ -1716,6 +1614,12 @@ function stepBody(dt, t) {
     P.armF[k] = f; P.armD[k] = d; P.elbow[k] = el;
   }
   P.headYaw = body.headYaw; P.headPitch = body.headPitch; P.scoot = 0;
+  // At the shelf he stands straight and looks up at the record he's on.
+  if (mode === 'crate' && shelfAim.sol) {
+    const q = shelfAim.sol, w = body.reach;
+    P.lean = lerp(P.lean, q.lean, w); P.twist = lerp(P.twist, 0, w);
+    P.headYaw = lerp(P.headYaw, q.hy, w); P.headPitch = lerp(P.headPitch, q.hp, w);
+  }
   // The cigarette takes over his right arm (and the left to light it).
   smoking.pose(P, sim, t);
   const standY = rig.standHip * Math.cos(a * Math.sin(ph)) - 0.012 * body.stride;
@@ -1823,17 +1727,34 @@ function solveSmoking(spot) {
   const mouthAt = (dx, dy) => () => anchorWorld(rig.mouth, new T.Vector3()).addScaledVector(fwd, dx).add(new T.Vector3(0, dy, 0));
   const top = new T.Vector3(spot.box.x, spot.box.y + 0.1, spot.box.z);
   const ash = new T.Vector3(spot.ash.x, spot.ash.y + 0.085, spot.ash.z).addScaledVector(fwd, -0.03);
-  const mouth = solveArm('R', mouthAt(0.012, -0.004), 0.05, [-0.04, 0.3], 0, { head: true, dMin: -1.6 });
+  const mouth = solveArm('R', mouthAt(0.012, -0.004), 0.05, [-0.04, 0.3], 0, { head: true, dMin: -2.1 });
   const sol = {
     box: solveArm('R', top, 0.5, [0.2, 0.72], 0.2),
     mouth,
     ash: solveArm('R', ash, 0.5, [0.2, 0.72], 0.2),
     // The lighter hand meets the cigarette with his head where the drag put it.
-    light: mouth && solveArm('L', mouthAt(0.075, -0.035), mouth.lean, null, 0, { dMin: -1.6, hy: mouth.hy, hp: mouth.hp }),
+    light: mouth && solveArm('L', mouthAt(0.075, -0.035), mouth.lean, null, 0, { dMin: -2.1, hy: mouth.hy, hp: mouth.hp }),
     ashYaw,
   };
   if (params.get('debug')) console.log('smoke ik', JSON.stringify(Object.fromEntries(Object.entries(sol).map(([k, v]) => [k, v?.err != null ? [+v.err.toFixed(3), v.res, +v.f.toFixed(2), +v.d.toFixed(2), +v.el.toFixed(2), +v.lean.toFixed(2), +v.scoot.toFixed(2), +v.hy.toFixed(2), +v.hp.toFixed(2)] : v]))));
   return sol;
+}
+// At the shelf: his hand goes to the spine of the record he's on (the arm
+// solved to it), and his eyes follow.
+const shelfAim = { sol: null, k: 'R', at: new T.Vector3() };
+function aimShelf() {
+  const c = crates[activeCrate], r = c?.recs[c.focus];
+  if (!r || !customAvatar?.visible) { shelfAim.sol = null; return; }
+  const zLocal = CRATE.d / 2 - 0.035 - r.i * crateSpacing(c);
+  const t = shelfAim.at.set(c.group.position.x - zLocal, SHELF.y + 0.022 + SLEEVE * 0.42, SHELF.z + 0.17 + 0.02);
+  const k = t.x > body.x + 0.03 ? 'R' : 'L';
+  const sol = solveArm(k, t, 0.02, [-0.06, 0.2]);
+  if (!sol) { shelfAim.sol = null; return; }
+  const fwd = Math.max(0.2, body.z - t.z);
+  sol.hy = clamp(-Math.atan2(t.x - body.x, fwd), -0.6, 0.6);
+  sol.hp = -clamp(Math.atan2(t.y - 1.62, fwd), 0, 0.45);
+  shelfAim.sol = sol; shelfAim.k = k;
+  if (params.get('debug')) console.log('shelf ik', k, sol.err.toFixed(3));
 }
 const smoking = createSmoking({
   T, room,
@@ -1855,7 +1776,7 @@ function smoke() {
 let recs = [];
 let tableSeq = 0;
 const nowPlaying = { rec: null, playing: false, progress: 0, loading: false };
-const settings = { view: 'third', autoplay: true, tank: true };
+const settings = { view: 'third', autoplay: true, tank: false };
 // The player's own preferences (the settings menu), kept in this room's local storage.
 const prefs = { walkSpeed: 1.15, camSens: 1, mouseSens: 1, volume: 80, sfx: 60, quality: 'high' };
 try { Object.assign(prefs, JSON.parse(localStorage.getItem('recordRoomPrefs') || '{}')); } catch {}
@@ -1908,7 +1829,10 @@ function buildCrates(list) {
 }
 
 const tmpQ = new T.Quaternion(), tmpE = new T.Euler(), tmpV = new T.Vector3();
-function crateSpacing(c) { return Math.min(0.0072, (CRATE.d - 0.06) / Math.max(1, c.recs.length)); }
+function crateSpacing(c) { return Math.min(0.0095, (CRATE.d - 0.06) / Math.max(1, c.recs.length)); }
+// How far the chosen record is out of the shelf (0 in, 1 out), eased each frame.
+let shelfPull = 0;
+const shelfE = new T.Euler();
 
 // Where a record wants to be right now, from its state.
 function poseFor(r, out = { p: new T.Vector3(), q: new T.Quaternion() }) {
@@ -1917,13 +1841,20 @@ function poseFor(r, out = { p: new T.Vector3(), q: new T.Quaternion() }) {
     const sp = crateSpacing(c);
     const zLocal = CRATE.d / 2 - 0.035 - r.i * sp;
     const active = mode === 'crate' && activeCrate === r.ci;
-    let a = 0, lift = 0;
-    if (active && r.i < c.focus) a = Math.min(1.25, 0.95 + (c.focus - 1 - r.i) * 0.012);
-    if (active && r.i === c.focus) lift = 0.07;
+    // Records before the one he's on lean left, opening a gap; the chosen one
+    // slides half out and turns its cover to the room.
+    let a = 0;
+    if (active && r.i < c.focus) a = Math.min(0.16, 0.05 + (c.focus - 1 - r.i) * 0.01);
     const half = SLEEVE / 2;
-    out.p.set(0, 0.022 + lift + Math.cos(a) * half, zLocal + Math.sin(a) * half);
-    tmpE.set(a, 0, 0);
-    out.q.setFromEuler(tmpE);
+    if (active && r.i === c.focus) {
+      const pull = shelfPull;
+      out.p.set(0.17 * pull, 0.022 + half + 0.03 * pull, zLocal);
+      shelfE.set(-0.12 * pull, PI / 2 * pull, 0, 'YXZ');
+    } else {
+      out.p.set(0, 0.022 + Math.cos(a) * half, zLocal + Math.sin(a) * half);
+      shelfE.set(a, 0, 0, 'XYZ');
+    }
+    out.q.setFromEuler(shelfE);
     out.p.applyQuaternion(c.group.quaternion).add(c.group.position);
     out.q.premultiply(c.group.quaternion);
   } else if (r.state === 'table') {
@@ -1946,6 +1877,7 @@ function moveTo(r, state, dur = 0.9, arc = 0.35) {
 }
 function stepRecords(dt) {
   const k = 1 - Math.exp(-dt * 13);
+  shelfPull += ((mode === 'crate' ? 1 : 0) - shelfPull) * (1 - Math.exp(-dt * 5));
   for (const r of recs) {
     poseFor(r, pose);
     if (r.anim) {
@@ -2238,10 +2170,10 @@ function viewPose() {
   }
   if (mode === 'crate') {
     const g = crates[activeCrate].group.position;
-    // 1st person: down over his hand at the records. 3rd: over his shoulder.
-    if (settings.view === 'first') return { pos: new T.Vector3(g.x + 0.06, 0.64, g.z + 0.46), at: new T.Vector3(g.x, 0.24, g.z + 0.04) };
-    const side = g.x > 0.1 ? -1 : 1;
-    return { pos: new T.Vector3(g.x + side * 1.05, 1.55, g.z + 1.95), at: new T.Vector3(g.x + side * 0.1, 0.4, g.z + 0.15) };
+    // 1st person: his eyes, up at the shelf. 3rd: behind and beside him, looking up past his arm.
+    if (settings.view === 'first') return { pos: new T.Vector3(body.x, 1.64, body.z + 0.02), at: new T.Vector3(g.x, 1.86, SHELF.z + 0.1) };
+    const side = g.x > 0.05 ? 1 : -1;
+    return { pos: new T.Vector3(g.x + side * 0.85, 1.72, SHELF.spotZ + 1.25), at: new T.Vector3(g.x - side * 0.05, 1.68, SHELF.z + 0.1) };
   }
   if (mode === 'window') {
     // At the window, looking out over the city.
@@ -2361,9 +2293,10 @@ function enterCrate(ci) {
   document.body.classList.add('crate');
   const first = c.recs.findIndex((r, i) => i >= c.focus && r.state === 'crate');
   if (first >= 0) c.focus = first;
-  body.look = { x: c.group.position.x, z: CRATE.z }; body.reachTo = 1; body.crouchTo = 1;
-  // He crouches down to the shelf, then the camera comes in.
-  goCamera(1.1, fromRoom ? 0.35 : 0);
+  body.reachTo = 1; body.crouchTo = 0;
+  shelfPull = 0; aimShelf();
+  // He reaches up to the shelf while the camera comes round.
+  goCamera(1.1, fromRoom ? 0.2 : 0);
   crateHint();
 }
 // Standing up, he walks over to the crate first; from the sofa he just reaches.
@@ -2371,7 +2304,7 @@ function crateClick(ci) {
   const c = crates[ci];
   if (!c.data || c.data.error || !c.recs.length) { send({ type: 'settings' }); return; }
   body.idle = 0;
-  const spot = { x: c.group.position.x, z: CRATE.z + 0.68 };
+  const spot = { x: c.group.position.x, z: SHELF.spotZ };
   if (Math.hypot(body.x - spot.x, body.z - spot.z) < 0.12 && !onSofa()) { body.h = 0; enterCrate(ci); return; }
   walkTo(spot, () => enterCrate(ci), 0);
 }
@@ -2379,6 +2312,7 @@ function leaveCrate() {
   if (mode !== 'crate') return;
   mode = 'room'; activeCrate = -1;
   body.reachTo = 0; body.crouchTo = 0;
+  orbit.yawTo = body.h + 0.35; orbit.userT = 0;
   document.body.classList.remove('crate');
   goCamera(1.0);
   roomHint();
@@ -2390,8 +2324,9 @@ function flip(c, to) {
   const dir = Math.sign(to - c.focus) || 1;
   while (to >= 0 && to < n && c.recs[to].state !== 'crate') to += dir;
   if (to < 0 || to >= n) return;
+  if (c.focus !== to && mode === 'crate') { shelfPull = 0; sfx('flip'); }
   c.focus = to;
-  if (mode === 'crate') crateHint();
+  if (mode === 'crate') { aimShelf(); crateHint(); }
   else paintBrowser();
 }
 
@@ -2679,6 +2614,7 @@ function sfx(name) {
   else if (name === 'lighter') { noise({ dur: 0.03, freq: 4500, type: 'highpass', gain: 0.25 * v }); noise({ dur: 0.9, freq: 900, type: 'bandpass', q: 0.6, gain: 0.05 * v, attack: 0.05, delay: 0.05 }); }
   else if (name === 'exhale') noise({ dur: 1.8, freq: 1100, type: 'bandpass', q: 0.5, gain: 0.07 * v, attack: 0.25 });
   else if (name === 'tap') noise({ dur: 0.04, freq: 2400, type: 'bandpass', q: 2, gain: 0.18 * v });
+  else if (name === 'flip') noise({ dur: 0.12, freq: 1800, type: 'bandpass', q: 1.2, gain: 0.07 * v, attack: 0.02 });
   else if (name === 'click') noise({ dur: 0.025, freq: 3000, type: 'bandpass', q: 3, gain: 0.08 * v });
 }
 // A footstep each time a foot comes down.
@@ -2702,9 +2638,9 @@ function interactables() {
   const list = [];
   crates.forEach((c, ci) => {
     const name = c.data?.name || c.data?.slug;
-    list.push({ x: c.group.position.x, z: CRATE.z + 0.68, r: 0.55, label: name ? `Browse records · ${name}` : 'Browse records', act: () => crateClick(ci) });
+    list.push({ x: c.group.position.x, z: SHELF.spotZ, r: 0.5, label: name ? `Browse records · ${name}` : 'Browse records', act: () => crateClick(ci) });
   });
-  list.push({ x: TT.x + 0.38, z: CRATE.z + 0.62, r: 0.42, label: 'Use the turntable', act: turntableMenu });
+  list.push({ x: TT.x + 0.38, z: CRED.z + 0.62, r: 0.42, label: 'Use the turntable', act: turntableMenu });
   for (const sx of [-1.6, 1.6]) list.push({ x: sx, z: CRED.z + 0.5, r: 0.45, label: 'Adjust the volume', act: volumeMenu });
   list.push({ x: X0 + 0.8, z: Z0 + 0.85, r: 0.55, label: lightsOn ? 'Turn the lights off' : 'Turn the lights on', act: toggleLights });
   // The window: anywhere along the wall under it (the couch may stand in front of it).
@@ -2866,7 +2802,7 @@ function paintSeatBar(force) {
 // ---------------------------------------------------------------- record browser
 // At the shelf: the crate's records as a plain list. Pick one, then Play
 // record; he takes it out, stands and puts it on the turntable.
-const browserEl = $('#browser'), browserList = browserEl.querySelector('ol');
+const browserEl = $('#browser'), browserList = browserEl.querySelector('ol'), coversEl = browserEl.querySelector('.covers');
 function paintBrowser() {
   if (mode !== 'crate' || activeCrate < 0) return;
   const c = crates[activeCrate];
@@ -2899,6 +2835,30 @@ function paintBrowser() {
       li.ondblclick = () => playFromShelf(r);
       browserList.append(li);
     });
+    // The cover flow: the record he has his hand on in the middle, the rest
+    // fanned out either side, sliding as he moves along the shelf.
+    coversEl.textContent = '';
+    c.recs.forEach((r, i) => {
+      const im = document.createElement('img');
+      im.alt = ''; im.src = r.track.art || ''; im.draggable = false;
+      im.onclick = () => { if (i === c.focus) playFromShelf(r); else flip(c, i); };
+      coversEl.append(im);
+    });
+  }
+  [...coversEl.children].forEach((im, i) => {
+    const o = i - c.focus, a = Math.abs(o), sg = Math.sign(o);
+    im.style.transform = o === 0 ? 'translateZ(30px)' : `translateX(${sg * (52 + a * 30)}px) translateZ(${-40 - a * 26}px) rotateY(${-sg * 52}deg)`;
+    im.style.opacity = a > 4 ? 0 : 1 - a * 0.13;
+    im.style.zIndex = 100 - a;
+    im.classList.toggle('out', c.recs[i].state !== 'crate');
+    if (o === 0 && paintBrowser.cover !== activeCrate + ':' + i) { paintBrowser.cover = activeCrate + ':' + i; im.classList.remove('c'); void im.offsetWidth; im.classList.add('c'); }
+  });
+  {
+    const r = c.recs[c.focus], cap = browserEl.querySelector('.cap');
+    const dur = String(r?.track.duration || '').replace(/^00:/, '').replace(/^0(\d:)/, '$1');
+    cap.querySelector('.t').textContent = r?.track.title || '';
+    cap.querySelector('.a').textContent = [c.data?.name, dur].filter(Boolean).join(' · ');
+    cap.querySelector('.n').textContent = c.recs.length ? `${c.focus + 1} / ${c.recs.length}` : '';
   }
   [...browserList.children].forEach((li, i) => {
     const r = c.recs[i];
@@ -2920,6 +2880,7 @@ function playFromShelf(r) {
   mode = 'room'; activeCrate = -1;
   document.body.classList.remove('crate');
   body.crouchTo = 0; body.reachTo = 0;
+  orbit.yawTo = body.h + 0.35; orbit.userT = 0;
   moveTo(r, 'hand', 0.9, 0.12);
   goCamera(1.1, 0.2);
   setTimeout(() => {
