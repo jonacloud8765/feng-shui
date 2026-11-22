@@ -97,6 +97,12 @@
     #settings .seg button.on { background: rgba(255,240,220,0.2); color: var(--ink); }
     #settings .line { display: grid; grid-template-columns: 130px 1fr; align-items: center; gap: 10px; margin: 9px 0; font-size: 12.5px; }
     #settings .keys { margin-top: 12px; color: var(--dim); font-size: 11px; line-height: 1.6; }
+    #dream { position: fixed; inset: 0; background: #fff8ee; opacity: 0; pointer-events: none; z-index: 40; transition: opacity 0.9s ease-in; }
+    #dream.on { opacity: 1; }
+    #dream.on.waking { transition: none; }
+    #dream.fade { opacity: 0; transition: opacity 3.2s ease-out; }
+    body:has(#dream.fade) canvas { animation: dreamwake 4.5s ease-out; }
+    @keyframes dreamwake { 0% { filter: blur(9px) brightness(1.4) saturate(0.6); } 100% { filter: none; } }
     #settings .foot { display: flex; justify-content: flex-end; margin-top: 12px; }
     #tip { position: absolute; pointer-events: none; padding: 6px 10px; border-radius: 10px; font-size: 12px; white-space: nowrap; transform: translate(-50%, -130%); opacity: 0; transition: opacity 0.15s; }
     #tip b { font-weight: 650; }
@@ -175,6 +181,7 @@
   <div class="hud glass" id="menu"></div>
   <div class="hud glass" id="seat"></div>
   <div class="hud glass" id="browser"><div class="tabs"></div><div class="flow"><div class="covers"></div><div class="cap"><div class="t"></div><div class="a"></div><div class="n"></div></div></div><ol></ol><div class="foot"><button class="act go" id="bplay" title="Put it on the turntable (Enter)">Play record</button><button class="act" id="bqueue" title="Line it up on the table">Queue</button><button class="act" id="bclose" title="Close (Esc)">Close</button></div></div>
+  <div id="dream"></div>
   <div class="hud" id="settings"><div class="card glass">
     <h2>Paused</h2>
     <label>Camera sensitivity<input type="range" data-k="camSens" min="0.3" max="2" step="0.05"><output></output></label>
@@ -185,7 +192,8 @@
     <div class="line">Graphics<div class="seg glass" id="gq"><button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button></div></div>
     <div class="line">Camera<div class="seg glass" id="gv"><button data-v="third">3rd person</button><button data-v="first">1st person</button></div></div>
     <div class="line">Display<div><button class="act" id="fs">Full screen</button></div></div>
-    <div class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows walk · <kbd>E</kbd> interact · <kbd>F</kbd> camera · drag to look · scroll to zoom · <kbd>Space</kbd> play/pause · <kbd>Q</kbd> queue · <kbd>G</kbd> dance · <kbd>Esc</kbd> menu</div>
+    <div class="line">Visitors<div><button class="act" id="trev">Send Trevor in</button></div></div>
+    <div class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows walk · <kbd>E</kbd> interact · <kbd>F</kbd> camera · drag to look · scroll to zoom · <kbd>Space</kbd> play/pause · <kbd>Q</kbd> queue · <kbd>G</kbd> dance · <kbd>J</kbd> jump (at the window) · <kbd>Esc</kbd> menu</div>
     <div class="foot"><button class="act go" id="resume">Resume</button></div>
   </div></div>
   <div class="glass" id="tip"></div>

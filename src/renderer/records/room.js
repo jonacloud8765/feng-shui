@@ -12,6 +12,7 @@
 
 import * as T from './three.js';
 import { createSmoking } from './smoke.js';
+import { createTrevor } from './trevor.js';
 import { buildSkeleton } from './skeleton.js';
 
 const $ = (s) => document.querySelector(s);
@@ -434,12 +435,18 @@ lw(Z0, WIN.z0, 0, RH); lw(WIN.z1, Z1, 0, RH); lw(WIN.z0, WIN.z1, 0, WIN.y0); lw(
 for (const [w, d, x, z] of [[RW, 0.02, 0, Z0 + 0.01], [0.02, RD, X1 - 0.01, 0], [0.02, RD, X0 + 0.01, 0]]) add(room, box(w, 0.09, d), M.oak, x, 0.045, z);
 
 // Window: oak frame and cross bars, faint glass, the sky beyond.
+const sash = new T.Group();
+let sashOpen = 0;
 {
   const g = new T.Group();
   const cz = (WIN.z0 + WIN.z1) / 2, cy = (WIN.y0 + WIN.y1) / 2, ww = WIN.z1 - WIN.z0, wh = WIN.y1 - WIN.y0;
-  for (const [h2, d2, y, z] of [[0.06, ww + 0.06, WIN.y0, cz], [0.06, ww + 0.06, WIN.y1, cz], [wh, 0.06, cy, WIN.z0], [wh, 0.06, cy, WIN.z1], [0.035, ww, cy + 0.15, cz], [wh, 0.035, cy, cz]]) add(g, box(0.07, h2, d2), M.oak, X0 - 0.07, y, z);
+  for (const [h2, d2, y, z] of [[0.06, ww + 0.06, WIN.y0, cz], [0.06, ww + 0.06, WIN.y1, cz], [wh, 0.06, cy, WIN.z0], [wh, 0.06, cy, WIN.z1]]) add(g, box(0.07, h2, d2), M.oak, X0 - 0.07, y, z);
   add(g, box(0.2, 0.04, ww + 0.14), M.oak, X0 + 0.03, WIN.y0 - 0.02, cz);
-  const glass = add(g, new T.PlaneGeometry(ww, wh), new T.MeshStandardMaterial({ color: '#9fb3c8', transparent: true, opacity: 0.06, roughness: 0.05, metalness: 0.1 }), X0 - 0.07, cy, cz, 0, PI / 2, 0);
+  // The glass and its cross bars are one sash, hinged on the side nearest the couch, so it can swing open.
+  sash.position.set(X0 - 0.07, 0, WIN.z1 - 0.03);
+  for (const [h2, d2, y, z] of [[0.035, ww - 0.06, cy + 0.15, cz], [wh - 0.06, 0.035, cy, cz]]) add(sash, box(0.05, h2, d2), M.oak, 0, y, z - sash.position.z);
+  const glass = add(sash, new T.PlaneGeometry(ww - 0.06, wh - 0.06), new T.MeshStandardMaterial({ color: '#9fb3c8', transparent: true, opacity: 0.06, roughness: 0.05, metalness: 0.1, side: T.DoubleSide }), 0, cy, cz - sash.position.z, 0, PI / 2, 0);
+  g.add(sash);
   noShadow.add(glass);
   // A trailing plant on the sill.
   add(g, cyl(0.07, 0.055, 0.12, 20), M.terracotta, X0 + 0.06, WIN.y0 + 0.06, WIN.z1 - 0.2);
@@ -1363,7 +1370,7 @@ const body = {
   x: SEAT.x, z: SEAT.z, h: 0, sit: 1, lie: 0, crouch: 0, crouchTo: 0, state: 'seated', path: [], speed: 0, phase: 0, stride: 0,
   reach: 0, reachTo: 0, hold: 0, look: null, then: null, t: 0, from: null, to: null, faceTo: null, after: null, idle: 0, exiting: false,
   vx: 0, vz: 0, seat: SEAT, auto: false, headT: 0, headYaw: 0, headPitch: 0, headTo: { y: 0, p: 0 }, fidget: 0, fidgetTo: 0, fidgetT: 12,
-  dance: 0, danceTo: 0, danceDrop: 0,
+  dance: 0, danceTo: 0, danceDrop: 0, hitT: 0, hitDir: null,
 };
 const LIE = { x: 0.12, z: SOFA_Z - 0.02, psi: -PI / 2, at: { x: 0.6, y: 1.5, z: -1.6 } };
 const qTmp = new T.Quaternion(), qLie = new T.Quaternion(), qUp = new T.Quaternion(), eUp = new T.Euler();
@@ -1746,6 +1753,18 @@ function stepBody(dt, t) {
     P.armF[k] = f; P.armD[k] = d; P.elbow[k] = el;
   }
   P.headYaw = body.headYaw; P.headPitch = body.headPitch; P.scoot = 0;
+  // Hit by the can: his head snaps away from it and he rocks back, then shakes it off.
+  if (body.hitT > 0) {
+    body.hitT = Math.max(0, body.hitT - sim * 0.9);
+    const k = Math.sin(PI * Math.pow(1 - body.hitT, 0.5)) * (body.hitT > 0 ? 1 : 0);
+    const d = body.hitDir || tmpV.set(0, 0, 1);
+    // Sideways relative to the way he faces: positive = from his right.
+    const side = d.x * Math.cos(body.h) - d.z * Math.sin(body.h);
+    P.headYaw += -side * 0.5 * k;
+    P.headPitch += 0.3 * k;
+    P.lean -= 0.18 * k * (1 - lie);
+    P.twist += -side * 0.12 * k;
+  }
   // At the shelf he stands straight and looks up at the record he's on.
   if (mode === 'crate' && shelfAim.sol) {
     const q = shelfAim.sol, w = body.reach;
@@ -1898,6 +1917,43 @@ const smoking = createSmoking({
   changed: () => paintSeatBar(true),
 });
 smoking.place(SEAT, TABLE);
+
+// Trevor drops in now and then, through the doorway on the right, and throws a beer can at you.
+const trevor = createTrevor({
+  T, room,
+  door: { x: X1, z0: DOOR.z0, z1: DOOR.z1, h: DOOR.h },
+  bounds: { x0: X0, x1: X1, z0: Z0, z1: Z1 },
+  ceiling: RH,
+  obstacles: canObstacles,
+  target: avatarTarget,
+  feet: (out) => (body.lie > 0.5 ? null : out.set(body.x, 0, body.z)),
+  canVisit: () => !body.exiting && dream.st === 'none' && !ui.settings,
+  onHit: (dir) => { body.hitT = 1; body.hitDir = dir; camKick = 1; },
+  sfx: (n) => sfx(n),
+  error: (m) => showError(m),
+  changed: () => {},
+});
+// Where the can is aimed: his upper chest, wherever he is and whatever he's doing.
+function avatarTarget(out) {
+  const sk = customAvatar?.userData.rig?.skel;
+  if (sk && sk.chest && sk.neck) {
+    sk.chest.getWorldPosition(out);
+    return out.lerp(sk.neck.getWorldPosition(tmpTarget), 0.45);
+  }
+  const s = ease(clamp(body.sit, 0, 1)), lie = ease(clamp(body.lie, 0, 1));
+  return out.set(lerp(body.x, LIE.x, lie), lerp(lerp(1.35, 1.0, s), 0.55, lie), lerp(body.z, LIE.z, lie));
+}
+const tmpTarget = new T.Vector3(), tmpV2 = new T.Vector3();
+// What the can bounces off: the couch, the coffee table, the record console.
+function canObstacles() {
+  const out = [];
+  for (const [a, b, c, d] of LAYOUT.sofa) out.push({ min: [a, 0, c], max: [b, 0.42, d] });
+  if (LAYOUT.table.rect) { const [a, b, c, d] = LAYOUT.table.rect; out.push({ min: [a, 0, c], max: [b, TABLE.y, d] }); }
+  else if (LAYOUT.table.circle) { const [x, z, r] = LAYOUT.table.circle; out.push({ min: [x - r, 0, z - r], max: [x + r, TABLE.y, z + r] }); }
+  out.push({ min: [-1.15, 0, CRED.z - 0.22], max: [1.15, CRED.y, CRED.z + 0.22] });
+  return out;
+}
+let camKick = 0;
 // Smoke: from the middle seat straight away; from another seat he slides over first.
 function smoke() {
   if (smoking.busy || body.state !== 'seated') return;
@@ -2323,6 +2379,14 @@ function viewPose() {
     const pz = (WIN.z0 + WIN.z1) / 2 + (WIN.z1 - WIN.z0) / 4, py = WIN.y0 + (WIN.y1 - WIN.y0) * 0.72;
     return { pos: new T.Vector3(X0 + 0.22, py, pz), at: new T.Vector3(X0 - 4, py - 0.25 + look.pitch * 2, pz + 0.2 + look.yaw * -3) };
   }
+  if (mode === 'jump') {
+    // Climbing onto the sill and out through the open window; it cuts to white before anything else.
+    const pz = (WIN.z0 + WIN.z1) / 2 + (WIN.z1 - WIN.z0) / 4, py = WIN.y0 + (WIN.y1 - WIN.y0) * 0.72;
+    const climb = sm(0.35, 1.25, dream.t), out = sm(1.15, 2.1, dream.t);
+    const bob = Math.sin(clamp((dream.t - 0.35) / 0.9, 0, 1) * PI) * 0.08;
+    const pos = new T.Vector3(lerp(X0 + 0.22, X0 + 0.02, climb) - out * 0.75, py + climb * 0.22 + bob - out * 0.1, pz);
+    return { pos, at: new T.Vector3(X0 - 4, py - 0.25 - out * 2.6, pz + 0.2) };
+  }
   if (mode === 'photos') {
     const zc = (PHOTO.z0 + PHOTO.z1) / 2, yc = (PHOTO.y0 + PHOTO.y1) / 2;
     return { pos: new T.Vector3(X0 + 1.55, yc + 0.05, zc + 0.05), at: new T.Vector3(X0, yc, zc) };
@@ -2392,7 +2456,7 @@ function stepCamera(dt) {
     if (tw.t >= 1) cam.tween = null;
   } else {
     const to = viewPose();
-    let k = mode === 'room' && settings.view === 'first' ? 14 : mode === 'room' ? 7 : 6;
+    let k = mode === 'room' && settings.view === 'first' ? 14 : mode === 'room' ? 7 : mode === 'jump' ? 12 : 6;
     // Pulled in by a wall: catch up quickly so it never pokes through.
     if (to.dist != null && cam.pos.distanceTo(to.at) > to.dist + 0.25) k = 22;
     cam.pos.lerp(to.pos, 1 - Math.exp(-dt * k));
@@ -2402,6 +2466,8 @@ function stepCamera(dt) {
   const boost = mode === 'room' && settings.view === 'third' ? 6 : mode === 'lava' ? -20 : 0;
   if (Math.abs(fovBoost - boost) > 0.01) { fovBoost += (boost - fovBoost) * (1 - Math.exp(-dt * 3)); camera.fov = baseFov + fovBoost; camera.updateProjectionMatrix(); }
   camera.position.copy(cam.pos);
+  // A jolt when the can hits him.
+  if (camKick > 0.001) { camKick *= Math.exp(-dt * 7); camera.position.x += (Math.random() - 0.5) * 0.05 * camKick; camera.position.y += (Math.random() - 0.5) * 0.05 * camKick; }
   const dir = tmpV.copy(cam.at).sub(cam.pos);
   const fpLook = mode === 'room' && settings.view === 'first';
   const yaw = fpLook ? look.yaw : 0, pitch = fpLook ? look.pitch : 0;
@@ -2409,7 +2475,7 @@ function stepCamera(dt) {
   const right = new T.Vector3().crossVectors(dir, camera.up).normalize();
   dir.applyAxisAngle(right, pitch);
   camera.lookAt(cam.pos.clone().add(dir));
-  const showMe = (settings.view !== 'first' && mode !== 'window' && mode !== 'lava') || mode === 'crate' || mode === 'inspect';
+  const showMe = (settings.view !== 'first' && mode !== 'window' && mode !== 'lava' && mode !== 'jump') || mode === 'crate' || mode === 'inspect';
   builtInAvatar.visible = showMe && !customAvatar;
   if (customAvatar) customAvatar.visible = showMe;
   // Up close in first person, only his body and hands show, not his head.
@@ -2665,6 +2731,8 @@ addEventListener('keydown', (e) => {
     else if (k === 'f' || k === 'v') setView(settings.view === 'first' ? 'third' : 'first', true);
     return;
   }
+  if (mode === 'jump') return;
+  if (mode === 'window' && k === 'j') { jumpOut(); return; }
   if (mode === 'window' || mode === 'photos' || mode === 'lava') {
     if (k === 'escape' || k === 'e') { endLook(); return; }
     if (!MOVE_KEYS[k]) return;
@@ -2749,6 +2817,13 @@ function noise({ dur, freq, q = 1, type = 'lowpass', gain, attack = 0.004, delay
   src.connect(f); f.connect(g); g.connect(a.destination);
   src.start(t0, Math.random()); src.stop(t0 + dur + 0.05);
 }
+// A short metallic ring (the can).
+function ring(freq, dur, gain) {
+  const a = actx, t0 = a.currentTime;
+  const o = a.createOscillator(); o.type = 'triangle'; o.frequency.value = freq;
+  const g2 = a.createGain(); g2.gain.setValueAtTime(gain, t0); g2.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  o.connect(g2); g2.connect(a.destination); o.start(t0); o.stop(t0 + dur + 0.02);
+}
 function sfx(name) {
   if (!actx || !noiseBuf || prefs.sfx <= 0) return;
   const v = prefs.sfx / 100;
@@ -2759,6 +2834,10 @@ function sfx(name) {
   else if (name === 'tap') noise({ dur: 0.04, freq: 2400, type: 'bandpass', q: 2, gain: 0.18 * v });
   else if (name === 'flip') noise({ dur: 0.12, freq: 1800, type: 'bandpass', q: 1.2, gain: 0.07 * v, attack: 0.02 });
   else if (name === 'click') noise({ dur: 0.025, freq: 3000, type: 'bandpass', q: 3, gain: 0.08 * v });
+  else if (name === 'whoosh') noise({ dur: 0.35, freq: 700, type: 'bandpass', q: 0.7, gain: 0.12 * v, attack: 0.08 });
+  else if (name === 'clank') { noise({ dur: 0.05, freq: 1800, type: 'bandpass', q: 1.5, gain: 0.4 * v }); ring(1240, 0.35, 0.09 * v); ring(2950, 0.22, 0.05 * v); }
+  else if (name === 'tink') { noise({ dur: 0.03, freq: 3600, type: 'bandpass', q: 3, gain: 0.14 * v }); ring(1900 + Math.random() * 400, 0.18, 0.035 * v); }
+  else if (name === 'wind') noise({ dur: 1.6, freq: 420, type: 'lowpass', q: 0.4, gain: 0.2 * v, attack: 0.5 });
 }
 // A footstep each time a foot comes down.
 let lastStep = 0;
@@ -2908,6 +2987,7 @@ function toggleLights() { lightsOn = !lightsOn; sfx('click'); }
 const seatEl = $('#seat');
 let seatButtons = [];
 function seatBarModel() {
+  if (mode === 'window' && !uiOpen()) return { b: [{ label: 'Jump out the window', act: jumpOut }, { label: 'Step back', act: endLook }] };
   if (mode !== 'room' || uiOpen() || body.exiting) return null;
   const st = body.state, sm = smoking.state;
   if (st === 'sliding') return { h: 'Sliding over to the ashtray…', b: [] };
@@ -3038,7 +3118,7 @@ function playFromShelf(r) {
 function lookOutside() {
   walkTo({ x: X0 + 0.42, z: (WIN.z0 + WIN.z1) / 2 }, () => {
     mode = 'window'; look.yaw = 0; look.pitch = 0; goCamera(1.3);
-    setHint('Drag to look around · Esc or a movement key steps back');
+    setHint('Drag to look around · J to jump out · Esc or a movement key steps back');
   }, PI / 2);
 }
 function lookAtPhotos() {
@@ -3046,6 +3126,49 @@ function lookAtPhotos() {
     mode = 'photos'; goCamera(1.3);
     setHint('Esc or a movement key steps back');
   }, PI / 2);
+}
+// ---------------------------------------------------------------- out the window (a dream)
+// From the window he climbs onto the sill and out; the screen goes white before
+// anything else is seen, and he wakes up asleep on the couch. It was a dream.
+const dream = { st: 'none', t: 0, white: false };
+const dreamEl = $('#dream');
+function jumpOut() {
+  if (mode !== 'window' || dream.st !== 'none') return;
+  Object.assign(dream, { st: 'jump', t: 0, white: false, at: performance.now() });
+  mode = 'jump'; held.clear(); cam.tween = null;
+  body.danceTo = 0; paintDanceBtn();
+  setHint('');
+  sfx('flip');
+}
+function stepDream(dt) {
+  if (dream.st === 'none') {
+    if (sashOpen > 0.001) { sashOpen += (0 - sashOpen) * (1 - Math.exp(-dt * 2)); sash.rotation.y = -1.3 * sashOpen; }
+    return;
+  }
+  dream.t += dt;
+  if (dream.st === 'jump') {
+    sashOpen = sm(0.05, 0.75, dream.t);
+    sash.rotation.y = -1.3 * sashOpen;
+    if (dream.t > 1.0 && !dream.wind) { dream.wind = true; sfx('wind'); }
+    if (dream.t > 1.55 && !dream.white) { dream.white = true; dreamEl.className = 'on'; }
+    if (dream.t > 2.9) wakeUp();
+  } else if (dream.st === 'wake' && dream.t > 7) {
+    dream.st = 'none'; roomHint();
+  }
+}
+function wakeUp() {
+  // Back on the couch, asleep on his pillow, as if he never got up.
+  const q = SEATS.find((x) => x.main);
+  Object.assign(body, { x: q.x, z: q.z, h: q.h, seat: q, sit: 1, lie: 1, state: 'lying', path: [], speed: 0, vx: 0, vz: 0, then: null, after: null, idle: 0, dance: 0, danceTo: 0, reach: 0, reachTo: 0, hold: 0, stride: 0, headYaw: 0, headPitch: 0 });
+  held.clear();
+  sashOpen = 0; sash.rotation.y = 0;
+  mode = 'room'; look.yaw = 0; look.pitch = 0;
+  const to = viewPose(); cam.pos.copy(to.pos); cam.at.copy(to.at); cam.tween = null;
+  dream.st = 'wake'; dream.t = 0; dream.white = false; dream.wind = false; dream.took = performance.now() - dream.at;
+  dreamEl.className = 'on waking';
+  requestAnimationFrame(() => requestAnimationFrame(() => { dreamEl.className = 'fade'; }));
+  setHint('…was that a dream?');
+  paintSeatBar(true);
 }
 function endLook() {
   if (mode !== 'window' && mode !== 'photos' && mode !== 'lava') return;
@@ -3083,6 +3206,7 @@ $('#fs').onclick = async () => {
   setTimeout(openSettings, 150);
 };
 $('#resume').onclick = closeSettings;
+$('#trev').onclick = () => { closeSettings(); if (!trevor.ready) { showError('Trevor isn’t set up yet: add his model in the widget settings.'); return; } if (!trevor.visit()) setHint('Trevor’s busy right now.'); };
 settingsEl.addEventListener('pointerdown', (e) => { if (e.target === settingsEl) closeSettings(); });
 // Graphics: resolution, shadows and the glow pass.
 function applyQuality() {
@@ -3176,6 +3300,13 @@ function frame() {
   stepCamera(dt);
   stepBody(dt, t);
   smoking.update(gamePaused() ? 0 : dt, t);
+  trevor.update(gamePaused() ? 0 : dt * (window.__tslow ?? 1), t);
+  stepDream(gamePaused() ? 0 : dt * (window.__dslow ?? 1));
+  // You can't walk through Trevor.
+  if (trevor.body(tmpV2) && upright()) {
+    const dx = body.x - tmpV2.x, dz = body.z - tmpV2.z, d = Math.hypot(dx, dz), r = trevor.radius + 0.22;
+    if (d < r && d > 1e-4) { body.x = tmpV2.x + dx / d * r; body.z = tmpV2.z + dz / d * r; }
+  }
   lightsK += ((lightsOn ? 1 : 0) - lightsK) * (1 - Math.exp(-dt * 5));
   paintPrompt();
   paintSeatBar();
@@ -3197,6 +3328,8 @@ addEventListener('message', (e) => {
     if (Array.isArray(m.photos)) setPhotos(m.photos);
     if (Array.isArray(m.posters)) setPosters(m.posters);
     if (typeof m.cigarettes === 'string') smoking.loadBox(m.cigarettes);
+    if (typeof m.trevor === 'string') trevor.load(m.trevor);
+    if (typeof m.beer === 'string') trevor.loadCan(m.beer);
     if (m.view && m.view !== settings.view) setView(m.view, false);
   } else if (m.type === 'crates' && Array.isArray(m.crates)) {
     const sig = JSON.stringify(m.crates.map((c) => c && (c.error || (c.tracks || []).map((t) => t.id).join(','))));
@@ -3228,6 +3361,12 @@ if (params.get('debug')) {
     path: (ax, az, bx, bz) => ({ p: findPath({ x: ax, z: az }, { x: bx, z: bz }), free: NAV.free.reduce((s, v) => s + v, 0), n: NAV.free.length, s: nearestFree(ax, az), t: nearestFree(bx, bz) }),
     screen: (x, y, z) => screenOf(new T.Vector3(x, y, z)),
     doze: () => { body.idle = 1000; },
+    trevor: () => trevor._debug(),
+    elbow: () => trevor._elbow(),
+    tperf: () => { const a = performance.now(); for (let i = 0; i < 10; i++) trevor.update(0.016, 1); const b = performance.now(); for (let i = 0; i < 3; i++) composer.render(0.016); return { upd: (b - a) / 10, render: (performance.now() - b) / 3 }; },
+    visit: () => trevor.visit(),
+    jump: () => { lookOutside(); },
+    dream: () => ({ ...dream, mode }),
     dance: () => ({ to: body.danceTo, w: +body.dance.toFixed(2), can: canDance(), state: body.state, busy: smoking.busy, mode }),
     pose: () => JSON.stringify({ f: P.armF, d: P.armD, el: P.elbow, lean: P.lean, sh: P.shrug }),
     walk: (x, z) => walkTo({ x, z }),
