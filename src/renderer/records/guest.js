@@ -19,9 +19,15 @@
 // Which one: CONFIG.pickup ('auto' picks kneel for a can on the floor with room
 // around it, bend for a raised can or a cramped spot).
 //
-// States: away -> enter -> position -> pickup (phases below) -> leave -> away.
+// Trevor's cans pile up where they land. She comes in when he lights a cigarette
+// (or once 20 have piled up) and collects every one: the can in her right hand
+// goes to her left between pickups, and with three in her hands she takes them
+// out and comes back for the rest.
+//
+// States: away -> enter -> position -> pickup (phases below) -> [pass -> enter
+// to the next can] -> leave (-> enter again for the rest) -> away.
 
-export const CONFIG = { pickup: 'auto' }; // 'auto' | 'kneel' | 'bend'
+export const CONFIG = { pickup: 'auto', perTrip: 3 }; // pickup: 'auto' | 'kneel' | 'bend'
 
 const sm = (a, b, v) => { const t = Math.min(1, Math.max(0, (v - a) / (b - a))); return t * t * (3 - 2 * t); };
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -42,23 +48,26 @@ const J = {
 const HEIGHT = 1.66;
 
 // Body poses, as angles in her side plane (degrees). Thigh and shin: from
-// straight down, + swinging forward. Foot: 0 flat, + toes pointing back along
-// the floor (kneeling), - up on the balls of the feet. Pelvis and spine: forward
-// pitch (they add up to the torso's lean). Head: extra nod.
+// straight down, + swinging forward. Pelvis and spine: forward
+// pitch (they add up to the torso's lean). Head: extra nod. Foot: heel-to-toe
+// direction, measured like the legs (77 flat on the floor, ~40 up on the balls
+// of the feet, -95 laid back along the floor behind her when kneeling).
 // V16, V13, V34 were measured off the reference scans' side views
 // (hip -> knee -> ankle, hip -> neck, neck -> head); their arms are not copied
 // (hands behind the head, hand flat on the floor): her free hand rests on her
 // thigh or hangs, and her right arm is driven by IK to the can.
 const POSES = {
-  STAND: { tL: 0, sL: 0, tR: 0, sR: 0, foot: 0, pelvis: 0, spine: 0, head: 0, spread: 0.04 },
+  STAND: { tL: 0, sL: 0, tR: 0, sR: 0, foot: 77, pelvis: 0, spine: 0, head: 0, spread: 0.04 },
   // Going down to her knees / pushing back up: a deep crouch, heels up.
-  CROUCH: { tL: 78, sL: -42, tR: 70, sR: -50, foot: -40, pelvis: 12, spine: 16, head: 6, spread: 0.1 },
+  CROUCH: { tL: 78, sL: -42, tR: 70, sR: -50, foot: 38, pelvis: 12, spine: 16, head: 6, spread: 0.1 },
   // V16: on both knees, sitting up, thighs ~60 deg forward, shins flat behind, torso ~6 deg lean.
-  V16: { tL: 60, sL: -86, tR: 60, sR: -86, foot: 80, pelvis: 2, spine: 4, head: 2, spread: 0.08 },
+  V16: { tL: 60, sL: -86, tR: 60, sR: -86, foot: -95, pelvis: 2, spine: 4, head: 2, spread: 0.08 },
   // V13: still on both knees, hips up off the heels (thighs ~55 deg), torso leaning ~35 deg, head down.
-  V13: { tL: 55, sL: -87, tR: 52, sR: -87, foot: 82, pelvis: 13, spine: 22, head: 16, spread: 0.1 },
+  V13: { tL: 55, sL: -87, tR: 52, sR: -87, foot: -96, pelvis: 13, spine: 22, head: 16, spread: 0.1 },
   // V34: standing, legs nearly straight (feet split a little), folded ~109 deg at the hips, head hanging.
-  V34: { tL: 4, sL: -2, tR: -7, sR: -12, foot: 0, pelvis: 62, spine: 47, head: 22, spread: 0.07 },
+  // Sitting on the couch, leaning back a little, feet on the floor.
+  SIT: { tL: 86, sL: -4, tR: 84, sR: -2, foot: 77, pelvis: -12, spine: -6, head: 6, spread: 0.07 },
+  V34: { tL: 4, sL: -2, tR: -7, sR: -12, foot: 77, pelvis: 62, spine: 47, head: 22, spread: 0.07 },
 };
 const KEYS = Object.keys(POSES.STAND);
 function mix(a, b, t) { const o = {}; for (const k of KEYS) o[k] = lerp(a[k], b[k], t); return o; }
@@ -122,6 +131,7 @@ export function createGuest(env) {
       return [Math.hypot(aq[0] - ab[0] * t, aq[1] - ab[1] * t, aq[2] - ab[2] * t), t];
     };
     const p = new T.Vector3();
+    const side = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
       p.fromBufferAttribute(pos, i);
       const { x, y } = p;
@@ -134,7 +144,10 @@ export function createGuest(env) {
       const legs = 1 - sm(43, 52, y);
       const up = sm(50, 58, y);
       const head = sm(84, 88.5, y) * (1 - arm);
-      const k = x < 1.0 ? 'R' : 'L';
+      // Which leg: the nearer one (her legs touch in the scan, so not just by x).
+      const legD = (L) => Math.min(seg(p, L.hip, L.knee)[0], seg(p, L.knee, L.ankle)[0], seg(p, L.ankle, L.toe)[0]);
+      const k = y > 47 ? (x < 1.0 ? 'R' : 'L') : (legD(J.R) < legD(J.L) ? 'R' : 'L');
+      side[i] = y < 46 ? (k === 'R' ? 1 : 2) : 0;
       const knee = k === 'R' ? 29 : 29.5;
       const shin = sm(knee + 2, knee - 2, y), foot = sm(8, 3.5, y);
       const body = (1 - arm);
@@ -161,6 +174,17 @@ export function createGuest(env) {
       const sum = top.reduce((s, e) => s + e[1], 0) || 1;
       top.forEach(([b, v], j) => { idx[i * 4 + j] = bi[b]; wts[i * 4 + j] = v / sum; });
       if (!top.length) { idx[i * 4] = bi.hips; wts[i * 4] = 1; }
+    }
+    // Where her legs touch in the scan, faces join one leg to the other; they'd
+    // stretch into a web once her legs move apart, so they're dropped.
+    {
+      const ix = g.index ? g.index.array : Array.from({ length: n }, (_, i) => i), keep = [];
+      for (let t = 0; t < ix.length; t += 3) {
+        const a = side[ix[t]], b = side[ix[t + 1]], c = side[ix[t + 2]];
+        if ((a | b | c) === 3) continue;
+        keep.push(ix[t], ix[t + 1], ix[t + 2]);
+      }
+      g.setIndex(keep);
     }
     g.setAttribute('skinIndex', new T.Uint16BufferAttribute(idx, 4));
     g.setAttribute('skinWeight', new T.Float32BufferAttribute(wts, 4));
@@ -213,7 +237,7 @@ export function createGuest(env) {
   }
 
   // ---------------------------------------------------------------- state
-  const S = { state: 'away', t: 0, x: 0, z: 0, h: 0, speed: 0, phase: 0, stride: 0, path: [], wait: -1, can: null,
+  const S = { state: 'away', t: 0, x: 0, z: 0, h: 0, speed: 0, phase: 0, stride: 0, path: [], wait: -1, can: null, canId: 0, force: null, passT: 0, done: 0,
     mode: null, seq: null, plan: null, carry: 0, blockT: 0, pickT: 0, phaseName: '' };
   let groundRef = null;
   const doorZ = () => (env.door.z0 + env.door.z1) / 2;
@@ -221,20 +245,58 @@ export function createGuest(env) {
   const doorIn = () => ({ x: env.door.x + 0.3, z: doorZ() });
   const ready = () => !!mesh;
 
-  // Called when the can has come to rest: she comes for it a little later.
-  // Until she takes it, the can is left exactly where it stopped.
-  function canSettled() { if (S.state === 'away' && S.wait < 0) S.wait = 5 + Math.random() * 6; }
+  // Called in (he's lit a cigarette, or the cans have piled up): she comes after a beat.
+  // Until she takes a can, it's left exactly where it stopped.
+  function call(delay = 2.5 + Math.random() * 2) {
+    if (S.state === 'away' && S.wait < 0) S.wait = delay;
+  }
   function come(force) {
-    if (!ready() || S.state !== 'away' || env.canState() !== 'rest' || !env.canCome()) return false;
+    if (!ready() || S.state !== 'away' || !env.canCome()) return false;
     const h = hall();
-    Object.assign(S, { state: 'enter', t: 0, x: h.x, z: h.z, h: -PI / 2, speed: 0, wait: -1, carry: 0, can: null, pickT: 0, phaseName: 'entering' });
+    Object.assign(S, { t: 0, x: h.x, z: h.z, h: -PI / 2, speed: 0, wait: -1, carry: 0, can: null, pickT: 0, force: force || null, done: 0 });
+    if (!env.cans().length) return goSit();
+    holder.visible = true;
+    if (!nextCan()) { holder.visible = false; S.state = 'away'; return false; }
+    return true;
+  }
+  // The nearest can still on the floor; plan the pickup and walk there.
+  function nextCan() {
+    const here = { x: S.x, z: S.z };
+    const cans = env.cans();
+    if (!cans.length) return false;
+    cans.sort((a, b) => Math.hypot(a.pos.x - here.x, a.pos.z - here.z) - Math.hypot(b.pos.x - here.x, b.pos.z - here.z));
+    const c = cans[0];
+    S.canId = c.id;
     S.why = {};
-    S.plan = planPickup(force || env.pickupMode?.() || CONFIG.pickup);
+    S.plan = planPickup(S.force || env.pickupMode?.() || CONFIG.pickup, c.pos.clone());
     S.mode = S.plan.mode; S.seq = SEQ[S.mode];
-    const p = env.findPath(doorIn(), S.plan.root) || [doorIn(), S.plan.root];
-    S.path = [doorIn(), ...p.slice(1), S.plan.root];
+    const outside = S.x > env.door.x;
+    const from = outside ? doorIn() : here;
+    const p = env.findPath(from, S.plan.root) || [from, S.plan.root];
+    S.path = [...(outside ? [doorIn()] : []), ...p.slice(1), S.plan.root];
+    S.state = 'enter'; S.t = 0; S.pickT = 0; S.phaseName = outside ? 'entering' : 'walking to the next can';
+    return true;
+  }
+  // No cans: she sits down on a free seat and just breathes for a while, then goes.
+  const SIT_FOR = 8 * 60;
+  function goSit() {
+    const seat = env.freeSeat?.();
+    if (!seat) return false;
+    S.seat = seat;
+    const p = env.findPath(doorIn(), seat.via || seat.stand) || [doorIn(), seat.via || seat.stand];
+    S.path = [doorIn(), ...p.slice(1), ...(seat.via ? [seat.stand] : [])];
+    S.state = 'toSeat'; S.t = 0; S.phaseName = 'going to sit down';
     holder.visible = true;
     return true;
+  }
+  // Where her feet go so that, sitting, her hips are over the seat.
+  function sitRoot(seat) {
+    const save = { x: S.x, z: S.z, h: S.h };
+    Object.assign(S, { x: 0, z: 0, h: seat.h });
+    posePlain(POSES.SIT, 0, 0); ground(POSES.SIT);
+    const hp = B.hips.getWorldPosition(new T.Vector3());
+    Object.assign(S, save);
+    return { x: seat.x - hp.x, z: seat.z - 0.06 - hp.z };
   }
 
   // ---------------------------------------------------------------- planning
@@ -242,7 +304,7 @@ export function createGuest(env) {
   function shoulderIn(P) {
     const save = { x: S.x, z: S.z, h: S.h };
     Object.assign(S, { x: 0, z: 0, h: 0 });
-    posePlain(P, 0, 0); ground();
+    posePlain(P, 0, 0); ground(P);
     const s = B.upperR.getWorldPosition(new T.Vector3());
     const kn = [B.shinL.getWorldPosition(new T.Vector3()), B.shinR.getWorldPosition(new T.Vector3())];
     const toes = [B.toeL.getWorldPosition(new T.Vector3()), B.toeR.getWorldPosition(new T.Vector3())];
@@ -253,8 +315,7 @@ export function createGuest(env) {
   // Pick the sequence and a spot: facing so the can is ahead of her right
   // shoulder at a comfortable reach, her feet (and knees) on open floor, nothing
   // between her hand and the can, nearest the way she came in.
-  function planPickup(mode) {
-    const c = env.canPos(new T.Vector3());
+  function planPickup(mode, c) {
     const P = c.clone(); // her palm closes on the can's centre
     const fp = env.feet?.(new T.Vector3());
     const raised = c.y > 0.12;
@@ -367,20 +428,19 @@ export function createGuest(env) {
       const kn = w * (0.06 + 0.55 * Math.max(0, Math.cos(lp))) / D2R;
       aim(B['thigh' + kk], B['shin' + kk], bodyDir(sag(P['t' + kk] + sw, sgn, P.spread), v4).clone());
       aim(B['shin' + kk], B['foot' + kk], bodyDir(sag(P['s' + kk] + sw - kn, sgn, P.spread * 0.4), v4).clone());
-      // Foot: flat (toes forward), up on the toes (-), or laid back along the floor (+).
-      const f = P.foot * D2R;
-      const fd = P.foot >= 0 ? [0, -0.22 * Math.cos(f) - 0.9 * Math.sin(f), 0.97 * Math.cos(f) - 0.45 * Math.sin(f)]
-        : [0, -0.22 + Math.sin(-f) * 0.9, 0.97 * Math.cos(-f)];
+      const fd = sag(P.foot, sgn, 0);
       aim(B['foot' + kk], B['toe' + kk], bodyDir(fd, v4).clone());
     }
     q1.setFromAxisAngle(frame.L, P.head * D2R); turnWorld(B.head, q1);
   }
   // The lowest point touching the floor: heels / toes / kneecaps.
-  function lowPoint() {
+  // Kneeling, her feet lie on their tops (toes don't touch, the instep does).
+  function lowPoint(P = POSES.STAND) {
+    const back = sm(40, -60, P.foot);
     let y = Infinity;
     for (const kk of ['L', 'R']) {
-      y = Math.min(y, B['toe' + kk].getWorldPosition(v1).y - 0.012);
-      y = Math.min(y, B['foot' + kk].getWorldPosition(v1).y - 0.085);
+      y = Math.min(y, B['toe' + kk].getWorldPosition(v1).y - 0.012 + back * 0.5);
+      y = Math.min(y, B['foot' + kk].getWorldPosition(v1).y - lerp(0.085, 0.045, back));
       y = Math.min(y, B['shin' + kk].getWorldPosition(v1).y - 0.055);
     }
     return y;
@@ -391,9 +451,9 @@ export function createGuest(env) {
   }
   // Put her on the floor: lowest contact at floor level, and her feet kept where
   // they were standing (so nothing slides as she kneels or bends).
-  function ground() {
+  function ground(P) {
     if (!groundRef) return;
-    const dy = groundRef.low - lowPoint();
+    const dy = groundRef.low - lowPoint(P);
     const m = ankleMid(new T.Vector3());
     // Standing feet position for this spot and heading.
     setFrame(S.h);
@@ -472,15 +532,43 @@ export function createGuest(env) {
         P.tL = Pl.tL; P.sL = Pl.sL;
       }
     }
+    if (S.sitW > 0) {
+      // Sitting, breathing slowly: chest and shoulders rise and settle every few seconds.
+      P = mix(POSES.STAND, POSES.SIT, S.sitW);
+      const br = Math.sin(performance.now() / 1000 * 2 * PI / 4.6) * S.sitW;
+      P.spine += 1.6 * br; P.head -= 0.8 * br;
+    }
+    const dw = S.state === 'dance' ? (S.danceW || 0) : 0;
+    let beat = 0, bounce = 0, half = 0, moves = [1, 0, 0];
+    if (dw > 0) {
+      // Dancing on his beat: knees give on every beat, a step side to side
+      // every two, hips and shoulders turning against each other.
+      beat = env.beat ? env.beat(performance.now() / 1000) : performance.now() / 1000 * 112 / 60;
+      bounce = 0.5 - 0.5 * Math.cos(beat * PI * 2); half = Math.sin(beat * PI);
+      const kb = 8 + 14 * bounce;
+      P = { ...P, tL: P.tL + dw * (kb + 10 * Math.max(0, half)), sL: P.sL - dw * (kb * 1.4 + 18 * Math.max(0, half)),
+        tR: P.tR + dw * (kb + 10 * Math.max(0, -half)), sR: P.sR - dw * (kb * 1.4 + 18 * Math.max(0, -half)),
+        pelvis: P.pelvis + dw * (4 + 4 * bounce), spine: P.spine + dw * (-6 + 3 * bounce), head: P.head + dw * (2 + 8 * bounce), spread: 0.08 };
+      // Which move: cycled every eight beats, crossfaded over the last one.
+      const bar = beat / 8, m0 = Math.floor(bar) % 3, m1 = (m0 + 1) % 3;
+      const x = clamp((bar % 1) * 8 - 7, 0, 1), xf = x * x * (3 - 2 * x);
+      moves = [0, 0, 0]; moves[m0] += 1 - xf; moves[m1] += xf;
+    }
     const w = S.stride * (S.state === 'pickup' ? 0 : 1);
     posePlain(P, w, S.phase);
-    ground();
+    if (dw > 0) {
+      // Shoulders turn against the step.
+      setFrame(S.h);
+      q1.setFromAxisAngle(UP, dw * (0.22 * half + 0.1 * Math.sin(beat * PI * 2) * moves[2])); turnWorld(B.spine, q1);
+    }
+    ground(P);
+    if (dw > 0) { setFrame(S.h); holder.position.addScaledVector(frame.L, dw * 0.06 * half); holder.updateMatrixWorld(true); }
     if (S.state !== 'pickup') holder.position.y -= 0.008 * w * Math.abs(Math.sin(S.phase));
     holder.updateMatrixWorld(true);
     setFrame(S.h);
     const swing = 0.22 * w * Math.sin(S.phase);
     const sq = S.state === 'pickup' ? S.seq : null, t = S.pickT;
-    const kneelW = sq && S.mode === 'kneel' ? sm(0.6, 1.5, t) * (1 - sm(5.0, 6.0, t)) : 0;
+    const kneelW = sq && S.mode === 'kneel' ? sm(0.6, 1.5, t) * (1 - sm(5.0, 6.0, t)) : (S.sitW || 0);
     for (const [kk, sgn] of [['L', 1], ['R', -1]]) {
       const { a: la, b: lb } = LEN[kk], sw = -sgn * swing;
       B['upper' + kk].getWorldPosition(v1);
@@ -492,12 +580,21 @@ export function createGuest(env) {
       let target = Ph, curl = 0.25;
       const palm = bodyDir([-sgn, 0, 0.15], new T.Vector3());
       // Kneeling: the free hand rests on top of her thigh.
-      if (kneelW > 0 && (kk === 'L' || !sq || t < sq.reach[0] || t > sq.lift[1])) {
+      if (kneelW > 0 && (kk === 'L' || !sq || t < sq.reach[0] || t > sq.lift[1]) && !(kk === 'R' && rightCan())) {
         const kn = B['shin' + kk].getWorldPosition(new T.Vector3()), hp = B['thigh' + kk].getWorldPosition(new T.Vector3());
         const onThigh = kn.lerp(hp, 0.3).addScaledVector(UP, 0.07);
         target = target.clone().lerp(onThigh, kneelW);
         palm.lerp(new T.Vector3(0, -1, 0), kneelW).normalize();
       }
+      if (S.passT > 0) {
+        // Passing a can between her hands, in front of her waist.
+        const pw = sm(0, 0.4, S.passT) * (1 - sm(0.6, 1.0, S.passT));
+        B.hips.getWorldPosition(v2);
+        const mid = v2.clone().addScaledVector(frame.F, 0.26).addScaledVector(UP, 0.08).addScaledVector(frame.L, sgn * 0.035);
+        target = target.clone().lerp(mid, pw);
+        curl = lerp(curl, 1.1, pw);
+      }
+      if (kk === 'L' && carried.some((e) => e.side === 'L')) curl = 1.2;
       if (kk === 'R') {
         // Carrying: forearm forward at her waist, can upright in her hand.
         if (S.carry > 0) {
@@ -516,6 +613,16 @@ export function createGuest(env) {
           palm.lerp(bodyDir([0.9, 0, 0.3], v4), r).normalize();
         }
       }
+      if (dw > 0) {
+        // Arms: a loose groove at her chest, both up over her head, or one up, one on her hip.
+        const D = (l, u, f) => S0.clone().addScaledVector(frame.L, l).addScaledVector(UP, u).addScaledVector(frame.F, f);
+        const groove = D(sgn * 0.02 - sgn * 0.12 * half * sgn, -0.18 + 0.05 * bounce, 0.3);
+        const up = D(sgn * (0.12 + 0.1 * half * sgn), 0.5 + 0.04 * bounce, 0.1);
+        const one = kk === 'R' ? D(-0.1 + 0.08 * half, 0.48 + 0.05 * bounce, 0.12) : D(0.16, -0.42, -0.02);
+        const T3 = groove.multiplyScalar(moves[0]).add(up.multiplyScalar(moves[1])).add(one.multiplyScalar(moves[2]));
+        target = target.clone().lerp(T3, dw * (kk === 'R' && rightCan() ? 0.6 : 1));
+        curl = lerp(curl, 0.5, dw);
+      }
       armTo(kk, sgn, target, palm, curl);
     }
   }
@@ -526,28 +633,35 @@ export function createGuest(env) {
     return Pc.clone().addScaledVector(UP, 0.18 * sm(sq.attach, sq.lift[1], t));
   }
 
-  // ---------------------------------------------------------------- the can in her hand
-  const held = { pos: new T.Vector3(), quat: new T.Quaternion(), t: 0 };
+  // ---------------------------------------------------------------- cans in her hands
+  // Each can she holds is kept relative to one hand's grip point. When it's put
+  // there it starts exactly where it was, and settles into its place in the hand.
   const HELD_Q = new T.Quaternion().setFromUnitVectors(new T.Vector3(0, 1, 0), new T.Vector3(0, 0, 1));
-  function attachCan(can) {
-    // Keep the can exactly where it is, relative to her palm, at the moment she grips it.
-    B.gripR.getWorldPosition(v1); B.gripR.getWorldQuaternion(q2);
+  const SLOTS = { R: [new T.Vector3()], L: [new T.Vector3(0, 0, -0.036), new T.Vector3(0, 0, 0.036)] };
+  const carried = []; // { mesh, side, slot, pos, quat, t, dur }
+  function attach(mesh, side, slot, dur) {
+    let e = carried.find((x) => x.mesh === mesh);
+    if (!e) carried.push((e = { mesh }));
+    const g = B['grip' + side];
+    g.getWorldPosition(v1); g.getWorldQuaternion(q2);
     const inv = q2.clone().invert();
-    held.pos.copy(can.position).sub(v1).applyQuaternion(inv);
-    held.quat.copy(inv).multiply(can.quaternion);
-    held.from = { pos: held.pos.clone(), quat: held.quat.clone() };
-    held.t = 0;
+    Object.assign(e, { side, slot, t: 0, dur,
+      pos: mesh.position.clone().sub(v1).applyQuaternion(inv), quat: inv.multiply(mesh.quaternion) });
   }
-  function holdCan(dt) {
-    held.t += dt;
-    // Settle into the hand (can upright across her palm) over half a second.
-    const u = sm(0, 0.6, held.t);
-    const pos = held.from.pos.clone().lerp(new T.Vector3(), u);
-    const quat = held.from.quat.clone().slerp(HELD_Q, u);
-    B.gripR.getWorldPosition(v1); B.gripR.getWorldQuaternion(q2);
-    S.can.position.copy(pos.applyQuaternion(q2).add(v1));
-    S.can.quaternion.copy(q2).multiply(quat);
+  function holdCans(dt) {
+    for (const e of carried) {
+      e.t += dt;
+      const u = sm(0, e.dur, e.t);
+      const pos = e.pos.clone().lerp(SLOTS[e.side][e.slot], u);
+      const quat = e.quat.clone().slerp(HELD_Q, u);
+      const g = B['grip' + e.side];
+      g.getWorldPosition(v1); g.getWorldQuaternion(q2);
+      e.mesh.position.copy(pos.applyQuaternion(q2).add(v1));
+      e.mesh.quaternion.copy(q2).multiply(quat);
+    }
   }
+  const rightCan = () => carried.find((e) => e.side === 'R');
+  const leftCount = () => carried.filter((e) => e.side === 'L').length;
 
   // ---------------------------------------------------------------- update
   function follow(dt) {
@@ -574,64 +688,147 @@ export function createGuest(env) {
   function phaseOf(t) { let n = ''; for (const [at, name] of S.seq.phases) if (t >= at) n = name; return n; }
   function update(dt, t) {
     if (S.state === 'away') {
-      if (S.wait >= 0 && dt > 0) { S.wait -= dt; if (S.wait < 0) { if (!come()) S.wait = env.canState() === 'rest' ? 3 : -1; } }
+      if (S.wait >= 0 && dt > 0) { S.wait -= dt; if (S.wait < 0) { if (!come()) S.wait = env.cans().length ? 3 : -1; } }
       return;
     }
     S.t += dt;
+    // He's dancing: she joins him (finishing a pickup first), until he stops.
+    if (env.dancing?.() && ['enter', 'position', 'toSeat', 'pass'].includes(S.state)) startDance();
+    if (env.dancing?.() && (S.state === 'sitting' || S.state === 'sitDown')) { S.state = 'standUp'; S.t = 0; S.toDance = true; S.sitTo ||= { x: S.x, z: S.z }; }
+    const stillThere = () => env.cans().some((c) => c.id === S.canId);
     if (S.state === 'enter') {
-      S.phaseName = S.path.length > 2 ? 'entering' : 'walking to the can';
-      // If the can's gone (or moved), there's nothing to pick up.
-      if (env.canState() !== 'rest') leave();
+      if (S.path.length <= 2 && S.phaseName === 'entering') S.phaseName = 'walking to the can';
+      // If that can's gone, go for another (or leave).
+      if (!stillThere()) { if (!nextCan()) leave(); }
       else if (follow(dt) || S.t > 20) { S.state = 'position'; S.t = 0; S.phaseName = 'positioning'; }
     } else if (S.state === 'position') {
       // Turn on the spot to face her pickup heading.
       let dh = S.plan.h - S.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
       S.h += clamp(dh, -dt * 2.6, dt * 2.6);
       S.speed *= Math.exp(-dt * 10);
-      if (Math.abs(dh) < 0.02 && S.speed < 0.05) { S.h = S.plan.h; S.state = 'pickup'; S.t = 0; S.pickT = 0; }
+      if (Math.abs(dh) < 0.02 && S.speed < 0.05) { S.h = S.plan.h; S.state = 'pickup'; S.t = 0; S.pickT = 0; S.can = null; }
     } else if (S.state === 'pickup') {
       S.pickT += dt;
       const sq = S.seq;
       S.phaseName = phaseOf(S.pickT);
       if (!S.can && S.pickT >= sq.attach) {
         // Only now, with her fingers closed on it, does the can come with her hand.
-        S.can = env.takeCan();
-        if (S.can) { attachCan(S.can); env.sfx?.('tink'); }
+        S.can = env.takeCan(S.canId);
+        if (S.can) { attach(S.can, 'R', 0, 0.6); env.sfx?.('tink'); S.done++; }
       }
-      S.carry = S.can ? sm(sq.lift[1] - 0.3, sq.end, S.pickT) : 0;
-      if (S.pickT >= sq.end) { S.carry = S.can ? 1 : 0; leave(); }
+      S.carry = rightCan() ? sm(sq.lift[1] - 0.3, sq.end, S.pickT) : 0;
+      if (S.pickT >= sq.end) {
+        S.carry = rightCan() ? 1 : 0; S.can = null;
+        if (env.dancing?.()) { startDance(); return; }
+        const more = env.cans().length > 0;
+        if (more && rightCan() && leftCount() < SLOTS.L.length) { S.state = 'pass'; S.t = 0; S.phaseName = 'passing the can to her other hand'; }
+        else if (more && !rightCan()) { if (!nextCan()) leave(); }
+        else leave();
+      }
+    } else if (S.state === 'pass') {
+      // Hands together at her waist; the can goes from right to left.
+      S.speed *= Math.exp(-dt * 10);
+      const r = rightCan();
+      if (r && S.t >= 0.45) { attach(r.mesh, 'L', leftCount(), 0.3); S.carry = 0; }
+      if (S.t >= 1.0) { if (!nextCan()) leave(); }
+    } else if (S.state === 'toSeat') {
+      if (follow(dt) || S.t > 25) { S.state = 'sitDown'; S.t = 0; S.sitFrom = { x: S.x, z: S.z }; S.sitTo = sitRoot(S.seat); S.phaseName = 'sitting down'; }
+    } else if (S.state === 'sitDown') {
+      // Turn her back to the seat, then lower herself onto it.
+      let dh = S.seat.h - S.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh));
+      S.h += clamp(dh, -dt * 3, dt * 3);
+      S.speed *= Math.exp(-dt * 10);
+      const u = sm(0.5, 2.1, S.t);
+      S.x = lerp(S.sitFrom.x, S.sitTo.x, u); S.z = lerp(S.sitFrom.z, S.sitTo.z, u);
+      S.sitW = sm(0.7, 2.2, S.t);
+      if (S.t > 2.2) { S.state = 'sitting'; S.t = 0; S.phaseName = 'sitting, breathing'; }
+    } else if (S.state === 'sitting') {
+      S.sitW = 1;
+      if (S.t > SIT_FOR || env.cans().length) { S.state = 'standUp'; S.t = 0; S.phaseName = 'getting up'; }
+    } else if (S.state === 'standUp') {
+      const u = sm(0.2, 1.8, S.t);
+      S.sitW = 1 - sm(0, 1.6, S.t);
+      S.x = lerp(S.sitTo.x, S.sitFrom.x, u); S.z = lerp(S.sitTo.z, S.sitFrom.z, u);
+      if (S.t > 1.9) {
+        S.sitW = 0;
+        if (S.toDance) { S.toDance = false; S.seat = null; startDance(); } else
+        // Cans turned up while she sat: collect them; otherwise go.
+        if (env.cans().length) { if (!nextCan()) leave(); } else leave();
+      }
+    } else if (S.state === 'toDance') {
+      const fp = env.feet?.(v1);
+      if (fp) { const dh0 = Math.atan2(fp.x - S.x, fp.z - S.z); if (!S.path.length) { let dh = dh0 - S.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); S.h += clamp(dh, -dt * 3, dt * 3); } }
+      if (follow(dt) || S.t > 15) { if (S.t > 0.6) { S.state = 'dance'; S.t = 0; S.phaseName = 'dancing with him'; } }
+      S.danceW = sm(0, 0.8, S.state === 'dance' ? 1 : 0);
+    } else if (S.state === 'dance') {
+      S.speed *= Math.exp(-dt * 10);
+      S.danceW = Math.min(1, (S.danceW || 0) + dt * 1.5);
+      // Keep facing him.
+      const fp = env.feet?.(v1);
+      if (fp) { let dh = Math.atan2(fp.x - S.x, fp.z - S.z) - S.h; dh = Math.atan2(Math.sin(dh), Math.cos(dh)); S.h += clamp(dh, -dt * 2, dt * 2); }
+      S.danceOff = env.dancing?.() ? 0 : (S.danceOff || 0) + dt;
+      if (S.danceOff > 1.2) { S.danceW = 0; leave(); }
     } else if (S.state === 'leave') {
       S.phaseName = 'leaving';
       if (follow(dt) || S.t > 25) {
-        S.state = 'away'; holder.visible = false; S.phaseName = '';
-        if (S.can) { env.dropCan(); S.can = null; }
+        // Out of the room: the cans she carried are gone; back in for any left.
+        for (const e of carried) env.dropCan(e.mesh);
+        carried.length = 0; S.carry = 0;
+        if (env.cans().length && S.done > 0) { S.done = 0; S.state = 'away'; holder.visible = false; S.wait = 1.5; }
+        else { S.state = 'away'; holder.visible = false; S.phaseName = ''; }
       }
     }
+    S.passT = S.state === 'pass' ? S.t : 0;
     S.stride += (clamp(S.speed / 0.8, 0, 1) - S.stride) * (1 - Math.exp(-dt * 8));
     S.phase += dt * S.speed / 0.58 * PI;
     const st = Math.floor(S.phase / PI);
     if (st !== prevStep) { prevStep = st; if (S.stride > 0.3) env.sfx?.('step'); }
     pose();
-    if (S.can) holdCan(dt);
+    holdCans(dt);
+  }
+  // Over to him, a step in front, facing him.
+  function startDance() {
+    S.sitW = 0; S.carry = rightCan() ? 1 : 0; S.danceOff = 0;
+    const fp = env.feet?.(new T.Vector3());
+    let spot = { x: S.x, z: S.z };
+    if (fp) {
+      let dx = S.x - fp.x, dz = S.z - fp.z; const d = Math.hypot(dx, dz) || 1; dx /= d; dz /= d;
+      for (const [r, a] of [[0.95, 0], [0.95, 0.5], [0.95, -0.5], [1.1, 1], [1.1, -1], [0.9, PI]]) {
+        const c = Math.cos(a), sn = Math.sin(a);
+        const x = fp.x + (dx * c - dz * sn) * r, z = fp.z + (dx * sn + dz * c) * r;
+        if (!env.free || env.free(x, z)) { spot = { x, z }; break; }
+      }
+    }
+    const p = env.findPath({ x: S.x, z: S.z }, spot) || [{ x: S.x, z: S.z }, spot];
+    S.path = [...p.slice(1)];
+    S.state = 'toDance'; S.t = 0; S.phaseName = 'going to dance with him';
   }
   function leave() {
-    S.state = 'leave'; S.t = 0;
+    S.state = 'leave'; S.t = 0; S.sitW = 0; S.danceW = 0;
+    if (S.seat?.via && Math.abs(S.z - S.seat.stand.z) < 0.25 && S.z > S.seat.via.z - 0.3) {
+      // Out from between the couch and the table the way she came in.
+      const p = env.findPath(S.seat.via, doorIn()) || [S.seat.via, doorIn()];
+      S.path = [S.seat.via, ...p.slice(1), doorIn(), hall()];
+      S.seat = null;
+      return;
+    }
+    S.seat = null;
     const p = env.findPath({ x: S.x, z: S.z }, doorIn()) || [{ x: S.x, z: S.z }, doorIn()];
     S.path = [...p.slice(1), doorIn(), hall()];
   }
 
   return {
-    load, update, come, canSettled,
+    load, update, come, call,
     get active() { return S.state !== 'away'; },
     get ready() { return ready(); },
-    get holding() { return !!S.can; },
+    get holding() { return carried.length; },
     body(out) { return S.state === 'away' ? null : out.set(S.x, 0, S.z); },
     radius: 0.26,
     _debug: () => {
       let grip = null;
       if (B && S.plan) grip = +B.gripR.getWorldPosition(new T.Vector3()).distanceTo(S.plan.P).toFixed(3);
       return { state: S.state, phase: S.phaseName, mode: S.mode, t: +S.t.toFixed(2), pickT: +S.pickT.toFixed(2), x: +S.x.toFixed(2), z: +S.z.toFixed(2), h: +S.h.toFixed(2),
-        carry: +S.carry.toFixed(2), can: !!S.can, wait: +S.wait.toFixed(1), path: S.path.length, plan: S.plan && { ...S.plan.root, h: +S.plan.h.toFixed(2), depth: +S.plan.depth.toFixed(2), lean: +S.plan.lean.toFixed(1), P: S.plan.P.toArray().map((v) => +v.toFixed(2)) }, gripToCan: grip, why: S.why,
+        carry: +S.carry.toFixed(2), can: !!S.can, hands: carried.map((e) => e.side).join(''), canId: S.canId, seat: S.seat?.name, sitW: +(S.sitW || 0).toFixed(2), left: env.cans().length, wait: +S.wait.toFixed(1), path: S.path.length, plan: S.plan && { ...S.plan.root, h: +S.plan.h.toFixed(2), depth: +S.plan.depth.toFixed(2), lean: +S.plan.lean.toFixed(1), P: S.plan.P.toArray().map((v) => +v.toFixed(2)) }, gripToCan: grip, why: S.why,
         y: +holder.position.y.toFixed(3) };
     },
   };

@@ -1480,8 +1480,8 @@ function tryMove(dx, dz) {
 // ---------------------------------------------------------------- dancing
 // An emote (G, or the Dance button): he dances on the beat. With a record
 // playing the beat follows the track's position; otherwise a steady 112 BPM.
-// Standing he cycles three moves every eight beats (groove, fist pump,
-// shimmy), crossfading between them; on the couch he nods and sways.
+// Standing he cycles six moves, a new one every eight beats (two-step, fist
+// pump, shimmy, running man, arm wave, point and lean), crossfading between them; on the couch he nods and sways.
 const BPM = 112;
 const canDance = () => !smoking.busy && !body.exiting && mode === 'room' && (upright() || body.state === 'seated');
 function toggleDance(on = body.danceTo < 0.5) {
@@ -1500,7 +1500,7 @@ function danceOverlay(t, s, lie, sim) {
   if (body.danceTo > 0 && !canDance()) { body.danceTo = 0; paintDanceBtn(); }
   body.dance += (body.danceTo - body.dance) * (1 - Math.exp(-sim * 4));
   const w = body.dance * (1 - lie);
-  body.danceDrop = 0;
+  body.danceDrop = 0; body.danceSway = 0;
   if (w < 0.002) return;
   const b = beatPhase(t);
   const bounce = 0.5 - 0.5 * Math.cos(b * PI * 2); // down on the beat
@@ -1519,29 +1519,52 @@ function danceOverlay(t, s, lie, sim) {
     }
     return;
   }
-  // Which move, crossfaded over the last beat of each eight.
-  const bar = b / 8, m0 = Math.floor(bar) % 3, m1 = (m0 + 1) % 3;
-  const x = clamp((bar % 1) * 8 - 7, 0, 1), xf = x * x * (3 - 2 * x);
-  const moves = [0, 0, 0]; moves[m0] += 1 - xf; moves[m1] += xf;
-  const pose = { lean: 0, twist: 0, hp: 0, hy: 0, L: { f: 0, d: 0, el: 0 }, R: { f: 0, d: 0, el: 0 } };
+  // Which move: six of them, a new one every eight beats in a mixed-up order,
+  // crossfaded over the last beat.
+  const ORDER = [0, 3, 1, 4, 2, 5, 3, 0, 5, 1, 4, 2];
+  const barI = Math.floor(b / 8), m0 = ORDER[barI % ORDER.length], m1 = ORDER[(barI + 1) % ORDER.length];
+  const x = clamp(((b / 8) % 1) * 8 - 7, 0, 1), xf = x * x * (3 - 2 * x);
+  const moves = [0, 0, 0, 0, 0, 0]; moves[m0] += 1 - xf; moves[m1] += xf;
+  const pose = { lean: 0, twist: 0, hp: 0, hy: 0, sway: 0, kb: 0, L: { f: 0, d: 0, el: 0, th: 0, kn: 0 }, R: { f: 0, d: 0, el: 0, th: 0, kn: 0 } };
   const addMove = (k, m) => {
     if (k <= 0) return;
-    pose.lean += k * m.lean; pose.twist += k * m.twist; pose.hp += k * m.hp; pose.hy += k * (m.hy || 0);
-    for (const a of ['L', 'R']) { pose[a].f += k * m[a][0]; pose[a].d += k * m[a][1]; pose[a].el += k * m[a][2]; }
+    for (const p of ['lean', 'twist', 'hp', 'hy', 'sway', 'kb']) pose[p] += k * (m[p] || 0);
+    for (const a of ['L', 'R']) {
+      const v = m[a];
+      pose[a].f += k * v[0]; pose[a].d += k * v[1]; pose[a].el += k * v[2];
+      pose[a].th += k * (v[3] || 0); pose[a].kn += k * (v[4] || 0);
+    }
   };
-  // Groove: sway, elbows bent, hands swinging opposite each other.
-  addMove(moves[0], { lean: 0.06 + 0.06 * bounce, twist: 0.24 * half, hp: 0.06 + 0.18 * bounce, L: [0.55 + 0.35 * half, -0.62, 1.45], R: [0.55 - 0.35 * half, -0.62, 1.45] });
-  // Fist pump: right arm up and punching on the beat, left hand on the hip.
-  addMove(moves[1], { lean: -0.04 + 0.05 * bounce, twist: 0.08 * half, hp: -0.12 + 0.2 * bounce, L: [0.15, -0.35, 1.9], R: [2.55 + 0.22 * bounce, -0.5, 0.35 + 0.65 * bounce] });
-  // Shimmy: arms out, shoulders popping forward and back on each beat.
   const pop = Math.sin(b * PI * 2);
-  addMove(moves[2], { lean: 0.1, twist: 0.3 * pop, hp: 0.1 * bounce, hy: -0.2 * half, L: [0.9 + 0.35 * pop, -0.3, 1.2], R: [0.9 - 0.35 * pop, -0.3, 1.2] });
+  const off = Math.max(0, Math.sin(b * PI * 2 - PI / 2)); // the off-beat
+  const lift = (sg) => Math.max(0, sg * half); // one leg each beat pair
+  // 1. Two-step: weight side to side, the free knee lifting, arms swinging, shoulders against the hips.
+  addMove(moves[0], { lean: 0.06 + 0.05 * bounce, twist: -0.22 * half, hp: 0.08 + 0.16 * bounce, hy: 0.12 * half, sway: 0.045 * half, kb: 1,
+    L: [0.5 - 0.4 * half, -0.66, 1.5, 0.3 * lift(-1), 0.55 * lift(-1)], R: [0.5 + 0.4 * half, -0.66, 1.5, 0.3 * lift(1), 0.55 * lift(1)] });
+  // 2. Fist pump: right arm punching up on the beat, left hand on the hip, knees popping.
+  addMove(moves[1], { lean: -0.06 + 0.06 * bounce, twist: 0.1 * half, hp: -0.15 + 0.25 * bounce, sway: 0.02 * half, kb: 1.3,
+    L: [0.15, -0.35, 1.9], R: [2.55 + 0.22 * bounce, -0.5, 0.35 + 0.65 * bounce] });
+  // 3. Shimmy: arms out, shoulders popping forward and back, leaning in.
+  addMove(moves[2], { lean: 0.14, twist: 0.32 * pop, hp: 0.1 * bounce, hy: -0.2 * half, kb: 0.8,
+    L: [0.9 + 0.35 * pop, -0.3, 1.2], R: [0.9 - 0.35 * pop, -0.3, 1.2] });
+  // 4. Running man: knees driving up in turn, arms pumping opposite.
+  addMove(moves[3], { lean: 0.12, twist: 0.12 * half, hp: 0.12 + 0.1 * bounce, kb: 0.6,
+    L: [0.35 + 0.6 * lift(1), -0.55, 1.6, 0.75 * lift(1) - 0.2 * lift(-1), 1.1 * lift(1)], R: [0.35 + 0.6 * lift(-1), -0.55, 1.6, 0.75 * lift(-1) - 0.2 * lift(1), 1.1 * lift(-1)] });
+  // 5. Arm wave: arms out to the sides, a wave rolling through from one hand to the other.
+  const wv = (ph) => Math.sin(b * PI + ph);
+  addMove(moves[4], { lean: 0.02, twist: 0.12 * wv(0), hp: 0.05 * wv(1), hy: 0.15 * wv(0.5), sway: 0.05 * wv(0.8), kb: 0.9,
+    L: [1.0 + 0.25 * wv(0), 0.55 + 0.45 * wv(0.6), 0.5 + 0.5 * wv(1.2)], R: [1.0 + 0.25 * wv(PI), 0.55 + 0.45 * wv(PI + 0.6), 0.5 + 0.5 * wv(PI + 1.2)] });
+  // 6. Point and lean: pointing up across himself on the one, the other hand on the three, leaning back.
+  const ptR = Math.max(0, Math.sin(b * PI / 2)), ptL = Math.max(0, -Math.sin(b * PI / 2));
+  addMove(moves[5], { lean: -0.1 - 0.05 * bounce, twist: 0.25 * (ptR - ptL), hp: -0.12, hy: 0.25 * (ptL - ptR), sway: 0.04 * (ptL - ptR), kb: 1,
+    L: [0.6 + 1.9 * ptL, -0.4 + 0.2 * ptL, 1.4 - 1.2 * ptL], R: [0.6 + 1.9 * ptR, -0.4 + 0.2 * ptR, 1.4 - 1.2 * ptR] });
   P.lean = mix(P.lean, pose.lean); P.twist = mix(P.twist, pose.twist);
   P.headPitch = mix(P.headPitch, pose.hp); P.headYaw = mix(P.headYaw, pose.hy);
   for (const k of ['L', 'R']) { P.armF[k] = mix(P.armF[k], pose[k].f); P.armD[k] = mix(P.armD[k], pose[k].d); P.elbow[k] = mix(P.elbow[k], pose[k].el); }
-  // Knees give on every beat.
-  const kb = 0.12 + 0.3 * bounce;
-  for (const k of ['L', 'R']) { P.thigh[k] = mix(P.thigh[k], kb * 0.55); P.knee[k] = mix(P.knee[k], kb); }
+  // Knees give on every beat (more or less by move), plus each move's own leg work.
+  const kb = (0.1 + 0.32 * bounce) * pose.kb + 0.06 * off;
+  for (const k of ['L', 'R']) { P.thigh[k] = mix(P.thigh[k], kb * 0.55 + pose[k].th); P.knee[k] = mix(P.knee[k], kb + pose[k].kn); }
+  body.danceSway = w * pose.sway;
   body.danceDrop = w * (0.006 + 0.04 * bounce);
 }
 
@@ -1781,7 +1804,7 @@ function stepBody(dt, t) {
   // Reaching for the table he slides forward to the edge of the cushion.
   px -= Math.sin(body.h) * P.scoot; pz -= Math.cos(body.h) * P.scoot;
   // Weight shift: the hips drift a centimetre or so sideways.
-  px += Math.cos(body.h) * shift * 0.012; pz += -Math.sin(body.h) * shift * 0.012;
+  px += Math.cos(body.h) * (shift * 0.012 + (body.danceSway || 0)); pz += -Math.sin(body.h) * (shift * 0.012 + (body.danceSway || 0));
   qUp.setFromEuler(eUp.set(0, body.h, 0));
   qTmp.slerpQuaternions(qUp, qLie, lie);
   for (const o of [customAvatar, builtInAvatar]) if (o) { o.position.set(px, hip, pz); o.quaternion.copy(qTmp); o.updateMatrixWorld(true); }
@@ -1966,11 +1989,21 @@ const guest = createGuest({
   solid: (x, y, z) => x < X0 + 0.04 || x > X1 - 0.04 || z < Z0 + 0.04 || z > Z1 - 0.04
     || canObstacles().some((o) => x > o.min[0] - 0.04 && x < o.max[0] + 0.04 && z > o.min[2] - 0.04 && z < o.max[2] + 0.04 && y < o.max[1] + 0.03),
   pickupMode: () => guestPickup,
+  // He's dancing (standing or on the couch), and the beat he's dancing to.
+  dancing: () => body.danceTo > 0.5 && body.dance > 0.3,
+  beat: (t) => beatPhase(t),
+  // A seat on the couch that isn't his (the far one from him), or none while he's lying on it.
+  freeSeat: () => {
+    if (body.lie > 0.3) return null;
+    const mine = body.state === 'seated' ? body.seat : null;
+    const free = SEATS.filter((q) => q !== mine).sort((a, b) => Math.abs(b.x - body.x) - Math.abs(a.x - body.x));
+    const q = free[0];
+    return q && { x: q.x, z: q.z, h: q.h + Math.PI, stand: { ...q.stand }, via: q.via && { ...q.via }, name: q.name };
+  },
   feet: (out) => (body.lie > 0.5 ? null : out.set(body.x, 0, body.z)),
-  canState: () => trevor.canState,
-  canPos: (out) => trevor.canPos(out),
-  takeCan: () => trevor.takeCan(),
-  dropCan: () => trevor.dropCan(),
+  cans: () => trevor.cans(),
+  takeCan: (id) => trevor.takeCan(id),
+  dropCan: (mesh) => trevor.dropCan(mesh),
   canCome: () => !trevor.active && !body.exiting && dream.st === 'none',
   sfx: (n) => sfx(n),
   error: (m) => showError(m),
@@ -1981,6 +2014,7 @@ function smoke() {
   const main = SEATS.find((q) => q.main);
   if (body.seat !== main) { slideTo(main, () => smoking.start()); paintSeatBar(true); return; }
   smoking.start();
+  guest.call(); // lighting up brings her in (for the cans, or to sit a while)
 }
 
 let recs = [];
@@ -3322,7 +3356,8 @@ function frame() {
   stepBody(dt, t);
   smoking.update(gamePaused() ? 0 : dt, t);
   trevor.update(gamePaused() ? 0 : dt * (window.__tslow ?? 1), t);
-  if (trevor.canState === 'rest' && !trevor.active && !guest.active) guest.canSettled();
+  // Once 20 cans have piled up she comes for them without waiting for a cigarette.
+  if (trevor.cans().length >= 20 && !trevor.active && !guest.active) guest.call();
   guest.update(gamePaused() ? 0 : dt * (window.__tslow ?? 1), t);
   stepDream(gamePaused() ? 0 : dt * (window.__dslow ?? 1));
   // You can't walk through Trevor.
@@ -3394,6 +3429,8 @@ if (params.get('debug')) {
     guest: () => guest._debug(),
     come: (mode) => guest.come(mode),
     putCan: (x, y, z, yaw) => trevor._putCan(x, y, z, yaw),
+    danceOn: (on) => toggleDance(on),
+    smokeNow: () => smoke(),
     obstacles: () => canObstacles(),
     jump: () => { lookOutside(); },
     dream: () => ({ ...dream, mode }),
