@@ -14,7 +14,7 @@ let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
 
-const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐', doughcon: '5', neh: '33', nuke: '☢', cabinet: '🗄' };
+const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐', doughcon: '5', neh: '33', nuke: '☢', cabinet: '🗄', records: '◉' };
 const ART = {
   clock: ['10:42', 'Thursday · October 9'],
   countdown: ['48', 'days to go'],
@@ -34,6 +34,7 @@ const ART = {
   neh: ['33', 'nothing ever happens'],
   nuke: ['☢', 'launch.exe'],
   cabinet: ['🗄', 'Downloads, 90s style'],
+  records: ['◉', 'crates and a turntable'],
 };
 
 const PAGES = [
@@ -215,6 +216,7 @@ function summary(w) {
     case 'doughcon': return 'Live from PizzINT Watch';
     case 'neh': return 'Live from PizzINT Watch';
     case 'nuke': return 'Click to open launch.exe';
+    case 'records': return [c.crate1, c.crate2, c.crate3].filter(Boolean).map((x) => String(x).replace(/^.*soundcloud\.com\//i, '').split(/[/?#]/)[0]).join(' · ') || 'No crates yet';
     case 'cabinet': return c.root ? c.root.split('/').pop() : 'Downloads';
     case 'board': return { white: 'Whiteboard', green: 'Green chalkboard', black: 'Black chalkboard' }[c.surface] || 'Whiteboard';
     case 'watched': return c.username ? `@${c.username}` : 'No Letterboxd user';
@@ -333,6 +335,7 @@ function field(w, f) {
     case 'image': return photoField(w);
     case 'folder': return folderField(w, f);
     case 'page': return pageField(w);
+    case 'model': return modelField(w, f);
     case 'city': return cityEditor(w, f, false);
     case 'cities': return cityEditor(w, f, true);
     default: return row(f.label, text(v, set, { placeholder: f.placeholder || '', label: f.label }), f.hint);
@@ -413,6 +416,19 @@ function pageField(w) {
     h('span', { style: { opacity: 0.75 } }, w.config.name || 'None chosen'),
     h('button.btn', { onclick: pick }, w.config.file ? 'Replace…' : 'Choose…')),
   'A single self-contained file. Feng Shui keeps its own copy, so the original can move.');
+}
+
+function modelField(w, f) {
+  const pick = async () => {
+    const r = await api.pickModel();
+    if (r.ok) { editWidget(w.id, { config: { [f.key]: r.data.file, [`${f.key}Name`]: r.data.name } }); render(); }
+    else if (!r.canceled) toast(r.error);
+  };
+  const reset = () => { editWidget(w.id, { config: { [f.key]: '', [`${f.key}Name`]: '' } }); render(); };
+  return row(f.label, h('div', { style: { display: 'flex', gap: '8px', alignItems: 'center' } },
+    h('span', { style: { opacity: 0.75 } }, w.config[f.key] ? (w.config[`${f.key}Name`] || 'Your model') : 'The default listener'),
+    w.config[f.key] ? h('button.btn', { onclick: reset }, 'Use default') : null,
+    h('button.btn', { onclick: pick }, 'Choose…')), f.hint);
 }
 
 function folderField(w, f) {

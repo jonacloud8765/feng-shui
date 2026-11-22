@@ -40,6 +40,7 @@ const MAP = {
   random: ['wealth', 'water', false, [184, 152]],
   launcher: ['helpful', 'metal', true, [256, 112]],
   cabinet: ['knowledge', 'metal', true, [480, 384]],
+  records: ['fame', 'fire', true, [560, 360], true],
   note: ['children', 'wood', true, [240, 232]],
   board: ['knowledge', 'metal', true, [400, 272]],
   cork: ['family', 'wood', true, [272, 344], true],

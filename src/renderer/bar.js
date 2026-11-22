@@ -13,6 +13,7 @@ const ICONS = {
   intel: S('<circle cx="8" cy="8" r="6"/><circle cx="8" cy="8" r="3.2"/><path d="M8 8l4.2-4.2"/><circle cx="8" cy="8" r="0.7" fill="currentColor"/>'),
   school: S('<path d="M1.5 6L8 3l6.5 3L8 9z"/><path d="M4.2 7.4v3.3c1 1 2.4 1.5 3.8 1.5s2.8-.5 3.8-1.5V7.4"/><path d="M14.5 6v3.5"/>'),
   cabinet: S('<rect x="3" y="1.8" width="10" height="12.4" rx="1"/><path d="M3 6h10M3 10h10M6.8 3.9h2.4M6.8 7.9h2.4M6.8 11.9h2.4"/>'),
+  records: S('<circle cx="8" cy="8" r="6.2"/><circle cx="8" cy="8" r="3.6"/><circle cx="8" cy="8" r="0.9" fill="currentColor"/>'),
   grid: S('<rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="9" y="2.5" width="4.5" height="4.5" rx="1"/><rect x="2.5" y="9" width="4.5" height="4.5" rx="1"/><rect x="9" y="9" width="4.5" height="4.5" rx="1"/>'),
   save: S('<path d="M3 2.5h8l2.5 2.5v8.5H3z"/><path d="M5.5 2.5v3.5h5v-3.5M5.5 13.5v-4h5v4"/>'),
   locked: S('<rect x="3.2" y="7" width="9.6" height="6.8" rx="1.4"/><path d="M5.3 7V5.2a2.7 2.7 0 0 1 5.4 0V7"/><circle cx="8" cy="10.3" r="0.8" fill="currentColor" stroke="none"/>'),
@@ -27,6 +28,7 @@ function iconFor(name) {
   if (/intel|osint|radar/.test(n)) return ICONS.intel;
   if (/school|class|study/.test(n)) return ICONS.school;
   if (/file|cabinet|folder/.test(n)) return ICONS.cabinet;
+  if (/disco|record|vinyl|music|crate/.test(n)) return ICONS.records;
   return ICONS.grid;
 }
 

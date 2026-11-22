@@ -4,7 +4,7 @@
 
 const ELEMENTS = ['wood', 'fire', 'earth', 'metal', 'water'];
 // Widgets that draw their own object (paper, cork, a ticket) get no glass frame.
-const SELF_DRAWN = new Set(['cork', 'board', 'doughcon', 'neh', 'watched', 'nuke', 'cabinet']);
+const SELF_DRAWN = new Set(['cork', 'board', 'doughcon', 'neh', 'watched', 'nuke', 'cabinet', 'records']);
 
 let built = '';
 let latest = null;

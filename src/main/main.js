@@ -10,6 +10,8 @@ const brand = require('../shared/brand');
 const apps = require('./apps');
 const weather = require('./weather').createWeatherService();
 let pizzintService;
+let soundcloudService;
+const soundcloud = () => soundcloudService || (soundcloudService = require('./soundcloud').createSoundCloud(app.getPath('userData')));
 const pizzint = () => pizzintService || (pizzintService = require('./pizzint').createPizzint(app.getPath('userData')));
 
 // The app keeps its data in Application Support/Feng Shui.
@@ -553,10 +555,39 @@ function registerIpc() {
     if (r.canceled) return { ok: false, canceled: true };
     return settle(pages.importPage(r.filePaths[0]));
   });
+  ipcMain.handle('fengshui:pick-model', async () => {
+    app.focus({ steal: true });
+    const r = await dialog.showOpenDialog(settingsWin && !settingsWin.isDestroyed() ? settingsWin : undefined, {
+      properties: ['openFile'],
+      message: 'Choose a 3D character (.glb)',
+      filters: [{ name: '3D model', extensions: ['glb'] }],
+    });
+    if (r.canceled) return { ok: false, canceled: true };
+    return settle((async () => {
+      const src = r.filePaths[0];
+      const fs = require('fs');
+      const st = await fs.promises.stat(src);
+      if (st.size > 120 * 1024 * 1024) throw new Error('That model is larger than 120 MB.');
+      const dir = path.join(app.getPath('userData'), 'models');
+      await fs.promises.mkdir(dir, { recursive: true });
+      const file = path.join(dir, `${require('crypto').randomUUID()}.glb`);
+      await fs.promises.copyFile(src, file);
+      return { file, name: path.basename(src) };
+    })());
+  });
   ipcMain.on('fengshui:open-watchlist', (e, user) => movies.openWatchlist(user));
   ipcMain.on('fengshui:open-profile', (e, user) => movies.openProfile(user));
   ipcMain.handle('fengshui:watched', (e, user, force) => movies.watched(user, { force }));
   ipcMain.handle('fengshui:film-details', (e, slugs) => movies.details(slugs));
+  ipcMain.handle('fengshui:records', async (e, force) => {
+    const w = store.widgets.find((x) => x.id === senderWidgetId(e));
+    if (!w || w.type !== 'records') return { ok: false, error: 'Not a Record Room.' };
+    const inputs = [w.config.crate1, w.config.crate2, w.config.crate3];
+    return { ok: true, data: await soundcloud().crates(inputs, { force: !!force }) };
+  });
+  ipcMain.on('fengshui:records-open', (e, url) => {
+    if (/^https:\/\/soundcloud\.com\/[^\s]*$/.test(String(url))) shell.openExternal(url);
+  });
   ipcMain.handle('fengshui:cabinet', async (e, op, ...args) => {
     const cab = require('./cabinet');
     const wid = senderWidgetId(e);
