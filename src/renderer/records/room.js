@@ -11,6 +11,7 @@
 // mode, warm lamps and fairy lights in dark mode. Same room, same things.
 
 import * as T from './three.js';
+import { createSmoking } from './smoke.js';
 
 const $ = (s) => document.querySelector(s);
 const params = new URLSearchParams(location.search);
@@ -963,11 +964,16 @@ const crates = CRATE.xs.map((x, ci) => {
 // shapes on joints) and a custom .glb (a standing mesh bent per vertex).
 // Angles: thigh/arm forward is positive, knee bend is positive, lean forward
 // is positive, twist turns the upper body like rotation.y.
-const SEAT = { x: 0, z: SOFA_Z + 0.03, h: 0 };
-const FRONT = { x: 0, z: SOFA_Z - 0.62 };
+// Sofa anchors. Each seat: where his hips go (x, z), the way he faces (h),
+// where he stands up to (stand), and, when the coffee table leaves only a
+// narrow gap, the end of that gap he sidesteps in from (via). main: the seat
+// by the ashtray.
+const SEATS = [{ x: 0, z: SOFA_Z + 0.03, h: 0, stand: { x: 0, z: SOFA_Z - 0.62 }, via: null, main: true, name: 'middle' }];
+const SEAT = SEATS[0];
 const P = {
   thigh: { L: 0, R: 0 }, knee: { L: 0, R: 0 }, armF: { L: 0, R: 0 }, armD: { L: -0.78, R: -0.78 },
-  lean: 0, twist: 0, breath: 0, armsOnly: false,
+  elbow: { L: 0.12, R: 0.12 }, headYaw: 0, headPitch: 0,
+  lean: 0, twist: 0, breath: 0, armsOnly: false, scoot: 0,
 };
 
 // Built-in listener: hoodie, jeans, headphones. Origin at the hips, facing -z.
@@ -1032,6 +1038,7 @@ function rigModel(root) {
     const base = new Float32Array(n * 3), nBase = new Float32Array(n * 3);
     const wArm = new Float32Array(n), wUp = new Float32Array(n), wChest = new Float32Array(n);
     const wThigh = new Float32Array(n), wKnee = new Float32Array(n), side = new Int8Array(n), shirt = new Float32Array(n);
+    const alongA = new Float32Array(n), offA = new Float32Array(n), wHead = new Float32Array(n);
     let anyShirt = false;
     const nm = new T.Matrix3().getNormalMatrix(o.matrixWorld);
     for (let i = 0; i < n; i++) {
@@ -1042,7 +1049,9 @@ function rigModel(root) {
       const ax = Math.abs(fx) - S.x / H, ay = fy - (S.y - y0) / H;
       const along = ax * armDir.x + ay * armDir.y;
       const off = Math.hypot(ax - along * armDir.x, ay - along * armDir.y);
-      wArm[i] = sm(-0.005, 0.04, along) * (1 - sm(0.07, 0.1, off));
+      wArm[i] = sm(-0.005, 0.04, along) * (1 - sm(0.045, 0.07, off));
+      alongA[i] = along; offA[i] = off;
+      wHead[i] = wArm[i] > 0.3 ? 0 : sm(0.845, 0.875, fy);
       wUp[i] = sm(hipY + H * 0.01, hipY + H * 0.12, y);
       wChest[i] = sm(0.58, 0.68, fy) * (1 - sm(0.74, 0.8, fy)) * (1 - sm(0.07, 0.1, Math.abs(fx))) * (v.z > S.z ? 1 : 0.3);
       wThigh[i] = wArm[i] > 0.5 ? 0 : sm(hipY + H * 0.02, hipY - H * 0.05, y);
@@ -1071,9 +1080,33 @@ function rigModel(root) {
     const inv = new T.Matrix4().copy(o.matrixWorld).invert();
     const nInv = new T.Matrix3().getNormalMatrix(o.matrixWorld).invert();
     let minY = Infinity; for (let i = 1; i < n * 3; i += 3) minY = Math.min(minY, base[i]);
-    rig.parts.push({ pos, nrm, base, nBase, wArm, wUp, wChest, wThigh, wKnee, side, inv, nInv, mesh: o, head: minY > y0 + H * 0.76 });
+    rig.parts.push({ pos, nrm, base, nBase, wArm, wUp, wChest, wThigh, wKnee, wHead, wFore: new Float32Array(n), alongA, offA, side, inv, nInv, mesh: o, head: minY > y0 + H * 0.76 });
     o.castShadow = true; o.receiveShadow = true;
     o.frustumCulled = false;
+  });
+  // Elbows: the forearm is the outer half of the arm. Anchors for props: a
+  // point in each hand (where a cigarette sits between the fingers) and the mouth.
+  const maxAlong = { 1: 0, [-1]: 0 };
+  for (const p of rig.parts) for (let i = 0; i < p.wArm.length; i++) if (p.wArm[i] > 0.9) maxAlong[p.side[i]] = Math.max(maxAlong[p.side[i]], p.alongA[i]);
+  rig.elbowAt = { 1: maxAlong[1] * 0.47, [-1]: maxAlong[-1] * 0.47 };
+  rig.armDir = armDir;
+  rig.hand = {}; rig.forearm = {}; rig.mouth = null; rig.neckY = y0 + H * 0.86;
+  const best = { 1: 1e9, [-1]: 1e9 }, bestF = {};
+  let mouthZ = -1e9;
+  rig.parts.forEach((p, pi) => {
+    for (let i = 0; i < p.wArm.length; i++) {
+      const sd = p.side[i], e = rig.elbowAt[sd], al = p.alongA[i];
+      if (p.wArm[i] > 0) p.wFore[i] = p.wArm[i] * sm(e - 0.012, e + 0.012, al);
+      if (p.wArm[i] > 0.95) {
+        const score = Math.abs(al - maxAlong[sd] * 0.9) + p.offA[i] * 1.5;
+        if (score < best[sd]) { best[sd] = score; rig.hand[sd === 1 ? 'L' : 'R'] = { part: pi, i }; }
+        const fs = Math.abs(al - maxAlong[sd] * 0.68) + p.offA[i] * 1.5;
+        if (fs < (bestF[sd] ?? 1e9)) { bestF[sd] = fs; rig.forearm[sd === 1 ? 'L' : 'R'] = { part: pi, i }; }
+      }
+      const x = p.base[i * 3], y = p.base[i * 3 + 1], z = p.base[i * 3 + 2];
+      const fy = (y - y0) / H;
+      if (Math.abs(x - xc) < H * 0.012 && fy > 0.897 && fy < 0.91 && z > mouthZ && p.wArm[i] === 0) { mouthZ = z; rig.mouth = { part: pi, i }; }
+    }
   });
   // The holder's origin is the hips; the model faces +z, so turn it to face -z like the room's listener.
   const holder = new T.Group();
@@ -1084,6 +1117,7 @@ function rigModel(root) {
   inner.rotation.y = PI;
   holder.add(inner);
   holder.userData.rig = rig;
+  rig.root = root;
   return holder;
 }
 function loadAvatar(url) {
@@ -1122,82 +1156,137 @@ function loadFurniture(url) {
     LAYOUT.table = { rect: [Tb.x - Tb.w / 2, Tb.x + Tb.w / 2, Tb.z - Tb.d / 2, Tb.z + Tb.d / 2] };
     LAYOUT.beanbag = false;
     Object.assign(TABLE, { x: Tb.x, z: Tb.z, y: Tb.y, w: Tb.w, d: Tb.d });
-    // He sits on the short arm facing into the room, so the corner camera sees him.
-    const armZ = (S.minZ + S.maxZ - S.depth) / 2, armX = S.minX + S.depth / 2;
-    Object.assign(SEAT, { x: armX + 0.04, z: armZ + 0.1, h: -PI / 2 });
-    Object.assign(FRONT, { x: S.minX + S.depth + 0.32, z: armZ + 0.1 });
-    Object.assign(LIE, { x: armX, z: armZ + 0.05, psi: PI, at: { x: armX + 1.6, y: 1.35, z: armZ + 0.9 } });
+    // Three seats along the long side, facing the table. The gap between the
+    // couch and the table is too narrow to walk, so he sidesteps in from its ends.
+    const frontZ = S.maxZ - S.depth, seatZ = frontZ + 0.36, standZ = frontZ - 0.21;
+    const viaR = { x: Tb.x + Tb.w / 2 + 0.3, z: standZ }, viaL = { x: Tb.x - Tb.w / 2 - 0.31, z: standZ };
+    SEATS.length = 0;
+    for (const [x, name, main] of [[Tb.x - Tb.w / 2 + 0.05, 'left', false], [Tb.x - 0.02, 'middle', true], [Tb.x + Tb.w / 2 - 0.05, 'right', false]]) {
+      SEATS.push({ x, z: seatZ, h: 0, stand: { x, z: standZ }, via: x < Tb.x - 0.2 ? viaL : viaR, main, name });
+    }
+    Object.assign(SEAT, SEATS.find((q) => q.main));
+    // Lying along the long side, head toward the corner cushions.
+    Object.assign(LIE, { x: Tb.x + 0.12, z: frontZ + 0.46, psi: -PI / 2, at: { x: Tb.x + 1.2, y: 1.05, z: frontZ - 1.4 } });
     setLie();
+    smoking.place(SEATS.find((q) => q.main), TABLE);
     LAYOUT.cam = { pos: new T.Vector3(X1 - 0.25, 2.45, Z1 - 0.15), at: new T.Vector3(-0.6, 0.1, -0.9) };
     buildNav();
-    if (body.state === 'seated') { body.x = SEAT.x; body.z = SEAT.z; body.h = SEAT.h; }
+    body.seat = SEATS.find((q) => q.main);
+    if (body.state === 'seated') { body.x = body.seat.x; body.z = body.seat.z; body.h = body.seat.h; }
     for (const r of recs) if (r.state === 'table') { r.tablePose = tableSlot(); }
   }, undefined, () => { showError('The furniture model couldn’t be loaded.'); });
 }
 
 // Bend the custom mesh into pose P. Model +x is the character's left.
-function poseCustom(rig) {
-  const { H, xc, zc, hipY, kneeY, S } = rig;
-  const rise = P.breath * 0.006 * H, swell = P.breath * 0.01 * H;
+// Each frame: the joint angles once (rigTrig), then every vertex (bendVertex).
+function rigTrig(rig) {
+  const { H, zc, hipY, kneeY, S } = rig;
   const sideK = { 1: 'L', [-1]: 'R' };
-  const trig = {};
+  const tr = { rise: P.breath * 0.006 * H, swell: P.breath * 0.01 * H, tw: P.twist, ln: P.lean };
   for (const s of [1, -1]) {
     const k = sideK[s];
     const th = -P.thigh[k];
     // Where the knee sits once the thigh has turned.
     const ky = hipY + (kneeY - hipY) * Math.cos(th), kz = zc + (kneeY - hipY) * Math.sin(th);
-    trig[s] = { th, ky, kz, kn: P.knee[k], a: P.armD[k], b: -P.armF[k] };
+    const a = P.armD[k], ca = Math.cos(a), sa = Math.sin(a);
+    // The elbow, once the arm has been lowered, and the hinge it bends on.
+    const eN = rig.elbowAt ? rig.elbowAt[s] * H : 0;
+    const ru = rig.armDir ? rig.armDir.x * eN : 0, rw = rig.armDir ? rig.armDir.y * eN : 0;
+    const eu = ru * ca - rw * sa, ew = ru * sa + rw * ca;
+    const dl = Math.hypot(eu, ew) || 1;
+    const dx = s * eu / dl, dy = ew / dl;
+    const ax = dy, ay = -dx, al = Math.hypot(ax, ay) || 1;
+    tr[s] = { th, ky, kz, kn: P.knee[k], a, b: -P.armF[k], el: P.elbow[k], ex: rig.xc + s * (S.x + eu), ey: S.y + ew, kx: ax / al, kyy: ay / al };
   }
-  const tw = P.twist, ln = P.lean;
+  tr.hy = P.headYaw; tr.hp = P.headPitch;
+  return tr;
+}
+const BV = { x: 0, y: 0, z: 0, nx: 0, ny: 0, nz: 0 };
+function bendVertex(rig, tr, p, i, wantNormal) {
+  const { xc, zc, hipY, S } = rig;
+  const { base, nBase, wArm, wUp, wChest, wThigh, wKnee, wHead, wFore, side: sd } = p;
+  let x = base[i * 3], y = base[i * 3 + 1], z = base[i * 3 + 2];
+  let nx = 0, ny = 0, nz = 0;
+  if (wantNormal) { nx = nBase[i * 3]; ny = nBase[i * 3 + 1]; nz = nBase[i * 3 + 2]; }
+  const s = sd[i], g = tr[s];
+  const wt = wThigh[i];
+  if (wt > 0) {
+    const a = g.th * wt, ca = Math.cos(a), sa = Math.sin(a);
+    const yy = y - hipY, zz = z - zc;
+    y = hipY + yy * ca - zz * sa; z = zc + yy * sa + zz * ca;
+    const ny2 = ny * ca - nz * sa; nz = ny * sa + nz * ca; ny = ny2;
+    const wk = wKnee[i];
+    if (wk > 0) {
+      const b = g.kn * wk, cb = Math.cos(b), sb = Math.sin(b);
+      const y2 = y - g.ky, z2 = z - g.kz;
+      y = g.ky + y2 * cb - z2 * sb; z = g.kz + y2 * sb + z2 * cb;
+      const ny3 = ny * cb - nz * sb; nz = ny * sb + nz * cb; ny = ny3;
+    }
+  }
+  const wa = wArm[i];
+  if (wa > 0) {
+    // Lower the arm from the shoulder (in its own mirrored frame), bend the elbow, then swing it.
+    const a = g.a * wa, ca = Math.cos(a), sa = Math.sin(a);
+    const u = s * (x - xc) - S.x, w = y - S.y;
+    x = xc + s * (S.x + u * ca - w * sa); y = S.y + u * sa + w * ca;
+    const nu = s * nx; nx = s * (nu * ca - ny * sa); ny = nu * sa + ny * ca;
+    const wf = wFore[i];
+    if (wf > 0 && g.el) {
+      // Rodrigues about the hinge (kx, kyy, 0) through the elbow.
+      const th = g.el * wf, c = Math.cos(th), sn = Math.sin(th), kx = g.kx, ky = g.kyy;
+      const px = x - g.ex, py = y - g.ey, pz = z - S.z;
+      const kd = kx * px + ky * py;
+      x = g.ex + px * c + (ky * pz) * sn + kx * kd * (1 - c);
+      y = g.ey + py * c + (-kx * pz) * sn + ky * kd * (1 - c);
+      z = S.z + pz * c + (kx * py - ky * px) * sn;
+      const kn = kx * nx + ky * ny;
+      const nx2 = nx * c + (ky * nz) * sn + kx * kn * (1 - c);
+      const ny2 = ny * c + (-kx * nz) * sn + ky * kn * (1 - c);
+      nz = nz * c + (kx * ny - ky * nx) * sn; nx = nx2; ny = ny2;
+    }
+    const b = g.b * wa, cb = Math.cos(b), sb = Math.sin(b);
+    const yy = y - S.y, zz = z - S.z;
+    y = S.y + yy * cb - zz * sb; z = S.z + yy * sb + zz * cb;
+    const ny2 = ny * cb - nz * sb; nz = ny * sb + nz * cb; ny = ny2;
+  }
+  const wh = wHead ? wHead[i] : 0;
+  if (wh > 0 && (tr.hy || tr.hp)) {
+    // Turn and nod the head about the neck.
+    const ny0 = rig.neckY;
+    const t = tr.hy * wh, ct = Math.cos(t), st = Math.sin(t);
+    const dx = x - xc, dz = z - zc;
+    x = xc + dx * ct + dz * st; z = zc - dx * st + dz * ct;
+    const nx2 = nx * ct + nz * st; nz = -nx * st + nz * ct; nx = nx2;
+    const q = tr.hp * wh, cq = Math.cos(q), sq = Math.sin(q);
+    const yy = y - ny0, zz = z - zc;
+    y = ny0 + yy * cq - zz * sq; z = zc + yy * sq + zz * cq;
+    const ny3 = ny * cq - nz * sq; nz = ny * sq + nz * cq; ny = ny3;
+  }
+  const wu = wUp[i];
+  if (wu > 0) {
+    y += tr.rise * wu;
+    z += tr.swell * wChest[i];
+    const t = tr.tw * wu, ct = Math.cos(t), st = Math.sin(t);
+    const dx = x - xc, dz = z - zc;
+    x = xc + dx * ct + dz * st; z = zc - dx * st + dz * ct;
+    const nx2 = nx * ct + nz * st; nz = -nx * st + nz * ct; nx = nx2;
+    const l = tr.ln * wu, cl = Math.cos(l), sl = Math.sin(l);
+    const yy = y - hipY, zz = z - zc;
+    y = hipY + yy * cl - zz * sl; z = zc + yy * sl + zz * cl;
+    const ny3 = ny * cl - nz * sl; nz = ny * sl + nz * cl; ny = ny3;
+  }
+  // First person at the shelf: only his arms and hands, the camera sits where his chest would be.
+  if (P.armsOnly && wa < 0.35) { x = xc; y = S.y; z = S.z; }
+  BV.x = x; BV.y = y; BV.z = z; BV.nx = nx; BV.ny = ny; BV.nz = nz;
+  return BV;
+}
+function poseCustom(rig) {
+  const tr = rigTrig(rig);
   for (const p of rig.parts) {
-    const { base, nBase, wArm, wUp, wChest, wThigh, wKnee, side: sd } = p;
     const pa = p.pos.array, na = p.nrm.array, e = p.inv.elements, ne = p.nInv.elements;
-    const n = wArm.length;
+    const n = p.wArm.length;
     for (let i = 0; i < n; i++) {
-      let x = base[i * 3], y = base[i * 3 + 1], z = base[i * 3 + 2];
-      let nx = nBase[i * 3], ny = nBase[i * 3 + 1], nz = nBase[i * 3 + 2];
-      const s = sd[i], g = trig[s];
-      const wt = wThigh[i];
-      if (wt > 0) {
-        const a = g.th * wt, ca = Math.cos(a), sa = Math.sin(a);
-        const yy = y - hipY, zz = z - zc;
-        y = hipY + yy * ca - zz * sa; z = zc + yy * sa + zz * ca;
-        const ny2 = ny * ca - nz * sa; nz = ny * sa + nz * ca; ny = ny2;
-        const wk = wKnee[i];
-        if (wk > 0) {
-          const b = g.kn * wk, cb = Math.cos(b), sb = Math.sin(b);
-          const y2 = y - g.ky, z2 = z - g.kz;
-          y = g.ky + y2 * cb - z2 * sb; z = g.kz + y2 * sb + z2 * cb;
-          const ny3 = ny * cb - nz * sb; nz = ny * sb + nz * cb; ny = ny3;
-        }
-      }
-      const wa = wArm[i];
-      if (wa > 0) {
-        // Lower the arm from the shoulder (in its own mirrored frame), then swing it.
-        const a = g.a * wa, ca = Math.cos(a), sa = Math.sin(a);
-        const u = s * (x - xc) - S.x, w = y - S.y;
-        x = xc + s * (S.x + u * ca - w * sa); y = S.y + u * sa + w * ca;
-        const nu = s * nx; nx = s * (nu * ca - ny * sa); ny = nu * sa + ny * ca;
-        const b = g.b * wa, cb = Math.cos(b), sb = Math.sin(b);
-        const yy = y - S.y, zz = z - S.z;
-        y = S.y + yy * cb - zz * sb; z = S.z + yy * sb + zz * cb;
-        const ny2 = ny * cb - nz * sb; nz = ny * sb + nz * cb; ny = ny2;
-      }
-      const wu = wUp[i];
-      if (wu > 0) {
-        y += rise * wu;
-        z += swell * wChest[i];
-        const t = tw * wu, ct = Math.cos(t), st = Math.sin(t);
-        const dx = x - xc, dz = z - zc;
-        x = xc + dx * ct + dz * st; z = zc - dx * st + dz * ct;
-        const nx2 = nx * ct + nz * st; nz = -nx * st + nz * ct; nx = nx2;
-        const l = ln * wu, cl = Math.cos(l), sl = Math.sin(l);
-        const yy = y - hipY, zz = z - zc;
-        y = hipY + yy * cl - zz * sl; z = zc + yy * sl + zz * cl;
-        const ny3 = ny * cl - nz * sl; nz = ny * sl + nz * cl; ny = ny3;
-      }
-      // First person at the shelf: only his arms and hands, the camera sits where his chest would be.
-      if (P.armsOnly && wa < 0.35) { x = xc; y = S.y; z = S.z; }
+      const { x, y, z, nx, ny, nz } = bendVertex(rig, tr, p, i, true);
       pa[i * 3] = e[0] * x + e[4] * y + e[8] * z + e[12];
       pa[i * 3 + 1] = e[1] * x + e[5] * y + e[9] * z + e[13];
       pa[i * 3 + 2] = e[2] * x + e[6] * y + e[10] * z + e[14];
@@ -1207,6 +1296,13 @@ function poseCustom(rig) {
     }
     p.pos.needsUpdate = true; p.nrm.needsUpdate = true;
   }
+}
+// Where an anchor vertex (a hand, the mouth) is in the room, in the current pose P.
+function anchorWorld(ref, out = new T.Vector3()) {
+  const rig = customAvatar?.userData.rig;
+  if (!rig || !ref) return null;
+  const v = bendVertex(rig, rigTrig(rig), rig.parts[ref.part], ref.i, false);
+  return out.set(v.x, v.y, v.z).applyMatrix4(rig.root.matrixWorld);
 }
 function poseBuiltIn() {
   const b = P.breath;
@@ -1233,9 +1329,17 @@ const LAYOUT = {
   beanbag: true,
   cam: null,
 };
+const camBoxes = [];
 function buildNav() {
   const rects = [...LAYOUT.sofa, [-1.2, 1.2, Z0, CRED.z + 0.24]];
   if (LAYOUT.table.rect) rects.push(LAYOUT.table.rect);
+  // The same furniture as boxes, for the camera.
+  camBoxes.length = 0;
+  const bx = (a, b, c, d, y1) => camBoxes.push(new T.Box3(new T.Vector3(a, 0, c), new T.Vector3(b, y1, d)));
+  for (const [a, b, c, d] of LAYOUT.sofa) bx(a, b, c, d, 0.82);
+  bx(-1.2, 1.2, Z0, CRED.z + 0.24, 0.66);
+  if (LAYOUT.table.rect) { const [a, b, c, d] = LAYOUT.table.rect; bx(a, b, c, d, TABLE.y + 0.04); }
+  else { const [cx, cz, cr] = LAYOUT.table.circle; bx(cx - cr, cx + cr, cz - cr, cz + cr, TABLE.y + 0.04); }
   const circles = [
     [X0 + 0.42, Z0 + 0.45, 0.22], [-1.6, CRED.z + 0.05, 0.16], [1.6, CRED.z + 0.05, 0.16],
     [1.45, SOFA_Z - 0.1, 0.16], [X1 - 0.4, 1.25, 0.28],
@@ -1318,10 +1422,18 @@ function findPath(from, to) {
 }
 
 // Where he is and what he's doing. sit: 1 on the sofa, 0 standing. lie: 1 lying
-// along the sofa. crouch: 1 squatting at the record shelf.
+// along the sofa. crouch: 1 squatting at the record shelf. vx/vz: his walking
+// velocity under the keys. seat: the sofa anchor he's on or heading for.
+//
+// States (each with a way in and a way out):
+//   standing, manual (keys), walking (a path), turning (to face something),
+//   shuffle (sidestepping along the couch, a controlled move that ignores the
+//   floor grid), sitting -> seated -> rising, lyingDown -> lying -> gettingUp.
+// Smoking and ashing run on top of 'seated' (see smoke.js) and lock him there.
 const body = {
   x: SEAT.x, z: SEAT.z, h: 0, sit: 1, lie: 0, crouch: 0, crouchTo: 0, state: 'seated', path: [], speed: 0, phase: 0, stride: 0,
   reach: 0, reachTo: 0, hold: 0, look: null, then: null, t: 0, from: null, to: null, faceTo: null, after: null, idle: 0, exiting: false,
+  vx: 0, vz: 0, seat: SEAT, auto: false, headT: 0, headYaw: 0, headPitch: 0, headTo: { y: 0, p: 0 }, fidget: 0, fidgetTo: 0, fidgetT: 12,
 };
 const LIE = { x: 0.12, z: SOFA_Z - 0.02, psi: -PI / 2, at: { x: 0.6, y: 1.5, z: -1.6 } };
 const qTmp = new T.Quaternion(), qLie = new T.Quaternion(), qUp = new T.Quaternion(), eUp = new T.Euler();
@@ -1332,15 +1444,21 @@ const marker = add(room, new T.RingGeometry(0.11, 0.14, 40), new T.MeshBasicMate
 noShadow.add(marker);
 const angleTo = (a, b) => { let d = (b - a) % (PI * 2); if (d > PI) d -= PI * 2; if (d < -PI) d += PI * 2; return d; };
 const headingFor = (dx, dz) => Math.atan2(-dx, -dz);
-const onSofa = () => ['seated', 'sitting', 'rising', 'lying', 'lyingDown', 'gettingUp'].includes(body.state);
+const onSofa = () => ['seated', 'sitting', 'rising', 'lying', 'lyingDown', 'gettingUp', 'sliding'].includes(body.state);
+// Seated, shift along the cushions to another seat.
+function slideTo(seat, then) {
+  body.state = 'sliding'; body.t = 0; body.from = { x: body.x, z: body.z }; body.to = { x: seat.x, z: seat.z }; body.slideSeat = seat; body.after = then || null;
+}
+const upright = () => ['standing', 'manual', 'walking', 'turning'].includes(body.state);
 
 // Get him on his feet, whatever he's doing, then carry on.
 function getUp(then) {
+  if (smoking.busy) return;
   if (body.state === 'lying' || body.state === 'lyingDown') { body.state = 'gettingUp'; body.t = 1 - body.lie; body.after = () => standUp(then); return; }
   if (body.state === 'gettingUp') { body.after = () => standUp(then); return; }
   if (body.state === 'seated' || body.state === 'sitting') { standUp(then); return; }
-  if (body.state === 'rising') { body.after = then; return; }
-  then();
+  if (body.state === 'rising' || body.state === 'shuffle') { const a = body.after; body.after = () => { a?.(); then?.(); }; return; }
+  then?.();
 }
 function walkTo(target, then, faceTo) {
   body.then = then || null;
@@ -1361,19 +1479,40 @@ function arrive() {
   if (body.faceTo != null) { body.state = 'turning'; body.turnThen = done; return; }
   done?.();
 }
+// A controlled sidestep, facing h, used in the gap between the couch and the table.
+function shuffleTo(to, h, then) {
+  body.state = 'shuffle'; body.from = { x: body.x, z: body.z }; body.to = { ...to }; body.faceH = h; body.t = 0;
+  body.after = then || null;
+}
+// Up off the seat: forward onto his feet, then out sideways if the table's in the way.
 function standUp(then) {
-  body.state = 'rising'; body.t = 0; body.from = { x: body.x, z: body.z }; body.to = { ...FRONT }; body.after = then;
+  const st = body.seat;
+  body.state = 'rising'; body.t = 0; body.from = { x: body.x, z: body.z }; body.to = { ...st.stand };
+  body.after = st.via ? () => shuffleTo(st.via, st.h, then) : then;
 }
-function sitOnSofa(then) {
-  if (body.state === 'seated') { then?.(); return; }
-  if (onSofa()) return;
-  walkTo(FRONT, () => { body.state = 'sitting'; body.t = 0; body.from = { x: body.x, z: body.z }; body.to = { x: SEAT.x, z: SEAT.z }; body.after = then || null; }, SEAT.h);
+function nearestSeat(p = body) {
+  let best = SEATS[0], bd = 1e9;
+  for (const q of SEATS) { const d = Math.hypot(p.x - q.x, p.z - q.z); if (d < bd) { bd = d; best = q; } }
+  return best;
 }
-function lieDown() {
-  sitOnSofa(() => { body.state = 'lyingDown'; body.t = 0; });
+function sitOnSofa(then, seat) {
+  if (smoking.busy) return;
+  if (body.state === 'seated' && (!seat || seat === body.seat)) { then?.(); return; }
+  if (onSofa() && body.state !== 'seated') return;
+  seat = seat || (body.state === 'seated' ? body.seat : nearestSeat());
+  const sitDown = () => { body.seat = seat; body.state = 'sitting'; body.t = 0; body.from = { x: body.x, z: body.z }; body.to = { x: seat.x, z: seat.z }; body.after = then || null; };
+  const go = () => {
+    // Into the gap from its end, sidestepping, then down; or straight down where there's room.
+    if (seat.via) walkTo(seat.via, () => shuffleTo(seat.stand, seat.h, sitDown), seat.h);
+    else walkTo(seat.stand, sitDown, seat.h);
+  };
+  if (body.state === 'seated') getUp(go); else go();
+}
+function lieDown(seat) {
+  sitOnSofa(() => { body.state = 'lyingDown'; body.t = 0; }, seat);
 }
 
-// Keys held down for walking: WASD or the arrow keys.
+// Keys held down for walking: WASD or the arrow keys. No running.
 const held = new Set();
 const MOVE_KEYS = { w: 'f', arrowup: 'f', s: 'b', arrowdown: 'b', a: 'l', arrowleft: 'l', d: 'r', arrowright: 'r' };
 function moveInput() {
@@ -1381,93 +1520,127 @@ function moveInput() {
   for (const k of held) { const m = MOVE_KEYS[k]; if (m === 'f') f += 1; if (m === 'b') f -= 1; if (m === 'l') r -= 1; if (m === 'r') r += 1; }
   return { f: clamp(f, -1, 1), r: clamp(r, -1, 1) };
 }
+// The floor grid is the collision for his capsule: try the move, else slide along the wall.
 function tryMove(dx, dz) {
   const ok = (x, z) => { const [i, j] = navCell(x, z); return navFree(i, j); };
   if (ok(body.x + dx, body.z + dz)) { body.x += dx; body.z += dz; return Math.hypot(dx, dz); }
-  if (ok(body.x + dx, body.z)) { body.x += dx; return Math.abs(dx); }
-  if (ok(body.x, body.z + dz)) { body.z += dz; return Math.abs(dz); }
+  if (ok(body.x + dx, body.z)) { body.x += dx; body.vz *= 0.5; return Math.abs(dx); }
+  if (ok(body.x, body.z + dz)) { body.z += dz; body.vx *= 0.5; return Math.abs(dz); }
+  body.vx *= 0.3; body.vz *= 0.3;
   return 0;
 }
 
 function stepBody(dt, t) {
-  const WALK = 1.05, RUN = 1.3, TURN = 5.5;
-  body.idle += dt;
-  // Keyboard walking (only out in the room, not while browsing).
-  const inp = mode === 'room' && !body.exiting ? moveInput() : { f: 0, r: 0 };
-  if (inp.f || inp.r) {
-    body.idle = 0;
-    if (onSofa()) { if (body.state !== 'rising' && body.state !== 'gettingUp') getUp(() => { body.state = 'standing'; }); }
-    else if (['standing', 'walking', 'turning', 'manual'].includes(body.state)) {
+  const TURN = 5.5;
+  const sim = gamePaused() ? 0 : dt;
+  const WALK = prefs.walkSpeed;
+  body.idle += sim;
+  // Keys move him only out in the room, with no menu open and nothing locking him in place.
+  const inp = keysDriveBody() ? moveInput() : { f: 0, r: 0 };
+  const pressing = !!(inp.f || inp.r);
+  if (pressing) {
+    body.idle = 0; body.auto = false;
+    if (smoking.busy) { /* he stays put until the cigarette's out */ }
+    else if (onSofa()) { if (!['rising', 'gettingUp', 'shuffle'].includes(body.state)) getUp(() => { body.state = 'standing'; }); }
+    else if (['standing', 'walking', 'turning'].includes(body.state)) {
       body.state = 'manual'; body.path = []; body.then = null; body.faceTo = null; body.reachTo = 0; body.crouchTo = 0;
     }
-  } else if (body.state === 'manual') body.state = 'standing';
+  }
 
   const st = body.state;
   if (st === 'rising' || st === 'sitting') {
-    body.t = Math.min(1, body.t + dt / 1.1);
+    body.t = Math.min(1, body.t + sim / 1.3);
     const e = ease(body.t);
     body.sit = st === 'rising' ? 1 - e : e;
     body.x = lerp(body.from.x, body.to.x, e); body.z = lerp(body.from.z, body.to.z, e);
-    body.h += angleTo(body.h, SEAT.h) * (1 - Math.exp(-dt * 6));
+    body.h += angleTo(body.h, body.seat.h) * (1 - Math.exp(-sim * 6));
     if (body.t >= 1) {
       body.state = st === 'rising' ? 'standing' : 'seated';
-      if (st === 'sitting') body.h = SEAT.h;
+      if (st === 'sitting') { body.h = body.seat.h; cameraFaceHim(); }
       const a = body.after; body.after = null; a?.();
     }
+  } else if (st === 'sliding') {
+    body.t = Math.min(1, body.t + sim / 1.4);
+    const e = ease(body.t);
+    body.x = lerp(body.from.x, body.to.x, e); body.z = lerp(body.from.z, body.to.z, e);
+    if (body.t >= 1) { body.seat = body.slideSeat; body.state = 'seated'; const a = body.after; body.after = null; a?.(); }
   } else if (st === 'lyingDown' || st === 'gettingUp') {
-    body.t = Math.min(1, body.t + dt / 1.6);
+    body.t = Math.min(1, body.t + sim / 1.9);
     body.lie = st === 'lyingDown' ? body.t : 1 - body.t;
     if (body.t >= 1) {
       body.state = st === 'lyingDown' ? 'lying' : 'seated';
       const a = body.after; body.after = null; a?.();
     }
+  } else if (st === 'shuffle') {
+    const d = Math.hypot(body.to.x - body.from.x, body.to.z - body.from.z);
+    const dur = Math.max(0.35, d / 0.5);
+    const t0 = body.t;
+    body.t = Math.min(1, body.t + sim / dur);
+    body.x = lerp(body.from.x, body.to.x, body.t); body.z = lerp(body.from.z, body.to.z, body.t);
+    body.h += angleTo(body.h, body.faceH) * (1 - Math.exp(-sim * 8));
+    body.speed = 0.5;
+    body.phase += (body.t - t0) * d / 0.4 * PI;
+    if (body.t >= 1) { body.state = 'standing'; body.speed = 0; const a = body.after; body.after = null; a?.(); }
   } else if (st === 'walking') {
     const tgt = body.path[0];
     const dx = tgt.x - body.x, dz = tgt.z - body.z, d = Math.hypot(dx, dz);
     const want = headingFor(dx, dz), turn = angleTo(body.h, want);
-    body.h += clamp(turn, -TURN * dt, TURN * dt);
+    body.h += clamp(turn, -TURN * sim, TURN * sim);
     const left = body.path.reduce((s, p, k) => s + (k ? Math.hypot(p.x - body.path[k - 1].x, p.z - body.path[k - 1].z) : d), 0);
     // Slow down to turn sharply and to stop; speed up gently.
     const vMax = WALK * clamp(1.2 - Math.abs(turn) * 0.8, 0.15, 1) * clamp(left / 0.45, 0.25, 1);
-    body.speed += (vMax - body.speed) * (1 - Math.exp(-dt * 5));
-    const step = Math.min(d, body.speed * dt);
+    body.speed += (vMax - body.speed) * (1 - Math.exp(-sim * 4));
+    const step = Math.min(d, body.speed * sim);
     if (d > 1e-4) { body.x += dx / d * step; body.z += dz / d * step; }
     body.phase += step / 0.62 * PI;
     if (d < 0.03) { body.path.shift(); if (!body.path.length) arrive(); }
   } else if (st === 'turning') {
     const turn = angleTo(body.h, body.faceTo);
-    body.h += clamp(turn, -3.5 * dt, 3.5 * dt);
-    body.phase += Math.abs(clamp(turn, -3.5 * dt, 3.5 * dt)) * 0.9;
+    body.h += clamp(turn, -3.5 * sim, 3.5 * sim);
+    body.phase += Math.abs(clamp(turn, -3.5 * sim, 3.5 * sim)) * 0.9;
     if (Math.abs(turn) < 0.02) { body.state = 'standing'; body.faceTo = null; const a = body.turnThen; body.turnThen = null; a?.(); }
-  } else if (st === 'manual') {
-    let mx, mz;
-    if (settings.view === 'first') {
-      body.h -= inp.r * 2.4 * dt;
-      mx = -Math.sin(body.h) * inp.f; mz = -Math.cos(body.h) * inp.f;
-    } else {
-      // Relative to the camera: W is away from it, A and D to its left and right.
-      const cf = new T.Vector3(); camera.getWorldDirection(cf); cf.y = 0; cf.normalize();
-      mx = cf.x * inp.f - cf.z * inp.r; mz = cf.z * inp.f + cf.x * inp.r;
+  } else if (st === 'manual' || st === 'standing') {
+    // Keys: a target velocity (diagonals no faster), eased in and out, so he
+    // speeds up, slows down and stops over a step or two instead of snapping.
+    let wx = 0, wz = 0;
+    if (pressing) {
+      let fx, fz;
+      if (settings.view === 'first') { fx = -Math.sin(body.h); fz = -Math.cos(body.h); }
+      else { fx = -Math.sin(orbit.yaw); fz = -Math.cos(orbit.yaw); }
+      const rx = -fz, rz = fx;
+      wx = fx * inp.f + rx * inp.r; wz = fz * inp.f + rz * inp.r;
+      const m = Math.hypot(wx, wz); wx /= m; wz /= m;
+      let k = 1;
+      if (settings.view !== 'first') {
+        // He turns to face where he's going; a sharp turn slows him to a pivot.
+        const turn = angleTo(body.h, headingFor(wx, wz));
+        body.h += clamp(turn, -TURN * sim, TURN * sim);
+        k = clamp(1.25 - Math.abs(turn) * 0.75, 0.12, 1);
+      } else if (inp.f < 0 && !inp.r) k = 0.6;
+      wx *= WALK * k; wz *= WALK * k;
     }
-    const m = Math.hypot(mx, mz);
-    if (m > 0.01) {
-      mx /= m; mz /= m;
-      const back = settings.view === 'first' && inp.f < 0;
-      if (!back) { const turn = angleTo(body.h, headingFor(mx, mz)); body.h += clamp(turn, -TURN * dt, TURN * dt); }
-      const vMax = (back ? 0.55 : RUN) * clamp(1.2 - Math.abs(angleTo(body.h, headingFor(mx, mz))) * (back ? 0 : 0.6), 0.2, 1);
-      body.speed += (vMax - body.speed) * (1 - Math.exp(-dt * 6));
-      const moved = tryMove(mx * body.speed * dt, mz * body.speed * dt);
+    const acc = pressing ? 3.0 : 4.2;
+    let ex = wx - body.vx, ez = wz - body.vz;
+    const el = Math.hypot(ex, ez), lim = acc * sim;
+    if (el > lim) { ex *= lim / el; ez *= lim / el; }
+    body.vx += ex; body.vz += ez;
+    const v = Math.hypot(body.vx, body.vz);
+    if (v > 0.004) {
+      const moved = tryMove(body.vx * sim, body.vz * sim);
+      const back = body.vx * -Math.sin(body.h) + body.vz * -Math.cos(body.h) < -0.05;
       body.phase += moved / 0.62 * PI * (back ? -1 : 1);
-      if (moved < body.speed * dt * 0.3) body.speed *= Math.exp(-dt * 10);
-    }
+    } else { body.vx = 0; body.vz = 0; }
+    body.speed = Math.hypot(body.vx, body.vz);
+    body.state = pressing || body.speed > 0.03 ? 'manual' : 'standing';
   }
-  if (!['walking', 'manual'].includes(st)) body.speed *= Math.exp(-dt * 8);
-  const moving = st === 'walking' || st === 'manual' || st === 'turning';
-  body.stride += ((moving ? Math.max(clamp(body.speed / WALK, 0, 1.15), st === 'turning' ? 0.35 : 0) : 0) - body.stride) * (1 - Math.exp(-dt * 8));
-  body.reach += (body.reachTo - body.reach) * (1 - Math.exp(-dt * (body.reachTo > body.reach ? 5 : 3)));
-  body.crouch += (body.crouchTo - body.crouch) * (1 - Math.exp(-dt * 4));
-  body.hold += ((mode === 'inspect' ? 1 : 0) - body.hold) * (1 - Math.exp(-dt * 5));
-  marker.material.opacity *= Math.exp(-dt * (st === 'walking' ? 0.6 : 3));
+  if (!['walking', 'manual', 'shuffle'].includes(body.state)) { body.speed *= Math.exp(-sim * 8); body.vx = 0; body.vz = 0; }
+  const moving = ['walking', 'manual', 'turning', 'shuffle'].includes(body.state);
+  body.stride += ((moving ? Math.max(clamp(body.speed / WALK, 0, 1.1), body.state === 'turning' ? 0.35 : 0) : 0) - body.stride) * (1 - Math.exp(-sim * 8));
+  body.reach += (body.reachTo - body.reach) * (1 - Math.exp(-sim * (body.reachTo > body.reach ? 5 : 3)));
+  body.crouch += (body.crouchTo - body.crouch) * (1 - Math.exp(-sim * 4));
+  body.hold += ((mode === 'inspect' ? 1 : 0) - body.hold) * (1 - Math.exp(-sim * 5));
+  marker.material.opacity *= Math.exp(-dt * (body.state === 'walking' ? 0.6 : 3));
+  footsteps(body.phase);
 
   // Out through the door on the right: leave the room for the Feng Shui layout.
   if (body.x > X1 + 0.12 && !body.exiting) {
@@ -1476,47 +1649,85 @@ function stepBody(dt, t) {
     $('#veil').classList.remove('gone');
     setTimeout(() => send({ type: 'exit' }), 700);
     setTimeout(() => {
-      Object.assign(body, { x: SEAT.x, z: SEAT.z, h: SEAT.h, sit: 1, lie: 0, state: 'seated', path: [], speed: 0, exiting: false });
+      const q = SEATS.find((x) => x.main);
+      Object.assign(body, { x: q.x, z: q.z, h: q.h, seat: q, sit: 1, lie: 0, state: 'seated', path: [], speed: 0, vx: 0, vz: 0, exiting: false });
       held.clear();
+      cameraFaceHim(true);
       $('#veil').classList.add('gone');
     }, 1800);
   }
 
-  // Dozing off: left alone for a while, he goes and lies down on the sofa.
-  if (body.idle > 45 && mode === 'room' && (st === 'standing' || st === 'seated')) { body.idle = 0; lieDown(); }
+  // Left alone for 30 seconds, he wanders over to the couch and lies down.
+  // Any key takes control back straight away.
+  if (body.idle > 30 && mode === 'room' && !uiOpen() && !smoking.active && !body.exiting && (body.state === 'standing' || body.state === 'seated')) {
+    body.idle = 0; body.auto = true; lieDown();
+  }
+
+  // Idle life: looking around now and then, small shifts of weight, and on the
+  // couch an occasional change of how his legs and arms lie.
+  const still = body.state === 'standing' || body.state === 'seated' || body.state === 'lying';
+  body.headT -= sim;
+  if (body.headT <= 0) {
+    body.headT = 2.5 + Math.random() * 4.5;
+    const lookAround = still && Math.random() < 0.7;
+    body.headTo = lookAround ? { y: (Math.random() - 0.5) * (body.state === 'lying' ? 0.6 : 1.0), p: (Math.random() - 0.6) * 0.22 } : { y: 0, p: 0 };
+  }
+  if (!still) body.headTo = { y: 0, p: 0 };
+  body.fidgetT -= sim;
+  if (body.fidgetT <= 0) { body.fidgetT = 12 + Math.random() * 14; body.fidgetTo = Math.random(); }
+  body.fidget += (body.fidgetTo - body.fidget) * (1 - Math.exp(-sim * 0.8));
+  const hk = 1 - Math.exp(-sim * 2.2);
+  body.headYaw += (body.headTo.y - body.headYaw) * hk; body.headPitch += (body.headTo.p - body.headPitch) * hk;
 
   // Pose numbers from the state.
   const rig = customAvatar?.userData.rig || builtIn;
   const s = ease(clamp(body.sit, 0, 1)), lie = ease(clamp(body.lie, 0, 1)), c = ease(clamp(body.crouch, 0, 1));
   const a = 0.42 * Math.min(1, body.stride), ph = body.phase;
   const swingL = a * Math.sin(ph), swingR = -swingL;
-  const legs = (swing, bend) => [lerp(lerp(lerp(swing, 1.3, c), PI / 2, s), 0.1, lie), lerp(lerp(lerp(bend, 2.2, c), rig.seatKnee, s), 0.22, lie)];
-  [P.thigh.L, P.knee.L] = legs(swingL, 1.15 * a * Math.max(0, Math.cos(ph)) + 0.04);
-  [P.thigh.R, P.knee.R] = legs(swingR, 1.15 * a * Math.max(0, -Math.cos(ph)) + 0.04);
-  P.breath = 0.5 - 0.5 * Math.cos(t * PI * 2 / (lie > 0.5 ? 6 : 4.6));
+  // On the couch: one knee drawn up a little when he shifts.
+  const lieKnee = { L: 0.22 + 0.5 * body.fidget * lie, R: 0.22 };
+  const legs = (k, swing, bend) => [lerp(lerp(lerp(swing, 1.3, c), PI / 2, s), 0.1 + 0.25 * (k === 'L' ? body.fidget : 0), lie), lerp(lerp(lerp(bend, 2.2, c), rig.seatKnee, s), lieKnee[k], lie)];
+  [P.thigh.L, P.knee.L] = legs('L', swingL, 1.15 * a * Math.max(0, Math.cos(ph)) + 0.04);
+  [P.thigh.R, P.knee.R] = legs('R', swingR, 1.15 * a * Math.max(0, -Math.cos(ph)) + 0.04);
+  P.breath = 0.5 - 0.5 * Math.cos(t * PI * 2 / (lie > 0.5 ? 6 : smoking.active ? 5.2 : 4.6));
   let reachSide = null, twist = 0;
   if (body.reach > 0.001 && body.look) {
     const want = headingFor(body.look.x - body.x, body.look.z - body.z);
     twist = clamp(angleTo(body.h, want), -0.9, 0.9) * 0.6 * body.reach;
     reachSide = angleTo(body.h, want) > 0.05 ? 'L' : 'R';
   }
-  P.twist = twist;
-  P.lean = lerp(lerp(lerp(0.05 * body.stride, 0.42, c), -0.13, s), 0, lie) + body.reach * 0.55 * (1 - c) * (1 - lie) + P.breath * 0.012;
+  // Standing still, his weight drifts from foot to foot.
+  const shift = body.state === 'standing' ? Math.sin(t * PI * 2 / 7.5) : 0;
+  P.twist = twist + shift * 0.025;
+  // Getting up and sitting down he leans forward over his feet and pushes off with his hands.
+  const push = (body.state === 'rising' || body.state === 'sitting') ? Math.sin(PI * clamp(body.t, 0, 1)) : body.state === 'sliding' ? 0.5 * Math.sin(PI * clamp(body.t, 0, 1)) : body.state === 'gettingUp' || body.state === 'lyingDown' ? 0.6 * Math.sin(PI * clamp(body.t, 0, 1)) : 0;
+  P.lean = lerp(lerp(lerp(0.05 * body.stride, 0.42, c), -0.13, s), 0, lie) + body.reach * 0.55 * (1 - c) * (1 - lie) + P.breath * 0.012 + push * 0.38;
   for (const k of ['L', 'R']) {
     const walkArm = -0.55 * (k === 'L' ? swingL : swingR);
-    let f = lerp(lerp(lerp(walkArm, 0.5, c), 0.55, s), 0.3, lie), d = lerp(lerp(-0.8, -0.66, s), -0.86, lie);
-    if (k === reachSide) { f = lerp(f, lerp(lerp(1.25, 1.15, s), 0.75, c), body.reach); d = lerp(d, -0.45, body.reach); }
+    let f = lerp(lerp(lerp(walkArm, 0.5, c), 0.28, s), 0.3 + (k === 'R' ? 0.6 * body.fidget : 0), lie), d = lerp(lerp(-0.8, -0.7, s), -0.86, lie);
+    let el = lerp(lerp(0.12 + 0.25 * body.stride, 0.4, c), 0.95, s);
+    el = lerp(el, k === 'R' ? 0.5 + 1.2 * body.fidget : 0.35, lie);
+    if (k === reachSide) { f = lerp(f, lerp(lerp(1.25, 1.15, s), 0.75, c), body.reach); d = lerp(d, -0.45, body.reach); el = lerp(el, 0.15, body.reach); }
     else f = lerp(f, f * 0.7, body.reach);
     // Holding a record up to look at it: both hands out in front.
-    f = lerp(f, 1.2, body.hold); d = lerp(d, -0.5, body.hold);
-    P.armF[k] = f; P.armD[k] = d;
+    f = lerp(f, 1.2, body.hold); d = lerp(d, -0.5, body.hold); el = lerp(el, 0.25, body.hold);
+    // Pushing off the cushions.
+    f = lerp(f, 0.2, push); d = lerp(d, -0.58, push); el = lerp(el, 0.55, push);
+    P.armF[k] = f; P.armD[k] = d; P.elbow[k] = el;
   }
+  P.headYaw = body.headYaw; P.headPitch = body.headPitch; P.scoot = 0;
+  // The cigarette takes over his right arm (and the left to light it).
+  smoking.pose(P, sim, t);
   const standY = rig.standHip * Math.cos(a * Math.sin(ph)) - 0.012 * body.stride;
   const hip = lerp(lerp(lerp(standY, 0.46, c), rig.seatHip, s), 0.45, lie);
-  const px = lerp(body.x, LIE.x, lie), pz = lerp(body.z, LIE.z, lie);
+  let px = lerp(body.x, LIE.x, lie), pz = lerp(body.z, LIE.z, lie);
+  // Reaching for the table he slides forward to the edge of the cushion.
+  px -= Math.sin(body.h) * P.scoot; pz -= Math.cos(body.h) * P.scoot;
+  // Weight shift: the hips drift a centimetre or so sideways.
+  px += Math.cos(body.h) * shift * 0.012; pz += -Math.sin(body.h) * shift * 0.012;
   qUp.setFromEuler(eUp.set(0, body.h, 0));
   qTmp.slerpQuaternions(qUp, qLie, lie);
-  for (const o of [customAvatar, builtInAvatar]) if (o) { o.position.set(px, hip, pz); o.quaternion.copy(qTmp); }
+  for (const o of [customAvatar, builtInAvatar]) if (o) { o.position.set(px, hip, pz); o.quaternion.copy(qTmp); o.updateMatrixWorld(true); }
   if (customAvatar?.visible) poseCustom(customAvatar.userData.rig);
   else if (builtInAvatar.visible) poseBuiltIn();
 }
@@ -1524,10 +1735,13 @@ function stepBody(dt, t) {
 function eyePose(out) {
   const rig = customAvatar?.userData.rig || builtIn;
   const s = ease(clamp(body.sit, 0, 1)), lie = ease(clamp(body.lie, 0, 1));
-  const y = lerp(rig.standHip + 0.76 + 0.015 * Math.sin(body.phase * 2) * Math.min(1, body.stride), rig.seatHip + 0.62, s);
-  const fx = -Math.sin(body.h), fz = -Math.cos(body.h);
+  // A little bob in step with his feet.
+  const bob = 0.018 * Math.abs(Math.sin(body.phase)) * Math.min(1, body.stride);
+  const y = lerp(rig.standHip + 0.76 - bob, rig.seatHip + 0.62, s) - 0.25 * clamp(body.crouch, 0, 1);
+  const hh = body.h + body.headYaw * 0.6;
+  const fx = -Math.sin(hh), fz = -Math.cos(hh);
   out.pos.set(body.x + fx * 0.1, y, body.z + fz * 0.1);
-  out.at.set(body.x + fx * 2, y - lerp(0.35, 0.55, s), body.z + fz * 2);
+  out.at.set(body.x + fx * 2, y - lerp(0.25, 0.45, s) + body.headPitch, body.z + fz * 2);
   if (lie > 0) {
     out.pos.lerp(tmpV.set(LIE.x + Math.sin(LIE.psi) * 0.72, 0.62, LIE.z + Math.cos(LIE.psi) * 0.72), lie);
     out.at.lerp(tmpV.set(LIE.at.x, LIE.at.y, LIE.at.z), lie);
@@ -1535,10 +1749,117 @@ function eyePose(out) {
   return out;
 }
 
+// ---------------------------------------------------------------- smoking
+// Where his hands and mouth are, for the cigarette (custom character: real
+// vertices of the bent mesh; the built-in one: the ends of its arms).
+const anchorRefs = { handR: new T.Vector3(), handL: new T.Vector3(), foreR: new T.Vector3(), mouth: new T.Vector3(), fwd: new T.Vector3() };
+function smokeAnchors() {
+  const A = anchorRefs, rig = customAvatar?.visible ? customAvatar.userData.rig : null;
+  A.fwd.set(-Math.sin(body.h), 0, -Math.cos(body.h));
+  if (rig) {
+    if (!anchorWorld(rig.hand.R, A.handR) || !anchorWorld(rig.hand.L, A.handL) || !anchorWorld(rig.forearm.R, A.foreR) || !anchorWorld(rig.mouth, A.mouth)) return null;
+  } else {
+    builtIn.arms.R.localToWorld(A.handR.set(0, -0.44, 0.02));
+    builtIn.arms.L.localToWorld(A.handL.set(0, -0.44, 0.02));
+    builtIn.arms.R.localToWorld(A.foreR.set(0, -0.3, 0));
+    builtIn.head[1]?.localToWorld(A.mouth.set(0, -0.04, -0.1));
+  }
+  return A;
+}
+// Arm angles that put a hand on a point: a small coordinate-descent search over
+// the shoulder swing, the arm's lift and the elbow, with the lean held fixed.
+function solveArm(k, target, lean, leanRange, scootMax = 0, o = {}) {
+  const rig = customAvatar?.userData.rig;
+  if (!rig) return null;
+  const save = { f: P.armF[k], d: P.armD[k], el: P.elbow[k], lean: P.lean, tw: P.twist, hy: P.headYaw, hp: P.headPitch };
+  P.lean = lean; P.twist = 0; P.headYaw = 0; P.headPitch = 0;
+  // x: shoulder swing, arm lift, elbow, lean, and how far he scoots forward on the cushion.
+  // With o.head he may also turn and dip his head to meet the hand.
+  const lo = [-0.8, o.dMin ?? -2.5, 0, leanRange ? leanRange[0] : lean, 0, -0.5, -0.35], hi = [2.9, 0.4, 2.7, leanRange ? leanRange[1] : lean, scootMax, 0.5, 0.35];
+  const x = [0.6, -0.75, 1.0, lean, 0, 0, 0];
+  const vars = [0, 1, 2]; if (leanRange) vars.push(3); if (scootMax) vars.push(4); if (o.head) vars.push(5, 6);
+  const h = new T.Vector3(), fwd = new T.Vector3(-Math.sin(body.h), 0, -Math.cos(body.h));
+  const err = () => {
+    P.armF[k] = x[0]; P.armD[k] = x[1]; P.elbow[k] = x[2]; P.lean = x[3]; P.headYaw = x[5]; P.headPitch = x[6];
+    anchorWorld(rig.hand[k], h).addScaledVector(fwd, x[4]);
+    const tg = typeof target === 'function' ? target() : target;
+    return h.distanceToSquared(tg) + 0.0004 * (x[1] + 0.75) ** 2 + 0.0003 * (x[5] ** 2 + x[6] ** 2);
+  };
+  // A few starting poses (arm low, hand up by the face, across the chest), keep the best.
+  let best = null, e = Infinity;
+  for (const seed of [[0.6, -0.75, 1.0], [1.6, -1.4, 2.2], [2.2, -2.0, 2.5], [1.0, -0.5, 0.3]]) {
+    x[0] = seed[0]; x[1] = Math.max(seed[1], lo[1]); x[2] = seed[2]; x[3] = lean; x[4] = 0; x[5] = o.hy || 0; x[6] = o.hp || 0;
+    let es = err();
+    for (const step of [0.4, 0.2, 0.1, 0.05, 0.025, 0.012, 0.006]) {
+      for (let it = 0; it < 40; it++) {
+        let improved = false;
+        for (const j of vars) for (const sgn of [1, -1]) {
+          const old = x[j];
+          x[j] = clamp(old + sgn * step, lo[j], hi[j]);
+          const e2 = err();
+          if (e2 < es - 1e-9) { es = e2; improved = true; } else x[j] = old;
+        }
+        if (!improved) break;
+      }
+    }
+    if (es < e) { e = es; best = x.slice(); }
+  }
+  for (let j = 0; j < 7; j++) x[j] = best[j];
+  err();
+  const tg0 = typeof target === 'function' ? target() : target;
+  const out = { f: x[0], d: x[1], el: x[2], lean: x[3], scoot: x[4], hy: x[5], hp: x[6], err: Math.sqrt(e), res: h.clone().sub(tg0).toArray().map((v) => +v.toFixed(3)) };
+  P.armF[k] = save.f; P.armD[k] = save.d; P.elbow[k] = save.el; P.lean = save.lean; P.twist = save.tw; P.headYaw = save.hy; P.headPitch = save.hp;
+  return out;
+}
+function solveSmoking(spot) {
+  const rig = customAvatar?.visible ? customAvatar.userData.rig : null;
+  if (params.get('debug')) { const rr = customAvatar?.userData.rig; if (rr) { const m = anchorWorld(rr.mouth, new T.Vector3()), hR = anchorWorld(rr.hand.R, new T.Vector3()); console.log('ik anchors mouth', m.toArray().map((v) => v.toFixed(2)).join(','), 'hand', hR.toArray().map((v) => v.toFixed(2)).join(',')); } }
+  const ashYaw = clamp(angleTo(body.h, headingFor(spot.ash.x - body.x, spot.ash.z - body.z)) * 0.8, -0.7, 0.7);
+  if (!rig) {
+    return { box: { f: 1.05, d: -0.75, el: 0, lean: 0.5 }, mouth: { f: 2.55, d: -0.85, el: 0, lean: 0 }, ash: { f: 1.0, d: -0.7, el: 0, lean: 0.48 }, light: { f: 2.35, d: -0.8, el: 0, lean: 0 }, ashYaw };
+  }
+  customAvatar.updateMatrixWorld(true);
+  const fwd = new T.Vector3(-Math.sin(body.h), 0, -Math.cos(body.h));
+  const mouthAt = (dx, dy) => () => anchorWorld(rig.mouth, new T.Vector3()).addScaledVector(fwd, dx).add(new T.Vector3(0, dy, 0));
+  const top = new T.Vector3(spot.box.x, spot.box.y + 0.1, spot.box.z);
+  const ash = new T.Vector3(spot.ash.x, spot.ash.y + 0.085, spot.ash.z).addScaledVector(fwd, -0.03);
+  const mouth = solveArm('R', mouthAt(0.012, -0.004), 0.05, [-0.04, 0.3], 0, { head: true, dMin: -1.6 });
+  const sol = {
+    box: solveArm('R', top, 0.5, [0.2, 0.72], 0.2),
+    mouth,
+    ash: solveArm('R', ash, 0.5, [0.2, 0.72], 0.2),
+    // The lighter hand meets the cigarette with his head where the drag put it.
+    light: mouth && solveArm('L', mouthAt(0.075, -0.035), mouth.lean, null, 0, { dMin: -1.6, hy: mouth.hy, hp: mouth.hp }),
+    ashYaw,
+  };
+  if (params.get('debug')) console.log('smoke ik', JSON.stringify(Object.fromEntries(Object.entries(sol).map(([k, v]) => [k, v?.err != null ? [+v.err.toFixed(3), v.res, +v.f.toFixed(2), +v.d.toFixed(2), +v.el.toFixed(2), +v.lean.toFixed(2), +v.scoot.toFixed(2), +v.hy.toFixed(2), +v.hp.toFixed(2)] : v]))));
+  return sol;
+}
+const smoking = createSmoking({
+  T, room,
+  canSmoke: () => body.state === 'seated' && body.seat.main && mode === 'room',
+  solveAll: solveSmoking,
+  anchors: smokeAnchors,
+  sfx: (n) => sfx(n),
+  changed: () => paintSeatBar(true),
+});
+smoking.place(SEAT, TABLE);
+// Smoke: from the middle seat straight away; from another seat he slides over first.
+function smoke() {
+  if (smoking.busy || body.state !== 'seated') return;
+  const main = SEATS.find((q) => q.main);
+  if (body.seat !== main) { slideTo(main, () => smoking.start()); paintSeatBar(true); return; }
+  smoking.start();
+}
+
 let recs = [];
 let tableSeq = 0;
 const nowPlaying = { rec: null, playing: false, progress: 0, loading: false };
 const settings = { view: 'third', autoplay: true, tank: true };
+// The player's own preferences (the settings menu), kept in this room's local storage.
+const prefs = { walkSpeed: 1.15, camSens: 1, mouseSens: 1, volume: 80, sfx: 60, quality: 'high' };
+try { Object.assign(prefs, JSON.parse(localStorage.getItem('recordRoomPrefs') || '{}')); } catch {}
+function savePrefs() { try { localStorage.setItem('recordRoomPrefs', JSON.stringify(prefs)); } catch {} }
 
 function setPlate(c) {
   const d = c.data;
@@ -1683,22 +2004,47 @@ function scPlay(url) {
     document.body.append(f);
     sc = SC.Widget(f);
     const E = SC.Widget.Events;
-    sc.bind(E.READY, () => { scReady = true; sc.play(); if (params.get('debug')) console.log('sc ready'); });
-    sc.bind(E.PLAY, () => { if (params.get('debug')) console.log('sc play'); nowPlaying.playing = true; nowPlaying.loading = false; paintNow(); });
+    sc.bind(E.READY, () => { scReady = true; setVol(0); sc.play(); if (params.get('debug')) console.log('sc ready'); });
+    sc.bind(E.PLAY, () => {
+      if (params.get('debug')) console.log('sc play');
+      nowPlaying.playing = true; nowPlaying.loading = false;
+      fadeTo(prefs.volume, 800);
+      sc.getDuration((d) => { nowPlaying.duration = d || 0; });
+      paintNow();
+    });
     sc.bind(E.PAUSE, () => { nowPlaying.playing = false; paintNow(); });
-    sc.bind(E.PLAY_PROGRESS, (e) => { nowPlaying.progress = e.relativePosition || 0; });
+    sc.bind(E.PLAY_PROGRESS, (e) => { nowPlaying.progress = e.relativePosition || 0; nowPlaying.pos = e.currentPosition || 0; });
     sc.bind(E.FINISH, () => { nowPlaying.playing = false; nowPlaying.progress = 1; if (settings.autoplay) playNext(); else paintNow(); });
     sc.bind(E.ERROR, () => { if (params.get('debug')) console.log('sc error'); nowPlaying.loading = false; showError('That track wouldn’t play on SoundCloud.'); });
   } else {
-    sc.load(url, { ...scOpts, callback: () => sc.play() });
+    setVol(0);
+    sc.load(url, { ...scOpts, callback: () => { setVol(0); sc.play(); } });
   }
 }
 function scPause() { if (sc && scReady) sc.pause(); }
-function scToggle() { if (sc && scReady) sc.toggle(); }
+// One player, so only one track ever plays; volume eases in and out.
+let volNow = 0;
+function setVol(v) { volNow = v; if (sc && scReady) sc.setVolume(v); }
+function fadeTo(v, ms, then) {
+  clearInterval(fadeTo.id);
+  const v0 = volNow, t0 = performance.now();
+  fadeTo.id = setInterval(() => {
+    const k = Math.min(1, (performance.now() - t0) / ms);
+    setVol(v0 + (v - v0) * k);
+    if (k >= 1) { clearInterval(fadeTo.id); then?.(); }
+  }, 30);
+}
+function scToggle() {
+  if (!sc || !scReady || !nowPlaying.rec) return;
+  if (nowPlaying.playing) fadeTo(0, 260, () => sc.pause()); else sc.play();
+}
 
-function play(r) {
+const played = [];
+function play(r, back) {
   hideError();
   const prev = nowPlaying.rec;
+  if (prev && prev !== r && !back) { played.push(prev); if (played.length > 30) played.shift(); }
+  nowPlaying.pos = 0; nowPlaying.duration = 0;
   if (prev && prev !== r) moveTo(prev, 'crate', 1.0, 0.45);
   nowPlaying.rec = r;
   nowPlaying.progress = 0;
@@ -1710,6 +2056,22 @@ function play(r) {
   scPlay(r.track.url);
   paintNow();
   paintQueue();
+  paintBrowser();
+}
+function playPrev() {
+  if (!nowPlaying.rec) return;
+  if ((nowPlaying.pos || 0) > 4000) { sc?.seekTo(0); return; }
+  let r = played.pop();
+  while (r && r.state !== 'crate' && r.state !== 'table') r = played.pop();
+  if (r) play(r, true); else sc?.seekTo(0);
+}
+function stopMusic() {
+  const r = nowPlaying.rec;
+  if (!r) return;
+  fadeTo(0, 300, () => {});
+  moveTo(r, 'crate', 1.0, 0.45);
+  stopPlayback();
+  roomHint();
 }
 function stopPlayback() {
   scPause();
@@ -1746,8 +2108,32 @@ function paintNow() {
     ? '<svg viewBox="0 0 16 16"><path d="M4 2.5h3v11H4zM9 2.5h3v11H9z"/></svg>'
     : '<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>';
 }
-$('#pp').onclick = () => { if (nowPlaying.rec) scToggle(); };
+$('#pp').onclick = () => scToggle();
 $('#nx').onclick = () => playNext();
+$('#pv').onclick = () => playPrev();
+$('#st').onclick = () => stopMusic();
+$('#seek').onclick = (e) => {
+  if (!nowPlaying.duration || !sc) return;
+  const b = e.currentTarget.getBoundingClientRect();
+  sc.seekTo(clamp((e.clientX - b.left) / b.width, 0, 1) * nowPlaying.duration);
+};
+const volEl = $('#vol');
+volEl.value = prefs.volume;
+volEl.oninput = () => setVolume(+volEl.value);
+function setVolume(v) {
+  prefs.volume = clamp(Math.round(v), 0, 100); savePrefs();
+  clearInterval(fadeTo.id);
+  if (nowPlaying.playing) setVol(prefs.volume);
+  volEl.value = prefs.volume;
+  for (const el of document.querySelectorAll('[data-k=volume], .vol input')) el.value = prefs.volume;
+}
+const fmt = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`; };
+function paintTime() {
+  if (!nowPlaying.rec) return;
+  const a = fmt(nowPlaying.pos || 0), b = nowPlaying.duration ? fmt(nowPlaying.duration) : '';
+  if (paintTime.a !== a) { paintTime.a = a; $('#tpos').textContent = a; }
+  if (paintTime.b !== b) { paintTime.b = b; $('#tdur').textContent = b; }
+}
 now.querySelector('.a').onclick = () => { const r = nowPlaying.rec; if (r) send({ type: 'open', url: r.track.url }); };
 
 // ---------------------------------------------------------------- queue
@@ -1829,13 +2215,13 @@ function roomHint() {
   paintQueue();
   if (!recs.length) return setHint(crates.some((c) => c.data) ? 'Add SoundCloud links in settings to fill the crates' : 'Filling the crates…');
   if (!nowPlaying.rec && recs.some((r) => r.state === 'table')) return setHint('Drag a record onto the turntable');
-  if (!nowPlaying.rec) return setHint('Click the records under the turntable · walk with WASD or the arrow keys');
+  if (!nowPlaying.rec) return setHint('WASD or arrows to walk · E to use things · drag to look · Esc for the menu');
   setHint('');
 }
 function crateHint() {
   const c = crates[activeCrate];
-  const r = c.recs[c.focus];
-  setHint(r ? `${r.track.title}  ·  ${c.focus + 1} of ${c.recs.length}  ·  scroll to flip, click to pull it out` : 'This crate is empty');
+  setHint(c.recs.length ? 'Scroll or use the arrow keys · Enter plays · click the record to look at it' : 'This crate is empty');
+  paintBrowser();
 }
 
 for (const b of document.querySelectorAll('#views button')) b.onclick = () => setView(b.dataset.v, true);
@@ -1857,26 +2243,73 @@ function viewPose() {
     const side = g.x > 0.1 ? -1 : 1;
     return { pos: new T.Vector3(g.x + side * 1.05, 1.55, g.z + 1.95), at: new T.Vector3(g.x + side * 0.1, 0.4, g.z + 0.15) };
   }
-  if (settings.view === 'first') return eyePose({ pos: new T.Vector3(), at: new T.Vector3() });
-  // Third person: high in the back corner, looking down over the room, and
-  // drifting after him when he's up and about.
-  if (LAYOUT.cam) {
-    const at = LAYOUT.cam.at.clone();
-    const up = 1 - clamp(body.sit, 0, 1);
-    at.x = lerp(at.x, lerp(at.x, body.x, 0.45), up); at.z = lerp(at.z, lerp(at.z, body.z - 0.4, 0.45), up);
-    return { pos: LAYOUT.cam.pos.clone(), at };
+  if (mode === 'window') {
+    // At the window, looking out over the city.
+    // Eye in the middle of one pane, clear of the cross bars.
+    const pz = (WIN.z0 + WIN.z1) / 2 + (WIN.z1 - WIN.z0) / 4, py = WIN.y0 + (WIN.y1 - WIN.y0) * 0.72;
+    return { pos: new T.Vector3(X0 + 0.22, py, pz), at: new T.Vector3(X0 - 4, py - 0.25 + look.pitch * 2, pz + 0.2 + look.yaw * -3) };
   }
-  const at = new T.Vector3(-0.05, 0.05, -1.05);
-  const up = 1 - clamp(body.sit, 0, 1);
-  at.x = lerp(at.x, body.x * 0.55, up); at.z = lerp(at.z, lerp(-1.05, body.z - 0.6, 0.45), up);
-  return { pos: new T.Vector3(0.3, 2.42, Z1 - 0.06), at };
+  if (mode === 'photos') {
+    const zc = (PHOTO.z0 + PHOTO.z1) / 2, yc = (PHOTO.y0 + PHOTO.y1) / 2;
+    return { pos: new T.Vector3(X0 + 1.55, yc + 0.05, zc + 0.05), at: new T.Vector3(X0, yc, zc) };
+  }
+  if (settings.view === 'first') return eyePose({ pos: new T.Vector3(), at: new T.Vector3() });
+  return followPose();
+}
+// Third person: behind and a little above him, turned with the mouse, pulled
+// in so it never goes through a wall or the furniture.
+const orbit = { yaw: PI + 0.55, pitch: 0.42, dist: 2.5, userT: -99 };
+function followTarget(out = new T.Vector3()) {
+  const s = ease(clamp(body.sit, 0, 1)), lie = ease(clamp(body.lie, 0, 1));
+  return out.set(lerp(body.x, LIE.x, lie), lerp(lerp(1.3, 0.98, s), 0.72, lie) - 0.38 * clamp(body.crouch, 0, 1), lerp(body.z, LIE.z, lie));
+}
+function cameraClear(from, dir, want) {
+  let t = want;
+  const inDoor = from.z > DOOR.z0 && from.z < DOOR.z1;
+  const lo = [X0 + 0.14, 0.22, Z0 + 0.14], hi = [inDoor ? X1 + 0.7 : X1 - 0.14, RH - 0.12, Z1 - 0.14];
+  const o = [from.x, from.y, from.z], d = [dir.x, dir.y, dir.z];
+  for (let k = 0; k < 3; k++) {
+    if (d[k] > 1e-5) t = Math.min(t, (hi[k] - o[k]) / d[k]);
+    else if (d[k] < -1e-5) t = Math.min(t, (lo[k] - o[k]) / d[k]);
+  }
+  const ray3 = new T.Ray(from, dir), hit = new T.Vector3();
+  for (const b of camBoxes) {
+    if (b.containsPoint(from)) continue;
+    if (ray3.intersectBox(b, hit)) t = Math.min(t, hit.distanceTo(from) - 0.12);
+  }
+  return Math.max(0.45, t);
+}
+function followPose() {
+  const tgt = followTarget();
+  const cp = Math.cos(orbit.pitch);
+  const dir = new T.Vector3(Math.sin(orbit.yaw) * cp, Math.sin(orbit.pitch), Math.cos(orbit.yaw) * cp);
+  const d = cameraClear(tgt, dir, orbit.dist);
+  return { pos: tgt.clone().addScaledVector(dir, d), at: tgt.clone().add(new T.Vector3(0, -0.08, 0)), dist: d };
+}
+// Settling on the couch, the camera comes round in front of him (unless the player's just turned it).
+function cameraFaceHim(force) {
+  if (!force && performance.now() - orbit.userT < 4000) return;
+  orbit.yawTo = body.seat.h + PI + 0.55;
+}
+function stepOrbit(dt) {
+  if (orbit.yawTo != null) {
+    const d = angleTo(orbit.yaw, orbit.yawTo);
+    orbit.yaw += d * (1 - Math.exp(-dt * 2.2));
+    if (Math.abs(d) < 0.01) orbit.yawTo = null;
+  } else if ((body.state === 'manual' || body.state === 'walking') && performance.now() - orbit.userT > 2500) {
+    // Walking, it drifts round behind him, but never swings over when he walks toward it.
+    const behind = angleTo(orbit.yaw, body.h);
+    if (Math.abs(behind) < 2.0) orbit.yaw += behind * (1 - Math.exp(-dt * 0.9 * clamp(body.speed, 0, 1.2)));
+  }
 }
 function goCamera(dur = 1.0, delay = 0) {
   const to = viewPose();
   cam.tween = { p0: cam.pos.clone(), a0: cam.at.clone(), p1: to.pos, a1: to.at, t: -delay / dur, dur };
 }
+let debugCam = null;
 function stepCamera(dt) {
-  if (cam.tween) {
+  if (debugCam) { cam.pos.copy(debugCam.pos); cam.at.copy(debugCam.at); cam.tween = null; }
+  else if (cam.tween) {
     const tw = cam.tween;
     tw.t += dt / tw.dur;
     const e = ease(clamp(tw.t, 0, 1));
@@ -1885,20 +2318,24 @@ function stepCamera(dt) {
     if (tw.t >= 1) cam.tween = null;
   } else {
     const to = viewPose();
-    const k = mode === 'room' && settings.view === 'first' ? 14 : mode === 'room' ? 2.2 : 6;
+    let k = mode === 'room' && settings.view === 'first' ? 14 : mode === 'room' ? 7 : 6;
+    // Pulled in by a wall: catch up quickly so it never pokes through.
+    if (to.dist != null && cam.pos.distanceTo(to.at) > to.dist + 0.25) k = 22;
     cam.pos.lerp(to.pos, 1 - Math.exp(-dt * k));
-    cam.at.lerp(to.at, 1 - Math.exp(-dt * k));
+    cam.at.lerp(to.at, 1 - Math.exp(-dt * Math.max(k, 10)));
   }
-  const boost = mode === 'room' && settings.view === 'third' ? 12 : 0;
+  stepOrbit(dt);
+  const boost = mode === 'room' && settings.view === 'third' ? 6 : 0;
   if (Math.abs(fovBoost - boost) > 0.01) { fovBoost += (boost - fovBoost) * (1 - Math.exp(-dt * 3)); camera.fov = baseFov + fovBoost; camera.updateProjectionMatrix(); }
   camera.position.copy(cam.pos);
   const dir = tmpV.copy(cam.at).sub(cam.pos);
-  const yaw = mode === 'room' ? look.yaw : 0, pitch = mode === 'room' ? look.pitch : 0;
+  const fpLook = mode === 'room' && settings.view === 'first';
+  const yaw = fpLook ? look.yaw : 0, pitch = fpLook ? look.pitch : 0;
   dir.applyAxisAngle(new T.Vector3(0, 1, 0), yaw);
   const right = new T.Vector3().crossVectors(dir, camera.up).normalize();
   dir.applyAxisAngle(right, pitch);
   camera.lookAt(cam.pos.clone().add(dir));
-  const showMe = settings.view !== 'first' || mode === 'crate' || mode === 'inspect';
+  const showMe = (settings.view !== 'first' && mode !== 'window') || mode === 'crate' || mode === 'inspect';
   builtInAvatar.visible = showMe && !customAvatar;
   if (customAvatar) customAvatar.visible = showMe;
   // Up close in first person, only his body and hands show, not his head.
@@ -1911,6 +2348,7 @@ function setView(v, user) {
   if (v !== 'first' && v !== 'third') return;
   settings.view = v;
   look.yaw = 0; look.pitch = 0;
+  if (v === 'third' && orbit.yawTo == null && performance.now() - orbit.userT > 4000) orbit.yaw = onSofa() ? body.seat.h + PI + 0.55 : body.h;
   for (const b of document.querySelectorAll('#views button')) b.classList.toggle('on', b.dataset.v === v);
   if (mode === 'room') goCamera(1.1);
   if (user) send({ type: 'view', view: v });
@@ -1954,6 +2392,7 @@ function flip(c, to) {
   if (to < 0 || to >= n) return;
   c.focus = to;
   if (mode === 'crate') crateHint();
+  else paintBrowser();
 }
 
 // ---------------------------------------------------------------- input
@@ -1996,7 +2435,7 @@ canvas.addEventListener('pointerdown', (e) => {
   canvas.focus();
   pointer(e);
   const h = hitTest();
-  down = { x: e.clientX, y: e.clientY, yaw: look.yaw, pitch: look.pitch, hit: h, moved: false };
+  down = { x: e.clientX, y: e.clientY, yaw: look.yaw, pitch: look.pitch, oyaw: orbit.yaw, opitch: orbit.pitch, bh: body.h, hit: h, moved: false };
   const r = h.rec || (h.disc ? nowPlaying.rec : null);
   if (mode === 'room' && r && (r.state === 'table' || r.state === 'platter')) {
     canvas.setPointerCapture(e.pointerId);
@@ -2024,10 +2463,22 @@ canvas.addEventListener('pointermove', (e) => {
   if (down) {
     const dx = e.clientX - down.x, dy = e.clientY - down.y;
     if (Math.hypot(dx, dy) > 5) down.moved = true;
-    if (down.moved && mode === 'room' && !down.hit.rec) {
-      const lim = settings.view === 'first' ? 1.1 : 0.45;
-      look.yaw = clamp(down.yaw - dx * 0.004, -lim, lim);
-      look.pitch = clamp(down.pitch - dy * 0.003, -0.45, 0.4);
+    if (down.moved && (mode === 'room' || mode === 'window') && !down.hit.rec && !gamePaused()) {
+      if (mode === 'room' && settings.view === 'third') {
+        // Turn the camera round him, and up or down.
+        orbit.yaw = down.oyaw - dx * 0.006 * prefs.camSens;
+        orbit.pitch = clamp(down.opitch + dy * 0.004 * prefs.camSens, -0.05, 1.2);
+        orbit.userT = performance.now(); orbit.yawTo = null;
+      } else if (mode === 'room' && upright() && !smoking.busy) {
+        // First person on his feet: the mouse turns him.
+        body.h = down.bh - dx * 0.004 * prefs.mouseSens;
+        look.yaw = 0;
+        look.pitch = clamp(down.pitch - dy * 0.003 * prefs.mouseSens, -0.5, 0.45);
+      } else {
+        const lim = 1.1;
+        look.yaw = clamp(down.yaw - dx * 0.004 * prefs.mouseSens, -lim, lim);
+        look.pitch = clamp(down.pitch - dy * 0.003 * prefs.mouseSens, -0.45, 0.4);
+      }
       canvas.style.cursor = 'grabbing';
     }
     return;
@@ -2070,7 +2521,10 @@ canvas.addEventListener('pointerup', (e) => {
   }
   if (!d || d.moved) return;
   const h = d.hit;
+  if (gamePaused()) return;
+  if (mode === 'window' || mode === 'photos') { endLook(); return; }
   if (mode === 'room') {
+    if (ui.menu) closeMenu();
     if (h.crate != null) crateClick(h.crate);
     else if (h.rec && h.rec.state === 'crate') crateClick(h.rec.ci);
     else if (!h.rec && !h.disc) {
@@ -2101,6 +2555,7 @@ canvas.addEventListener('pointerup', (e) => {
 
 canvas.addEventListener('wheel', (e) => {
   e.preventDefault();
+  if (mode === 'room' && settings.view === 'third' && !gamePaused()) { orbit.dist = clamp(orbit.dist * (1 + e.deltaY * 0.0012), 1.1, 4.2); return; }
   if (mode !== 'crate') return;
   const c = crates[activeCrate];
   wheelAcc += e.deltaY;
@@ -2108,24 +2563,44 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 let wheelAcc = 0;
 
+// Keyboard, by game state: paused (settings), a menu, inspecting a record,
+// browsing a crate, looking out of the window, or out in the room.
 addEventListener('keydown', (e) => {
   body.idle = 0;
+  audio();
   const k = e.key.toLowerCase();
-  if (mode === 'room' && MOVE_KEYS[k] && !e.metaKey && !e.ctrlKey) { e.preventDefault(); held.add(k); return; }
+  if (e.metaKey || e.ctrlKey) return;
+  if (ui.settings) { if (k === 'escape') closeSettings(); return; }
+  if (ui.menu) { menuKey(e); return; }
   if (mode === 'inspect' && held_) {
     if (e.key === 'Enter') endInspect('play');
-    else if (e.key === 'q' || e.key === 'Q') endInspect('queue');
-    else if (e.key === 'Escape' || e.key === 'Backspace') endInspect('back');
+    else if (k === 'q') endInspect('queue');
+    else if (k === 'escape' || k === 'backspace') endInspect('back');
     return;
   }
-  if (e.key === 'Escape') leaveCrate();
-  else if (e.key === 'v' || e.key === 'V') setView(settings.view === 'first' ? 'third' : 'first', true);
-  else if (e.key === ' ') { e.preventDefault(); if (nowPlaying.rec) scToggle(); }
-  else if (e.key === 'n' || e.key === 'N') playNext();
-  else if (e.key === 'q' || e.key === 'Q') toggleQueue();
-  else if (mode === 'crate' && (e.key === 'ArrowDown' || e.key === 'ArrowRight')) flip(crates[activeCrate], crates[activeCrate].focus + 1);
-  else if (mode === 'crate' && (e.key === 'ArrowUp' || e.key === 'ArrowLeft')) flip(crates[activeCrate], crates[activeCrate].focus - 1);
-  else if (mode === 'crate' && e.key === 'Enter') { const c = crates[activeCrate]; if (c.recs[c.focus]) pull(c.recs[c.focus]); }
+  if (mode === 'crate') {
+    const c = crates[activeCrate];
+    if (k === 'escape') leaveCrate();
+    else if (k === 'arrowdown' || k === 'arrowright') { e.preventDefault(); flip(c, c.focus + 1); }
+    else if (k === 'arrowup' || k === 'arrowleft') { e.preventDefault(); flip(c, c.focus - 1); }
+    else if (e.key === 'Enter') playFromShelf(c.recs[c.focus]);
+    else if (k === ' ') { e.preventDefault(); scToggle(); }
+    else if (k === 'f' || k === 'v') setView(settings.view === 'first' ? 'third' : 'first', true);
+    return;
+  }
+  if (mode === 'window' || mode === 'photos') {
+    if (k === 'escape' || k === 'e') { endLook(); return; }
+    if (!MOVE_KEYS[k]) return;
+    endLook();
+  }
+  if (mode !== 'room') return;
+  if (MOVE_KEYS[k]) { e.preventDefault(); held.add(k); return; }
+  if (k === 'e') interact();
+  else if (k === 'f' || k === 'v') setView(settings.view === 'first' ? 'third' : 'first', true);
+  else if (k === 'escape') { if (document.body.classList.contains('q')) toggleQueue(false); else openSettings(); }
+  else if (k === ' ') { e.preventDefault(); scToggle(); }
+  else if (k === 'n') playNext();
+  else if (k === 'q') toggleQueue();
 });
 
 addEventListener('keyup', (e) => held.delete(e.key.toLowerCase()));
@@ -2162,6 +2637,358 @@ function endInspect(next) {
 }
 for (const b of document.querySelectorAll('#inspect button')) b.onclick = () => { if (held_) endInspect(b.dataset.a); };
 
+// ---------------------------------------------------------------- game state
+// What the player is doing decides what input does. Paused (the settings
+// menu): nothing moves. A menu open: the keys drive the menu, not him.
+const ui = { menu: null, settings: false };
+function uiOpen() { return !!ui.menu || ui.settings; }
+function gamePaused() { return ui.settings; }
+function keysDriveBody() { return mode === 'room' && !uiOpen() && !body.exiting; }
+let lightsOn = true, lightsK = 1;
+
+// ---------------------------------------------------------------- sound effects
+// Footsteps, the lighter, an exhale, ash taps: short shaped noise, no files.
+let actx = null, noiseBuf = null;
+function audio() {
+  if (!actx) {
+    try {
+      actx = new AudioContext();
+      const n = actx.sampleRate * 2;
+      noiseBuf = actx.createBuffer(1, n, actx.sampleRate);
+      const d = noiseBuf.getChannelData(0);
+      for (let i = 0; i < n; i++) d[i] = Math.random() * 2 - 1;
+    } catch { actx = null; }
+  }
+  if (actx?.state === 'suspended') actx.resume();
+  return actx;
+}
+addEventListener('pointerdown', audio, { capture: true });
+function noise({ dur, freq, q = 1, type = 'lowpass', gain, attack = 0.004, delay = 0 }) {
+  const a = actx, t0 = a.currentTime + delay;
+  const src = a.createBufferSource(); src.buffer = noiseBuf; src.playbackRate.value = 0.8 + Math.random() * 0.4;
+  const f = a.createBiquadFilter(); f.type = type; f.frequency.value = freq; f.Q.value = q;
+  const g = a.createGain(); g.gain.setValueAtTime(0, t0); g.gain.linearRampToValueAtTime(gain, t0 + attack); g.gain.exponentialRampToValueAtTime(0.0001, t0 + dur);
+  src.connect(f); f.connect(g); g.connect(a.destination);
+  src.start(t0, Math.random()); src.stop(t0 + dur + 0.05);
+}
+function sfx(name) {
+  if (!actx || !noiseBuf || prefs.sfx <= 0) return;
+  const v = prefs.sfx / 100;
+  if (name === 'step') noise({ dur: 0.09, freq: 520, gain: 0.22 * v });
+  else if (name === 'pick') noise({ dur: 0.14, freq: 3200, type: 'bandpass', q: 0.8, gain: 0.08 * v });
+  else if (name === 'lighter') { noise({ dur: 0.03, freq: 4500, type: 'highpass', gain: 0.25 * v }); noise({ dur: 0.9, freq: 900, type: 'bandpass', q: 0.6, gain: 0.05 * v, attack: 0.05, delay: 0.05 }); }
+  else if (name === 'exhale') noise({ dur: 1.8, freq: 1100, type: 'bandpass', q: 0.5, gain: 0.07 * v, attack: 0.25 });
+  else if (name === 'tap') noise({ dur: 0.04, freq: 2400, type: 'bandpass', q: 2, gain: 0.18 * v });
+  else if (name === 'click') noise({ dur: 0.025, freq: 3000, type: 'bandpass', q: 3, gain: 0.08 * v });
+}
+// A footstep each time a foot comes down.
+let lastStep = 0;
+function footsteps(phase) {
+  const st = Math.floor(phase / PI);
+  if (st !== lastStep) { lastStep = st; if (body.stride > 0.22 && (upright() || body.state === 'shuffle')) sfx('step'); }
+}
+
+// ---------------------------------------------------------------- things to do
+// Every interactive object has a spot and a reach. Walking in range shows one
+// prompt, for the nearest; E (or clicking the prompt) does it.
+function seatFor(p = body) {
+  let best = SEATS[0], bd = 1e9;
+  for (const q of SEATS) { const a = q.via || q.stand; const d = Math.hypot(p.x - a.x, p.z - a.z) * 0.5 + Math.hypot(p.x - q.x, p.z - q.z); if (d < bd) { bd = d; best = q; } }
+  return best;
+}
+function rectDist(p, [a, b, c, d]) { return Math.hypot(Math.max(a - p.x, 0, p.x - b), Math.max(c - p.z, 0, p.z - d)); }
+function photoSpot() { const [i, j] = nearestFree(X0 + 1.35, (PHOTO.z0 + PHOTO.z1) / 2); return navPoint(i, j); }
+function interactables() {
+  const list = [];
+  crates.forEach((c, ci) => {
+    const name = c.data?.name || c.data?.slug;
+    list.push({ x: c.group.position.x, z: CRATE.z + 0.68, r: 0.55, label: name ? `Browse records · ${name}` : 'Browse records', act: () => crateClick(ci) });
+  });
+  list.push({ x: TT.x + 0.38, z: CRATE.z + 0.62, r: 0.42, label: 'Use the turntable', act: turntableMenu });
+  for (const sx of [-1.6, 1.6]) list.push({ x: sx, z: CRED.z + 0.5, r: 0.45, label: 'Adjust the volume', act: volumeMenu });
+  list.push({ x: X0 + 0.8, z: Z0 + 0.85, r: 0.55, label: lightsOn ? 'Turn the lights off' : 'Turn the lights on', act: toggleLights });
+  // The window: anywhere along the wall under it (the couch may stand in front of it).
+  { const wz = clamp(body.z, WIN.z0, WIN.z1); list.push({ x: X0, z: wz, d: Math.max(0, Math.hypot(body.x - X0, body.z - wz) - 0.9), r: 0.6, label: 'Look outside', act: lookOutside }); }
+  if (photoWall.children.length) { const p = photoSpot(); list.push({ x: p.x, z: p.z, r: 0.5, label: 'Look at the photos', act: lookAtPhotos }); }
+  // The couch: anywhere along its front, or at either end of the gap by the table.
+  let sd = Math.min(...LAYOUT.sofa.map((rc) => rectDist(body, rc)));
+  for (const q of SEATS) if (q.via) sd = Math.min(sd, Math.hypot(body.x - q.via.x, body.z - q.via.z) - 0.05);
+  list.push({ d: sd, r: 0.5, label: 'Sit on the sofa', act: sofaMenu });
+  if (LAYOUT.table.rect) list.push({ d: rectDist(body, LAYOUT.table.rect), r: 0.42, label: 'Sit by the coffee table', act: () => sitOnSofa(null, SEATS.find((q) => q.main)) });
+  return list;
+}
+function nearestThing() {
+  // The nearest wins, but what he is facing counts for more.
+  let best = null, bs = 1;
+  const fx = -Math.sin(body.h), fz = -Math.cos(body.h);
+  for (const it of interactables()) {
+    const d = it.d ?? Math.hypot(body.x - it.x, body.z - it.z);
+    let score = d / it.r;
+    if (it.x != null) { const dx = it.x - body.x, dz = it.z - body.z, l = Math.hypot(dx, dz); if (l > 0.05 && (dx * fx + dz * fz) / l > 0.6) score *= 0.5; }
+    if (score < bs) { bs = score; best = it; }
+  }
+  return best;
+}
+const promptEl = $('#prompt');
+let promptThing = null;
+function paintPrompt() {
+  const show = mode === 'room' && !uiOpen() && !body.exiting && (body.state === 'standing' || body.state === 'manual' || body.state === 'turning');
+  promptThing = show ? nearestThing() : null;
+  promptEl.classList.toggle('on', !!promptThing);
+  if (promptThing && paintPrompt.label !== promptThing.label) { paintPrompt.label = promptThing.label; promptEl.querySelector('span').textContent = promptThing.label; }
+  if (!promptThing) paintPrompt.label = '';
+}
+promptEl.onclick = () => { promptThing?.act(); };
+function interact() {
+  if (seatButtons.length) { const b = seatButtons.find((x) => !x.disabled); b?.act(); return; }
+  if (promptThing) promptThing.act();
+}
+
+// ---------------------------------------------------------------- menus
+// A small menu over the bottom of the room. Arrow keys or the mouse; Enter or
+// E picks; Esc closes. Every button does something.
+const menuEl = $('#menu');
+function openMenu(title, items, extra) {
+  held.clear();
+  ui.menu = { items, focus: Math.max(0, items.findIndex((i) => i.go)) };
+  menuEl.textContent = '';
+  if (title) { const h = document.createElement('div'); h.className = 'h'; h.textContent = title; menuEl.append(h); }
+  if (extra) menuEl.append(extra);
+  const row = document.createElement('div'); row.className = 'row';
+  items.forEach((it, k) => {
+    const b = document.createElement('button');
+    b.className = 'act' + (it.go ? ' go' : '');
+    b.textContent = it.label;
+    b.onmouseenter = () => { ui.menu.focus = k; paintMenuFocus(); };
+    b.onclick = () => pickMenu(k);
+    row.append(b);
+  });
+  menuEl.append(row);
+  menuEl.classList.add('on');
+  paintMenuFocus();
+}
+function paintMenuFocus() { menuEl.querySelectorAll('.row .act').forEach((b, k) => b.classList.toggle('focus', k === ui.menu?.focus)); }
+function pickMenu(k) {
+  const it = ui.menu?.items[k];
+  if (!it) return;
+  sfx('click');
+  if (!it.keep) closeMenu();
+  it.act?.();
+}
+function closeMenu() { ui.menu = null; menuEl.classList.remove('on'); }
+function menuKey(e) {
+  const k = e.key.toLowerCase(), n = ui.menu.items.length;
+  if (k === 'escape') closeMenu();
+  else if (k === 'arrowright' || k === 'arrowdown' || k === 'd' || k === 's' || k === 'tab') { e.preventDefault(); ui.menu.focus = (ui.menu.focus + 1) % n; paintMenuFocus(); }
+  else if (k === 'arrowleft' || k === 'arrowup' || k === 'a' || k === 'w') { e.preventDefault(); ui.menu.focus = (ui.menu.focus - 1 + n) % n; paintMenuFocus(); }
+  else if (k === 'enter' || k === 'e' || k === ' ') { e.preventDefault(); pickMenu(ui.menu.focus); }
+  else if (/^[1-9]$/.test(k)) pickMenu(+k - 1);
+}
+function sofaMenu() {
+  const q = seatFor();
+  openMenu('Sofa', [
+    { label: 'Sit', go: true, act: () => sitOnSofa(null, q) },
+    { label: 'Lie down', act: () => lieDown(q) },
+    { label: 'Cancel' },
+  ]);
+}
+function volumeSlider() {
+  const w = document.createElement('label'); w.className = 'vol';
+  w.innerHTML = '<span>Volume</span><input type="range" min="0" max="100"><output></output>';
+  const i = w.querySelector('input'), o = w.querySelector('output');
+  i.value = prefs.volume; o.textContent = prefs.volume;
+  i.oninput = () => { setVolume(+i.value); o.textContent = prefs.volume; };
+  return w;
+}
+function turntableMenu() {
+  const r = nowPlaying.rec;
+  const items = [];
+  if (r) {
+    items.push({ label: nowPlaying.playing ? 'Pause' : 'Play', go: true, act: scToggle, keep: true });
+    items.push({ label: 'Stop', act: stopMusic }, { label: 'Previous', act: playPrev, keep: true }, { label: 'Next', act: playNext, keep: true });
+  }
+  items.push({ label: 'Browse records', go: !r, act: () => crateClick(crates.findIndex((c) => c.recs.length) >= 0 ? (crates[1].recs.length ? 1 : crates.findIndex((c) => c.recs.length)) : 0) });
+  items.push({ label: 'Close' });
+  openMenu(r ? `Turntable · ${r.track.title}` : 'Turntable · nothing on', items, volumeSlider());
+  // Play/Pause relabels itself.
+  if (r) { const b = menuEl.querySelector('.row .act'); const relabel = () => { if (ui.menu && b.isConnected) { b.textContent = nowPlaying.playing ? 'Pause' : 'Play'; requestAnimationFrame(relabel); } }; relabel(); }
+}
+function volumeMenu() {
+  const muted = prefs.volume === 0;
+  openMenu('Speakers', [
+    { label: muted ? 'Unmute' : 'Mute', act: () => { if (muted) setVolume(volumeMenu.last || 70); else { volumeMenu.last = prefs.volume; setVolume(0); } } },
+    { label: 'Done', go: true },
+  ], volumeSlider());
+}
+function toggleLights() { lightsOn = !lightsOn; sfx('click'); }
+
+// ---------------------------------------------------------------- on the couch
+// Only what makes sense right now: smoke, lie down or get up; while he smokes,
+// how long is left; when it's done, put it out.
+const seatEl = $('#seat');
+let seatButtons = [];
+function seatBarModel() {
+  if (mode !== 'room' || uiOpen() || body.exiting) return null;
+  const st = body.state, sm = smoking.state;
+  if (st === 'sliding') return { h: 'Sliding over to the ashtray…', b: [] };
+  if (st === 'seated' || (sm !== 'box' && onSofa())) {
+    if (sm === 'pickup' || sm === 'lighting') return { h: sm === 'pickup' ? 'Taking one out…' : 'Lighting up…', b: [] };
+    if (sm === 'smoking') return { h: `Smoking · <span class="clock">${fmt(smoking.remaining * 1000)}</span> left`, b: [] };
+    if (sm === 'finished') return { h: 'Your cigarette is finished.', b: [{ label: 'Ash cigarette', go: true, act: () => smoking.ash() }] };
+    if (sm === 'ashing') return { h: 'Putting it out…', b: [] };
+    if (st !== 'seated') return null;
+    return { b: [{ label: 'Smoke', go: true, act: smoke }, { label: 'Lie down', act: () => lieDown(body.seat) }, { label: 'Get up', act: () => getUp(() => { body.state = 'standing'; }) }] };
+  }
+  if (st === 'lying') return { b: [{ label: 'Sit up', go: true, act: () => { body.state = 'gettingUp'; body.t = 1 - body.lie; body.after = null; } }, { label: 'Get up', act: () => getUp(() => { body.state = 'standing'; }) }] };
+  return null;
+}
+function paintSeatBar(force) {
+  const m = seatBarModel();
+  const key = m ? (m.h || '') + '|' + m.b.map((b) => b.label).join(',') : '';
+  if (!force && key === paintSeatBar.key) return;
+  paintSeatBar.key = key;
+  seatButtons = m ? m.b : [];
+  seatEl.classList.toggle('on', !!m);
+  if (!m) return;
+  seatEl.textContent = '';
+  if (m.h) { const h = document.createElement('div'); h.className = 'h'; h.innerHTML = m.h; seatEl.append(h); }
+  if (m.b.length) {
+    const row = document.createElement('div'); row.className = 'row';
+    for (const it of m.b) {
+      const b = document.createElement('button'); b.className = 'act' + (it.go ? ' go' : ''); b.textContent = it.label;
+      b.onclick = () => { sfx('click'); body.idle = 0; it.act(); paintSeatBar(true); };
+      row.append(b);
+    }
+    seatEl.append(row);
+  }
+}
+
+// ---------------------------------------------------------------- record browser
+// At the shelf: the crate's records as a plain list. Pick one, then Play
+// record; he takes it out, stands and puts it on the turntable.
+const browserEl = $('#browser'), browserList = browserEl.querySelector('ol');
+function paintBrowser() {
+  if (mode !== 'crate' || activeCrate < 0) return;
+  const c = crates[activeCrate];
+  const tabs = browserEl.querySelector('.tabs');
+  const tabKey = crates.map((x) => x.data?.name || '').join('|') + activeCrate;
+  if (paintBrowser.tabKey !== tabKey) {
+    paintBrowser.tabKey = tabKey;
+    tabs.textContent = '';
+    crates.forEach((x, ci) => {
+      const b = document.createElement('button');
+      b.textContent = x.data?.name || x.data?.slug || `Crate ${ci + 1}`;
+      b.classList.toggle('on', ci === activeCrate);
+      b.disabled = !x.recs.length;
+      b.onclick = () => { if (ci !== activeCrate) crateClick(ci); };
+      tabs.append(b);
+    });
+  }
+  const listKey = activeCrate + ':' + c.recs.length;
+  if (paintBrowser.listKey !== listKey) {
+    paintBrowser.listKey = listKey;
+    browserList.textContent = '';
+    c.recs.forEach((r, i) => {
+      const li = document.createElement('li');
+      li.innerHTML = '<img alt=""><div class="m"><div class="t"></div><div class="a"></div></div>';
+      li.querySelector('img').src = r.track.art || '';
+      li.querySelector('.t').textContent = r.track.title;
+      const dur = String(r.track.duration || '').replace(/^00:/, '').replace(/^0(\d:)/, '$1');
+      li.querySelector('.a').textContent = [c.data?.name, dur].filter(Boolean).join(' · ');
+      li.onclick = () => { flip(c, i); };
+      li.ondblclick = () => playFromShelf(r);
+      browserList.append(li);
+    });
+  }
+  [...browserList.children].forEach((li, i) => {
+    const r = c.recs[i];
+    li.classList.toggle('sel', i === c.focus);
+    li.classList.toggle('out', r.state !== 'crate');
+  });
+  const sel = browserList.children[c.focus];
+  if (sel && paintBrowser.sel !== activeCrate + ':' + c.focus) { paintBrowser.sel = activeCrate + ':' + c.focus; sel.scrollIntoView({ block: 'nearest' }); }
+  $('#bplay').disabled = !c.recs[c.focus] || c.recs[c.focus].state !== 'crate';
+}
+$('#bplay').onclick = () => { const c = crates[activeCrate]; if (c) playFromShelf(c.recs[c.focus]); };
+$('#bqueue').onclick = () => { const c = crates[activeCrate]; const r = c?.recs[c.focus]; if (r && r.state === 'crate') { enqueue(r); flip(c, c.focus + 1); paintQueue(); } };
+$('#bclose').onclick = () => leaveCrate();
+// Out of the crate, into his hands as he straightens up, then onto the platter.
+function playFromShelf(r) {
+  if (!r || r.state !== 'crate') return;
+  const c = crates[r.ci];
+  flip(c, c.focus + 1);
+  mode = 'room'; activeCrate = -1;
+  document.body.classList.remove('crate');
+  body.crouchTo = 0; body.reachTo = 0;
+  moveTo(r, 'hand', 0.9, 0.12);
+  goCamera(1.1, 0.2);
+  setTimeout(() => {
+    body.look = { x: TT.x, z: TT.z }; body.reachTo = 1;
+    play(r);
+    setTimeout(() => { body.reachTo = 0; roomHint(); }, 1100);
+  }, 1000);
+}
+
+// ---------------------------------------------------------------- looking at things
+function lookOutside() {
+  walkTo({ x: X0 + 0.42, z: (WIN.z0 + WIN.z1) / 2 }, () => {
+    mode = 'window'; look.yaw = 0; look.pitch = 0; goCamera(1.3);
+    setHint('Drag to look around · Esc or a movement key steps back');
+  }, PI / 2);
+}
+function lookAtPhotos() {
+  walkTo(photoSpot(), () => {
+    mode = 'photos'; goCamera(1.3);
+    setHint('Esc or a movement key steps back');
+  }, PI / 2);
+}
+function endLook() {
+  if (mode !== 'window' && mode !== 'photos') return;
+  mode = 'room'; look.yaw = 0; look.pitch = 0; goCamera(1.1); roomHint();
+}
+
+// ---------------------------------------------------------------- settings
+const settingsEl = $('#settings');
+function openSettings() {
+  closeMenu(); held.clear();
+  ui.settings = true;
+  settingsEl.classList.add('on');
+  for (const i of settingsEl.querySelectorAll('input[data-k]')) { i.value = prefs[i.dataset.k]; i.nextElementSibling.textContent = fmtPref(i.dataset.k); }
+  for (const b of settingsEl.querySelectorAll('#gq button')) b.classList.toggle('on', b.dataset.q === prefs.quality);
+  for (const b of settingsEl.querySelectorAll('#gv button')) b.classList.toggle('on', b.dataset.v === settings.view);
+  $('#fs').textContent = document.fullscreenElement ? 'Leave full screen' : 'Full screen';
+}
+function closeSettings() { ui.settings = false; settingsEl.classList.remove('on'); }
+function fmtPref(k) {
+  const v = prefs[k];
+  return k === 'walkSpeed' ? `${(+v).toFixed(2)}` : k === 'camSens' || k === 'mouseSens' ? `${(+v).toFixed(1)}×` : `${Math.round(v)}`;
+}
+for (const i of settingsEl.querySelectorAll('input[data-k]')) {
+  i.oninput = () => {
+    const k = i.dataset.k;
+    if (k === 'volume') setVolume(+i.value); else prefs[k] = +i.value;
+    savePrefs();
+    i.nextElementSibling.textContent = fmtPref(k);
+  };
+}
+for (const b of settingsEl.querySelectorAll('#gq button')) b.onclick = () => { prefs.quality = b.dataset.q; savePrefs(); applyQuality(); openSettings(); };
+for (const b of settingsEl.querySelectorAll('#gv button')) b.onclick = () => { setView(b.dataset.v, true); openSettings(); };
+$('#fs').onclick = async () => {
+  try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.documentElement.requestFullscreen(); } catch { showError('Full screen isn’t available here.'); }
+  setTimeout(openSettings, 150);
+};
+$('#resume').onclick = closeSettings;
+settingsEl.addEventListener('pointerdown', (e) => { if (e.target === settingsEl) closeSettings(); });
+// Graphics: resolution, shadows and the glow pass.
+function applyQuality() {
+  const q = prefs.quality;
+  renderer.setPixelRatio(q === 'high' ? Math.min(devicePixelRatio || 1, 1.6) : q === 'medium' ? Math.min(devicePixelRatio || 1, 1.2) : 1);
+  const sh = q !== 'low';
+  if (renderer.shadowMap.enabled !== sh) { renderer.shadowMap.enabled = sh; scene.traverse((o) => { if (o.material) for (const m of [].concat(o.material)) m.needsUpdate = true; }); }
+  bloom.enabled = q !== 'low';
+  resize();
+}
+
 // ---------------------------------------------------------------- day and night
 const dark = matchMedia('(prefers-color-scheme: dark)');
 const forced = params.get('mood');
@@ -2187,16 +3014,18 @@ function applyMood(n, t, beat) {
   skyDay.color.setScalar(lerp(1.5, 0.3, n));
   shaft.material.uniforms.uStrength.value = d;
   dust.pts.material.opacity = 0.55 * d + 0.08 * n;
-  lampLight.intensity = 2.4 * n;
-  lampShade.material.emissiveIntensity = 0.38 * n;
+  const L = lightsK;
+  lampLight.intensity = 2.4 * n * L;
+  lampShade.material.emissiveIntensity = 0.38 * n * L;
   const twinkle = 0.85 + 0.15 * Math.sin(t * 1.3);
-  fairy.mat.color.setRGB(lerp(0.35, 3.2, n) * twinkle, lerp(0.33, 2.6, n) * twinkle, lerp(0.3, 1.9, n) * twinkle);
-  for (const l of fairy.lights) l.intensity = 2.1 * n;
+  const fl = lerp(1, L, n);
+  fairy.mat.color.setRGB(lerp(0.35, 3.2, n * L) * twinkle * fl, lerp(0.33, 2.6, n * L) * twinkle * fl, lerp(0.3, 1.9, n * L) * twinkle * fl);
+  for (const l of fairy.lights) l.intensity = 2.1 * n * L;
   // Shelf LED strips and downlights: off by day, on at night.
   for (const o of shelfLeds) {
-    if (o.isSpotLight) o.intensity = 4 * n;
-    else if (o.isPointLight) o.intensity = 0.7 * n * (1 + beat * 0.15);
-    else o.material.color.setRGB(1.5 * n, 1.0 * n, 0.55 * n);
+    if (o.isSpotLight) o.intensity = 4 * n * L;
+    else if (o.isPointLight) o.intensity = 0.7 * n * L * (1 + beat * 0.15);
+    else o.material.color.setRGB(1.5 * n * L, 1.0 * n * L, 0.55 * n * L);
   }
   for (const m of hifiMats) m.emissiveIntensity = 0.15 + 0.9 * n;
   lava.uniforms.uGlow.value = lerp(0.7, 1.15, n);
@@ -2241,7 +3070,11 @@ function frame() {
   stepRecords(dt);
   stepCamera(dt);
   stepBody(dt, t);
-  if (nowPlaying.rec) now.querySelector('.bar i').style.width = `${(nowPlaying.progress * 100).toFixed(2)}%`;
+  smoking.update(gamePaused() ? 0 : dt, t);
+  lightsK += ((lightsOn ? 1 : 0) - lightsK) * (1 - Math.exp(-dt * 5));
+  paintPrompt();
+  paintSeatBar();
+  if (nowPlaying.rec) { now.querySelector('.bar i').style.width = `${(nowPlaying.progress * 100).toFixed(2)}%`; paintTime(); }
   composer.render(dt);
   if (first) { first = false; setTimeout(() => $('#veil').classList.add('gone'), 250); }
   requestAnimationFrame(frame);
@@ -2257,6 +3090,7 @@ addEventListener('message', (e) => {
     if (typeof m.avatar === 'string') loadAvatar(m.avatar);
     if (typeof m.furniture === 'string') loadFurniture(m.furniture);
     if (Array.isArray(m.photos)) setPhotos(m.photos);
+    if (typeof m.cigarettes === 'string') smoking.loadBox(m.cigarettes);
     if (m.view && m.view !== settings.view) setView(m.view, false);
   } else if (m.type === 'crates' && Array.isArray(m.crates)) {
     const sig = JSON.stringify(m.crates.map((c) => c && (c.error || (c.tracks || []).map((t) => t.id).join(','))));
@@ -2268,6 +3102,7 @@ addEventListener('message', (e) => {
 });
 
 applyMood(night, 0, 0);
+applyQuality();
 crates.forEach(setPlate);
 setView(settings.view, false);
 cam.pos.copy(viewPose().pos); cam.at.copy(viewPose().at);
@@ -2290,5 +3125,12 @@ if (params.get('debug')) {
     walk: (x, z) => walkTo({ x, z }),
     body: () => ({ exiting: body.exiting, lie: +body.lie.toFixed(2), crouch: +body.crouch.toFixed(2), state: body.state, x: +body.x.toFixed(2), z: +body.z.toFixed(2), h: +body.h.toFixed(2), sit: +body.sit.toFixed(2), reach: +body.reach.toFixed(2) }),
     state: () => ({ mode, playing: nowPlaying.playing, rec: nowPlaying.rec?.track.title, progress: nowPlaying.progress, table: recs.filter((r) => r.state === 'table').length }),
+    cam: () => ({ pos: camera.position.toArray().map((v) => +v.toFixed(2)), fp: followPose(), tgt: followTarget().toArray(), boxes: camBoxes.map((b) => [b.min.toArray(), b.max.toArray()]), tween: !!cam.tween }),
+    camAt: (a, b) => { debugCam = a ? { pos: new T.Vector3(...a), at: new T.Vector3(...b) } : null; },
+    smokeAt: (st, tt, drag) => smoking._debugSet(st, tt, drag),
+    smoke: () => ({ state: smoking.state, remaining: +smoking.remaining.toFixed(2), ashtray: smoking.ashtray }),
+    age: (sec) => smoking._debugAge(sec),
+    ui: () => ({ seat: paintSeatBar.key, prompt: promptThing?.label || '', menu: !!ui.menu, settings: ui.settings, mode, orbit: { yaw: +orbit.yaw.toFixed(2), dist: +orbit.dist.toFixed(2) } }),
+    place: (x, z, h) => { Object.assign(body, { x, z, h, sit: 0, lie: 0, state: 'standing', seat: nearestSeat({ x, z }) }); },
   };
 }
