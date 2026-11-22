@@ -125,6 +125,7 @@
     #queue .empty { margin: 2px 6px 6px; font-size: 12px; color: var(--dim); }
     #qb b { display: inline-block; min-width: 16px; margin-left: 4px; padding: 2px 5px; border-radius: 8px; background: rgba(255,240,220,0.16); font-size: 11px; }
     body.q #qb { background: rgba(255,240,220,0.16); }
+    #dance.on { background: linear-gradient(135deg, rgba(255,150,90,0.55), rgba(240,90,140,0.5)); }
     #inspect { left: 50%; bottom: 18px; transform: translateX(-50%); display: none; align-items: center; gap: 14px; padding: 10px 12px 10px 10px; border-radius: 18px; max-width: min(640px, 92vw); }
     body.inspect #inspect { display: flex; }
     body.inspect #now { opacity: 0; pointer-events: none; }
@@ -144,6 +145,7 @@
   <div class="hud" id="title">Record Room</div>
   <div class="hud" id="top">
     <button class="btn glass" id="back" title="Back to the room (Esc)">← Room</button>
+    <button class="btn glass" id="dance" title="Dance (G)">Dance</button>
     <button class="btn glass" id="qb" title="Show the queue (Q)">Queue<b>0</b></button>
     <div class="seg glass" id="views">
       <button data-v="third" class="on" title="Third person (F)">3rd person</button>
@@ -183,7 +185,7 @@
     <div class="line">Graphics<div class="seg glass" id="gq"><button data-q="low">Low</button><button data-q="medium">Medium</button><button data-q="high">High</button></div></div>
     <div class="line">Camera<div class="seg glass" id="gv"><button data-v="third">3rd person</button><button data-v="first">1st person</button></div></div>
     <div class="line">Display<div><button class="act" id="fs">Full screen</button></div></div>
-    <div class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows walk · <kbd>E</kbd> interact · <kbd>F</kbd> camera · drag to look · scroll to zoom · <kbd>Space</kbd> play/pause · <kbd>Q</kbd> queue · <kbd>Esc</kbd> menu</div>
+    <div class="keys"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> or arrows walk · <kbd>E</kbd> interact · <kbd>F</kbd> camera · drag to look · scroll to zoom · <kbd>Space</kbd> play/pause · <kbd>Q</kbd> queue · <kbd>G</kbd> dance · <kbd>Esc</kbd> menu</div>
     <div class="foot"><button class="act go" id="resume">Resume</button></div>
   </div></div>
   <div class="glass" id="tip"></div>

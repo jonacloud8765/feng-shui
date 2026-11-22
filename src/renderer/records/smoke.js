@@ -208,13 +208,16 @@ export function createSmoking(env) {
   function start() {
     if (busy() || !env.canSmoke()) return false;
     ikCache = env.solveAll(spot);
-    S.lit = 0; S.drag = -1; S.nextDrag = 7 + Math.random() * 5; S.bright = 0; S.held = 0;
+    S.ashQueued = false; S.lit = 0; S.drag = -1; S.nextDrag = 7 + Math.random() * 5; S.bright = 0; S.held = 0;
     setBurn(0);
     set('pickup');
     return true;
   }
+  // He can put it out whenever he likes, not only once it has burned down.
   function ash() {
-    if (S.state !== 'finished') return false;
+    if (S.state !== 'finished' && S.state !== 'smoking') return false;
+    // Mid-drag, he finishes the drag first, then puts it out.
+    if (S.state === 'smoking' && S.drag >= 0) { S.ashQueued = true; env.changed?.(); return true; }
     set('ashing');
     return true;
   }
@@ -276,12 +279,12 @@ export function createSmoking(env) {
       if (S.drag >= 0) {
         S.drag += dt;
         if (S.drag >= 3.0 && S.drag - dt < 3.0) exhale(a);
-        if (S.drag >= 4.4) { S.drag = -1; S.nextDrag = 8 + Math.random() * 8; }
+        if (S.drag >= 4.4) { S.drag = -1; S.nextDrag = 8 + Math.random() * 8; if (S.ashQueued) { S.ashQueued = false; set('ashing'); } }
       } else {
         S.nextDrag -= dt;
         if (S.nextDrag <= 0 && remaining() > 5) S.drag = 0;
       }
-      if (remaining() <= 0 && S.drag < 0) set('finished');
+      if (S.state === 'smoking' && remaining() <= 0 && S.drag < 0) set('finished');
     } else if (S.state === 'ashing') {
       for (const tt of [1.4, 1.7, 2.0]) if (S.t >= tt && S.t - dt < tt) { tapAsh(); env.sfx?.('tap'); }
       if (S.t >= 2.4 && !S.release) {
@@ -387,6 +390,7 @@ export function createSmoking(env) {
     get busy() { return busy(); },
     get active() { return busy(); },
     get finished() { return S.state === 'finished'; },
+    get ashQueued() { return !!S.ashQueued; },
     get remaining() { return remaining(); },
     get ashtray() { return ashtrayState.butts ? 'butts' : ashtrayState.ash ? 'ash' : 'empty'; },
     spot,

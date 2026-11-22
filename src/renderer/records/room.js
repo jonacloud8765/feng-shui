@@ -655,8 +655,9 @@ const lava = new T.ShaderMaterial({
     }`,
 });
 const lavaLight = new T.PointLight('#ff7a3d', 0, 3, 2);
+const lavaLamp = new T.Group();
 {
-  const g = new T.Group();
+  const g = lavaLamp;
   g.position.set(1.45, 0, SOFA_Z - 0.1);
   add(g, cyl(0.2, 0.2, 0.36, 32), M.oak, 0, 0.18, 0);
   add(g, cyl(0.045, 0.075, 0.12, 24), M.brass, 0, 0.42, 0);
@@ -829,6 +830,38 @@ function setPhotos(list) {
       mat.map = tex; mat.emissiveMap = tex; mat.needsUpdate = true;
     });
   }
+}
+
+// Film posters (his Letterboxd top four) in thin black frames on the wall
+// behind the couch, centred over its long side.
+const posterWall = new T.Group();
+room.add(posterWall);
+function setPosters(list, relayout) {
+  const sig = JSON.stringify(list);
+  if (sig === setPosters.sig && !relayout) return;
+  setPosters.sig = sig; setPosters.list = list;
+  for (const o of [...posterWall.children]) { posterWall.remove(o); o.traverse((c) => { c.geometry?.dispose(); if (c.material?.map) c.material.map.dispose(); }); }
+  const items = list.slice(0, 6);
+  if (!items.length) return;
+  const sofa = LAYOUT.sofa[0];
+  const cx = (sofa[0] + sofa[1]) / 2;
+  const h = 0.74, w = h * 2 / 3, gap = 0.16, total = items.length * w + (items.length - 1) * gap;
+  const frame = new T.MeshStandardMaterial({ color: '#141210', roughness: 0.5 });
+  items.forEach((it, i) => {
+    const g = new T.Group();
+    // Rotated to face the room, so list order runs right to left in x (left to right as he sees them).
+    g.position.set(cx + total / 2 - w / 2 - i * (w + gap), 1.6, Z1 - 0.004);
+    g.rotation.y = PI;
+    posterWall.add(g);
+    add(g, box(w + 0.04, h + 0.04, 0.024), frame, 0, 0, 0.012);
+    const mat = new T.MeshStandardMaterial({ color: '#ffffff', roughness: 0.35, emissive: '#ffffff', emissiveIntensity: 0.1 });
+    const pic = add(g, new T.PlaneGeometry(w, h), mat, 0, 0, 0.0255);
+    pic.castShadow = false;
+    loader.load(it.url, (tex) => {
+      tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = 8;
+      mat.map = tex; mat.emissiveMap = tex; mat.needsUpdate = true;
+    });
+  });
 }
 
 // Fairy lights: scallops above the window and along the top of the back wall, one across the ceiling.
@@ -1161,6 +1194,7 @@ function loadFurniture(url) {
     const { sofa: S, table: Tb } = L;
     // An L couch: the long side along the front wall, the short side along the left one.
     LAYOUT.sofa = [[S.minX, S.maxX, S.maxZ - S.depth, Z1], [X0, S.minX + S.depth, S.minZ, Z1]];
+    if (setPosters.list) setPosters(setPosters.list, true);
     LAYOUT.table = { rect: [Tb.x - Tb.w / 2, Tb.x + Tb.w / 2, Tb.z - Tb.d / 2, Tb.z + Tb.d / 2] };
     LAYOUT.beanbag = false;
     Object.assign(TABLE, { x: Tb.x, z: Tb.z, y: Tb.y, w: Tb.w, d: Tb.d });
@@ -1329,11 +1363,21 @@ const body = {
   x: SEAT.x, z: SEAT.z, h: 0, sit: 1, lie: 0, crouch: 0, crouchTo: 0, state: 'seated', path: [], speed: 0, phase: 0, stride: 0,
   reach: 0, reachTo: 0, hold: 0, look: null, then: null, t: 0, from: null, to: null, faceTo: null, after: null, idle: 0, exiting: false,
   vx: 0, vz: 0, seat: SEAT, auto: false, headT: 0, headYaw: 0, headPitch: 0, headTo: { y: 0, p: 0 }, fidget: 0, fidgetTo: 0, fidgetT: 12,
+  dance: 0, danceTo: 0, danceDrop: 0,
 };
 const LIE = { x: 0.12, z: SOFA_Z - 0.02, psi: -PI / 2, at: { x: 0.6, y: 1.5, z: -1.6 } };
 const qTmp = new T.Quaternion(), qLie = new T.Quaternion(), qUp = new T.Quaternion(), eUp = new T.Euler();
 // Lying: tip the body onto its back (Rx), then point the head along LIE.psi.
-function setLie() { qLie.setFromEuler(new T.Euler(PI / 2, LIE.psi, 0, 'YXZ')); }
+function setLie() { qLie.setFromEuler(new T.Euler(PI / 2, LIE.psi, 0, 'YXZ')); placePillow(); }
+// A pillow at the head end of where he lies down, so his head rests on it.
+const pillow = new T.Mesh(rbox(0.46, 0.13, 0.34, 0.06, 5), M.mustard);
+pillow.castShadow = true; pillow.receiveShadow = true;
+room.add(pillow);
+function placePillow() {
+  const hx = Math.sin(LIE.psi), hz = Math.cos(LIE.psi);
+  pillow.position.set(LIE.x + hx * 0.84, 0.47, LIE.z + hz * 0.84);
+  pillow.rotation.set(0, LIE.psi + PI / 2, 0.18 * Math.sign(-hx || 1));
+}
 setLie();
 const marker = add(room, new T.RingGeometry(0.11, 0.14, 40), new T.MeshBasicMaterial({ color: '#ffd9a8', transparent: true, opacity: 0, depthWrite: false }), 0, 0.006, 0, -PI / 2);
 noShadow.add(marker);
@@ -1425,6 +1469,93 @@ function tryMove(dx, dz) {
   return 0;
 }
 
+// ---------------------------------------------------------------- dancing
+// An emote (G, or the Dance button): he dances on the beat. With a record
+// playing the beat follows the track's position; otherwise a steady 112 BPM.
+// Standing he cycles three moves every eight beats (groove, fist pump,
+// shimmy), crossfading between them; on the couch he nods and sways.
+const BPM = 112;
+const canDance = () => !smoking.busy && !body.exiting && mode === 'room' && (upright() || body.state === 'seated');
+function toggleDance(on = body.danceTo < 0.5) {
+  if (on && !canDance()) return;
+  body.danceTo = on ? 1 : 0;
+  body.idle = 0;
+  if (on && body.state === 'manual') { body.vx = 0; body.vz = 0; }
+  paintDanceBtn();
+}
+function paintDanceBtn() { $('#dance')?.classList.toggle('on', body.danceTo > 0.5); }
+function beatPhase(t) {
+  if (nowPlaying.playing && nowPlaying.pos) return (nowPlaying.pos / 1000) * BPM / 60;
+  return t * BPM / 60;
+}
+function danceOverlay(t, s, lie, sim) {
+  if (body.danceTo > 0 && !canDance()) { body.danceTo = 0; paintDanceBtn(); }
+  body.dance += (body.danceTo - body.dance) * (1 - Math.exp(-sim * 4));
+  const w = body.dance * (1 - lie);
+  body.danceDrop = 0;
+  if (w < 0.002) return;
+  const b = beatPhase(t);
+  const bounce = 0.5 - 0.5 * Math.cos(b * PI * 2); // down on the beat
+  const half = Math.sin(b * PI); // side to side every two beats
+  const mix = (k, v) => k + (v - k) * w;
+  if (s > 0.5) {
+    // Seated groove: head nods, shoulders sway, hands loose over the knees.
+    P.headPitch = mix(P.headPitch, 0.05 + 0.2 * bounce);
+    P.twist = mix(P.twist, 0.16 * half);
+    P.lean = mix(P.lean, P.lean + 0.08 * bounce);
+    for (const k of ['L', 'R']) {
+      const sg = k === 'L' ? 1 : -1;
+      P.armF[k] = mix(P.armF[k], 0.55 + 0.25 * sg * half);
+      P.armD[k] = mix(P.armD[k], -0.7);
+      P.elbow[k] = mix(P.elbow[k], 1.35 + 0.25 * bounce);
+    }
+    return;
+  }
+  // Which move, crossfaded over the last beat of each eight.
+  const bar = b / 8, m0 = Math.floor(bar) % 3, m1 = (m0 + 1) % 3;
+  const x = clamp((bar % 1) * 8 - 7, 0, 1), xf = x * x * (3 - 2 * x);
+  const moves = [0, 0, 0]; moves[m0] += 1 - xf; moves[m1] += xf;
+  const pose = { lean: 0, twist: 0, hp: 0, hy: 0, L: { f: 0, d: 0, el: 0 }, R: { f: 0, d: 0, el: 0 } };
+  const addMove = (k, m) => {
+    if (k <= 0) return;
+    pose.lean += k * m.lean; pose.twist += k * m.twist; pose.hp += k * m.hp; pose.hy += k * (m.hy || 0);
+    for (const a of ['L', 'R']) { pose[a].f += k * m[a][0]; pose[a].d += k * m[a][1]; pose[a].el += k * m[a][2]; }
+  };
+  // Groove: sway, elbows bent, hands swinging opposite each other.
+  addMove(moves[0], { lean: 0.06 + 0.06 * bounce, twist: 0.24 * half, hp: 0.06 + 0.18 * bounce, L: [0.55 + 0.35 * half, -0.62, 1.45], R: [0.55 - 0.35 * half, -0.62, 1.45] });
+  // Fist pump: right arm up and punching on the beat, left hand on the hip.
+  addMove(moves[1], { lean: -0.04 + 0.05 * bounce, twist: 0.08 * half, hp: -0.12 + 0.2 * bounce, L: [0.15, -0.35, 1.9], R: [2.55 + 0.22 * bounce, -0.5, 0.35 + 0.65 * bounce] });
+  // Shimmy: arms out, shoulders popping forward and back on each beat.
+  const pop = Math.sin(b * PI * 2);
+  addMove(moves[2], { lean: 0.1, twist: 0.3 * pop, hp: 0.1 * bounce, hy: -0.2 * half, L: [0.9 + 0.35 * pop, -0.3, 1.2], R: [0.9 - 0.35 * pop, -0.3, 1.2] });
+  P.lean = mix(P.lean, pose.lean); P.twist = mix(P.twist, pose.twist);
+  P.headPitch = mix(P.headPitch, pose.hp); P.headYaw = mix(P.headYaw, pose.hy);
+  for (const k of ['L', 'R']) { P.armF[k] = mix(P.armF[k], pose[k].f); P.armD[k] = mix(P.armD[k], pose[k].d); P.elbow[k] = mix(P.elbow[k], pose[k].el); }
+  // Knees give on every beat.
+  const kb = 0.12 + 0.3 * bounce;
+  for (const k of ['L', 'R']) { P.thigh[k] = mix(P.thigh[k], kb * 0.55); P.knee[k] = mix(P.knee[k], kb); }
+  body.danceDrop = w * (0.006 + 0.04 * bounce);
+}
+
+// ---------------------------------------------------------------- staring at the lava lamp
+// First person, his eyes on the lamp: the view narrows, the blobs drift, and
+// the room's sounds stay. From the couch he just turns his head; standing, he
+// walks over first. Drag to look around a little; Esc or a step snaps him out.
+function lavaPoint(out = new T.Vector3()) { return lavaLamp.getWorldPosition(out).add(tmpV.set(0, 0.64, 0)); }
+function stareAtLamp() {
+  if (body.state === 'seated') { enterLava(); return; }
+  const p = lavaLamp.getWorldPosition(new T.Vector3());
+  const [i, j] = nearestFree(p.x - 0.35, p.z - 0.7);
+  const spot = navPoint(i, j);
+  walkTo(spot, enterLava, headingFor(p.x - spot.x, p.z - spot.z));
+}
+function enterLava() {
+  body.danceTo = 0; paintDanceBtn();
+  mode = 'lava'; look.yaw = 0; look.pitch = 0;
+  goCamera(1.6);
+  setHint('Staring at the lava lamp · drag to look · Esc or a movement key snaps out of it');
+}
+
 function stepBody(dt, t) {
   const TURN = 5.5;
   const sim = gamePaused() ? 0 : dt;
@@ -1434,7 +1565,7 @@ function stepBody(dt, t) {
   const inp = keysDriveBody() ? moveInput() : { f: 0, r: 0 };
   const pressing = !!(inp.f || inp.r);
   if (pressing) {
-    body.idle = 0; body.auto = false;
+    body.idle = 0; body.auto = false; body.danceTo = 0;
     if (smoking.busy) { /* he stays put until the cigarette's out */ }
     else if (onSofa()) { if (!['rising', 'gettingUp', 'shuffle'].includes(body.state)) getUp(() => { body.state = 'standing'; }); }
     else if (['standing', 'walking', 'turning'].includes(body.state)) {
@@ -1580,8 +1711,8 @@ function stepBody(dt, t) {
   const a = 0.42 * Math.min(1, body.stride), ph = body.phase;
   const swingL = a * Math.sin(ph), swingR = -swingL;
   // On the couch: one knee drawn up a little when he shifts.
-  const lieKnee = { L: 0.22 + 0.5 * body.fidget * lie, R: 0.22 };
-  const legs = (k, swing, bend) => [lerp(lerp(lerp(swing, 1.3, c), PI / 2, s), 0.1 + 0.25 * (k === 'L' ? body.fidget : 0), lie), lerp(lerp(lerp(bend, 2.2, c), rig.seatKnee, s), lieKnee[k], lie)];
+  const lieKnee = { L: 0.2 + 0.25 * body.fidget * lie, R: 0.16 };
+  const legs = (k, swing, bend) => [lerp(lerp(lerp(swing, 1.3, c), PI / 2, s), 0.06 + 0.12 * (k === 'L' ? body.fidget : 0), lie), lerp(lerp(lerp(bend, 2.2, c), rig.seatKnee, s), lieKnee[k], lie)];
   [P.thigh.L, P.knee.L] = legs('L', swingL, 1.15 * a * Math.max(0, Math.cos(ph)) + 0.04);
   [P.thigh.R, P.knee.R] = legs('R', swingR, 1.15 * a * Math.max(0, -Math.cos(ph)) + 0.04);
   P.breath = 0.5 - 0.5 * Math.cos(t * PI * 2 / (lie > 0.5 ? 6 : smoking.active ? 5.2 : 4.6));
@@ -1596,12 +1727,13 @@ function stepBody(dt, t) {
   P.twist = twist + shift * 0.025;
   // Getting up and sitting down he leans forward over his feet and pushes off with his hands.
   const push = (body.state === 'rising' || body.state === 'sitting') ? Math.sin(PI * clamp(body.t, 0, 1)) : body.state === 'sliding' ? 0.5 * Math.sin(PI * clamp(body.t, 0, 1)) : body.state === 'gettingUp' || body.state === 'lyingDown' ? 0.6 * Math.sin(PI * clamp(body.t, 0, 1)) : 0;
-  P.lean = lerp(lerp(lerp(0.05 * body.stride, 0.42, c), -0.13, s), 0, lie) + body.reach * 0.55 * (1 - c) * (1 - lie) + P.breath * 0.012 + push * 0.38;
+  P.lean = lerp(lerp(lerp(0.05 * body.stride, 0.42, c), -0.13, s), 0.2, lie) + body.reach * 0.55 * (1 - c) * (1 - lie) + P.breath * 0.012 + push * 0.38;
   for (const k of ['L', 'R']) {
     const walkArm = -0.55 * (k === 'L' ? swingL : swingR);
-    let f = lerp(lerp(lerp(walkArm, 0.5, c), 0.28, s), 0.3 + (k === 'R' ? 0.6 * body.fidget : 0), lie), d = lerp(lerp(-0.8, -0.7, s), -0.86, lie);
+    // Lying: both arms resting down along his sides.
+    let f = lerp(lerp(lerp(walkArm, 0.5, c), 0.28, s), k === 'R' ? 0.06 : 0.1, lie), d = lerp(lerp(-0.8, -0.7, s), k === 'R' ? -0.92 : -0.9, lie);
     let el = lerp(lerp(0.12 + 0.25 * body.stride, 0.4, c), 0.95, s);
-    el = lerp(el, k === 'R' ? 0.5 + 1.2 * body.fidget : 0.35, lie);
+    el = lerp(el, k === 'R' ? 0.18 + 0.1 * body.fidget : 0.22, lie);
     const shelf = mode === 'crate' && shelfAim.sol;
     if (shelf && k === shelfAim.k) { const q = shelfAim.sol; f = lerp(f, q.f, body.reach); d = lerp(d, q.d, body.reach); el = lerp(el, q.el, body.reach); }
     else if (shelf) { f = lerp(f, 0.05, body.reach); d = lerp(d, -0.82, body.reach); el = lerp(el, 0.2, body.reach); }
@@ -1620,10 +1752,11 @@ function stepBody(dt, t) {
     P.lean = lerp(P.lean, q.lean, w); P.twist = lerp(P.twist, 0, w);
     P.headYaw = lerp(P.headYaw, q.hy, w); P.headPitch = lerp(P.headPitch, q.hp, w);
   }
+  danceOverlay(t, s, lie, sim);
   // The cigarette takes over his right arm (and the left to light it).
   smoking.pose(P, sim, t);
   const standY = rig.standHip * Math.cos(a * Math.sin(ph)) - 0.012 * body.stride;
-  const hip = lerp(lerp(lerp(standY, 0.46, c), rig.seatHip, s), 0.45, lie);
+  const hip = lerp(lerp(lerp(standY, 0.46, c), rig.seatHip, s), 0.45, lie) - body.danceDrop;
   let px = lerp(body.x, LIE.x, lie), pz = lerp(body.z, LIE.z, lie);
   // Reaching for the table he slides forward to the edge of the cushion.
   px -= Math.sin(body.h) * P.scoot; pz -= Math.cos(body.h) * P.scoot;
@@ -2138,6 +2271,7 @@ function toggleQueue(on) {
   paintQueue();
 }
 $('#qb').onclick = () => toggleQueue();
+$('#dance').onclick = () => { $('#dance').blur(); toggleDance(); };
 $('#qclear').onclick = () => { for (const r of queued()) unqueue(r); roomHint(); };
 
 function showError(t) { errBox.textContent = t; errBox.style.display = 'block'; clearTimeout(showError.t); showError.t = setTimeout(hideError, 7000); }
@@ -2147,7 +2281,7 @@ function roomHint() {
   paintQueue();
   if (!recs.length) return setHint(crates.some((c) => c.data) ? 'Add SoundCloud links in settings to fill the crates' : 'Filling the crates…');
   if (!nowPlaying.rec && recs.some((r) => r.state === 'table')) return setHint('Drag a record onto the turntable');
-  if (!nowPlaying.rec) return setHint('WASD or arrows to walk · E to use things · drag to look · Esc for the menu');
+  if (!nowPlaying.rec) return setHint('WASD or arrows to walk · E to use things · G to dance · drag to look · Esc for the menu');
   setHint('');
 }
 function crateHint() {
@@ -2174,6 +2308,14 @@ function viewPose() {
     if (settings.view === 'first') return { pos: new T.Vector3(body.x, 1.64, body.z + 0.02), at: new T.Vector3(g.x, 1.86, SHELF.z + 0.1) };
     const side = g.x > 0.05 ? 1 : -1;
     return { pos: new T.Vector3(g.x + side * 0.85, 1.72, SHELF.spotZ + 1.25), at: new T.Vector3(g.x - side * 0.05, 1.68, SHELF.z + 0.1) };
+  }
+  if (mode === 'lava') {
+    const e = eyePose({ pos: new T.Vector3(), at: new T.Vector3() });
+    const lp = lavaPoint();
+    // His eyes drift a little, like a long stare.
+    const tt = performance.now() / 1000;
+    lp.x += Math.sin(tt * 0.23) * 0.02 + look.yaw * -0.6; lp.y += Math.sin(tt * 0.31) * 0.015 + look.pitch * 0.6;
+    return { pos: e.pos.lerp(lp, 0.18), at: lp };
   }
   if (mode === 'window') {
     // At the window, looking out over the city.
@@ -2257,7 +2399,7 @@ function stepCamera(dt) {
     cam.at.lerp(to.at, 1 - Math.exp(-dt * Math.max(k, 10)));
   }
   stepOrbit(dt);
-  const boost = mode === 'room' && settings.view === 'third' ? 6 : 0;
+  const boost = mode === 'room' && settings.view === 'third' ? 6 : mode === 'lava' ? -20 : 0;
   if (Math.abs(fovBoost - boost) > 0.01) { fovBoost += (boost - fovBoost) * (1 - Math.exp(-dt * 3)); camera.fov = baseFov + fovBoost; camera.updateProjectionMatrix(); }
   camera.position.copy(cam.pos);
   const dir = tmpV.copy(cam.at).sub(cam.pos);
@@ -2267,7 +2409,7 @@ function stepCamera(dt) {
   const right = new T.Vector3().crossVectors(dir, camera.up).normalize();
   dir.applyAxisAngle(right, pitch);
   camera.lookAt(cam.pos.clone().add(dir));
-  const showMe = (settings.view !== 'first' && mode !== 'window') || mode === 'crate' || mode === 'inspect';
+  const showMe = (settings.view !== 'first' && mode !== 'window' && mode !== 'lava') || mode === 'crate' || mode === 'inspect';
   builtInAvatar.visible = showMe && !customAvatar;
   if (customAvatar) customAvatar.visible = showMe;
   // Up close in first person, only his body and hands show, not his head.
@@ -2398,7 +2540,7 @@ canvas.addEventListener('pointermove', (e) => {
   if (down) {
     const dx = e.clientX - down.x, dy = e.clientY - down.y;
     if (Math.hypot(dx, dy) > 5) down.moved = true;
-    if (down.moved && (mode === 'room' || mode === 'window') && !down.hit.rec && !gamePaused()) {
+    if (down.moved && (mode === 'room' || mode === 'window' || mode === 'lava') && !down.hit.rec && !gamePaused()) {
       if (mode === 'room' && settings.view === 'third') {
         // Turn the camera round him, and up or down.
         orbit.yaw = down.oyaw - dx * 0.006 * prefs.camSens;
@@ -2523,7 +2665,7 @@ addEventListener('keydown', (e) => {
     else if (k === 'f' || k === 'v') setView(settings.view === 'first' ? 'third' : 'first', true);
     return;
   }
-  if (mode === 'window' || mode === 'photos') {
+  if (mode === 'window' || mode === 'photos' || mode === 'lava') {
     if (k === 'escape' || k === 'e') { endLook(); return; }
     if (!MOVE_KEYS[k]) return;
     endLook();
@@ -2535,6 +2677,7 @@ addEventListener('keydown', (e) => {
   else if (k === 'escape') { if (document.body.classList.contains('q')) toggleQueue(false); else openSettings(); }
   else if (k === ' ') { e.preventDefault(); scToggle(); }
   else if (k === 'n') playNext();
+  else if (k === 'g') toggleDance();
   else if (k === 'q') toggleQueue();
 });
 
@@ -2642,6 +2785,7 @@ function interactables() {
   });
   list.push({ x: TT.x + 0.38, z: CRED.z + 0.62, r: 0.42, label: 'Use the turntable', act: turntableMenu });
   for (const sx of [-1.6, 1.6]) list.push({ x: sx, z: CRED.z + 0.5, r: 0.45, label: 'Adjust the volume', act: volumeMenu });
+  { const lp = lavaLamp.getWorldPosition(tmpV); list.push({ x: lp.x, z: lp.z, r: 0.75, label: 'Stare at the lava lamp', act: stareAtLamp }); }
   list.push({ x: X0 + 0.8, z: Z0 + 0.85, r: 0.55, label: lightsOn ? 'Turn the lights off' : 'Turn the lights on', act: toggleLights });
   // The window: anywhere along the wall under it (the couch may stand in front of it).
   { const wz = clamp(body.z, WIN.z0, WIN.z1); list.push({ x: X0, z: wz, d: Math.max(0, Math.hypot(body.x - X0, body.z - wz) - 0.9), r: 0.6, label: 'Look outside', act: lookOutside }); }
@@ -2769,11 +2913,11 @@ function seatBarModel() {
   if (st === 'sliding') return { h: 'Sliding over to the ashtray…', b: [] };
   if (st === 'seated' || (sm !== 'box' && onSofa())) {
     if (sm === 'pickup' || sm === 'lighting') return { h: sm === 'pickup' ? 'Taking one out…' : 'Lighting up…', b: [] };
-    if (sm === 'smoking') return { h: `Smoking · <span class="clock">${fmt(smoking.remaining * 1000)}</span> left`, b: [] };
+    if (sm === 'smoking') return smoking.ashQueued ? { h: 'Last drag…', b: [] } : { b: [{ label: 'Ash cigarette', act: () => smoking.ash() }] };
     if (sm === 'finished') return { h: 'Your cigarette is finished.', b: [{ label: 'Ash cigarette', go: true, act: () => smoking.ash() }] };
     if (sm === 'ashing') return { h: 'Putting it out…', b: [] };
     if (st !== 'seated') return null;
-    return { b: [{ label: 'Smoke', go: true, act: smoke }, { label: 'Lie down', act: () => lieDown(body.seat) }, { label: 'Get up', act: () => getUp(() => { body.state = 'standing'; }) }] };
+    return { b: [{ label: 'Smoke', go: true, act: smoke }, { label: 'Lava lamp', act: stareAtLamp }, { label: 'Lie down', act: () => lieDown(body.seat) }, { label: 'Get up', act: () => getUp(() => { body.state = 'standing'; }) }] };
   }
   if (st === 'lying') return { b: [{ label: 'Sit up', go: true, act: () => { body.state = 'gettingUp'; body.t = 1 - body.lie; body.after = null; } }, { label: 'Get up', act: () => getUp(() => { body.state = 'standing'; }) }] };
   return null;
@@ -2904,7 +3048,7 @@ function lookAtPhotos() {
   }, PI / 2);
 }
 function endLook() {
-  if (mode !== 'window' && mode !== 'photos') return;
+  if (mode !== 'window' && mode !== 'photos' && mode !== 'lava') return;
   mode = 'room'; look.yaw = 0; look.pitch = 0; goCamera(1.1); roomHint();
 }
 
@@ -3051,6 +3195,7 @@ addEventListener('message', (e) => {
     if (typeof m.avatar === 'string') loadAvatar(m.avatar);
     if (typeof m.furniture === 'string') loadFurniture(m.furniture);
     if (Array.isArray(m.photos)) setPhotos(m.photos);
+    if (Array.isArray(m.posters)) setPosters(m.posters);
     if (typeof m.cigarettes === 'string') smoking.loadBox(m.cigarettes);
     if (m.view && m.view !== settings.view) setView(m.view, false);
   } else if (m.type === 'crates' && Array.isArray(m.crates)) {
@@ -3083,6 +3228,8 @@ if (params.get('debug')) {
     path: (ax, az, bx, bz) => ({ p: findPath({ x: ax, z: az }, { x: bx, z: bz }), free: NAV.free.reduce((s, v) => s + v, 0), n: NAV.free.length, s: nearestFree(ax, az), t: nearestFree(bx, bz) }),
     screen: (x, y, z) => screenOf(new T.Vector3(x, y, z)),
     doze: () => { body.idle = 1000; },
+    dance: () => ({ to: body.danceTo, w: +body.dance.toFixed(2), can: canDance(), state: body.state, busy: smoking.busy, mode }),
+    pose: () => JSON.stringify({ f: P.armF, d: P.armD, el: P.elbow, lean: P.lean, sh: P.shrug }),
     walk: (x, z) => walkTo({ x, z }),
     body: () => ({ exiting: body.exiting, lie: +body.lie.toFixed(2), crouch: +body.crouch.toFixed(2), state: body.state, x: +body.x.toFixed(2), z: +body.z.toFixed(2), h: +body.h.toFixed(2), sit: +body.sit.toFixed(2), reach: +body.reach.toFixed(2) }),
     state: () => ({ mode, playing: nowPlaying.playing, rec: nowPlaying.rec?.track.title, progress: nowPlaying.progress, table: recs.filter((r) => r.state === 'table').length }),

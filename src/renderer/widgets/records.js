@@ -31,6 +31,8 @@ export function mount(root, ctx) {
   const settings = () => ({ view: ctx.config.view, autoplay: ctx.config.autoplay !== false, avatar: ctx.config.avatar ? fileUrl(ctx.config.avatar) : '', furniture: ctx.config.furniture ? fileUrl(ctx.config.furniture) : '',
     // Framed photos on the wall above the couch: [{ file, aspect, style }].
     cigarettes: ctx.config.cigarettes ? fileUrl(ctx.config.cigarettes) : '',
+    // Film posters on the wall behind the couch: [{ file, title }].
+    posters: (Array.isArray(ctx.config.posters) ? ctx.config.posters : []).filter((p) => p && p.file).map((p) => ({ url: fileUrl(p.file), title: String(p.title || '') })),
     photos: (Array.isArray(ctx.config.photos) ? ctx.config.photos : []).filter((p) => p && p.file).map((p) => ({ url: fileUrl(p.file), aspect: Number(p.aspect) || 1.5, style: p.style || 'gallery' })) });
   const key = () => [ctx.config.crate1, ctx.config.crate2, ctx.config.crate3].join('|');
   let loadedKey = '';
