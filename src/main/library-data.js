@@ -475,9 +475,33 @@ function statusOf(cat, id) {
   return '';
 }
 
+// Goodreads search results. The current page streams its results as React
+// data ("legacyId", "title", "webUrl", then the author's "name"); the older
+// page had bookTitle/authorName links. Returns [{ path, title, author }].
+function parseGoodreadsSearch(html) {
+  const out = []; const seen = new Set();
+  const add = (path, title, author) => {
+    if (seen.has(path)) return; seen.add(path);
+    out.push({ path, title: strip(title), author: strip(author) });
+  };
+  const unq = (t) => { try { return JSON.parse(`"${t}"`); } catch { return t; } };
+  const s = String(html || '').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  for (const chunk of s.split('"__typename":"Book",').slice(1)) {
+    const field = (re) => (chunk.match(re) || [])[1];
+    const title = field(/"title":"((?:[^"\\]|\\.)*)"/);
+    const path = field(/"webUrl":"https:\/\/www\.goodreads\.com(\/book\/show\/[^"?]+)/);
+    const edge = chunk.indexOf('"primaryContributorEdge"');
+    const author = edge >= 0 && (chunk.slice(edge).match(/"name":"((?:[^"\\]|\\.)*)"/) || [])[1];
+    if (title && path && author) add(path, unq(title), unq(author));
+  }
+  const old = /<a class="bookTitle"[^>]*href="(\/book\/show\/\d+[^"?]*)[^"]*"[^>]*>\s*<span[^>]*>([\s\S]*?)<\/span>[\s\S]*?<a class="authorName"[^>]*><span[^>]*>([\s\S]*?)<\/span>/g;
+  for (const m of String(html || '').matchAll(old)) add(m[1], m[2], m[3]);
+  return out;
+}
+
 module.exports = {
   isbn13, normTitle, workKey, parseCsv, looksLikeGoodreadsCsv, parseGoodreadsCsv, looksLikeWishlist, parseAmazonWishlist, bigAmazonImage,
   looksLikeWishlistText, parseWishlistText, htmlToText,
-  parseGoodreadsProfile, parseGoodreadsBook, emptyCatalogue, findBook, applyGoodreadsCsv, applyGoodreadsProfile,
+  parseGoodreadsProfile, parseGoodreadsBook, parseGoodreadsSearch, emptyCatalogue, findBook, applyGoodreadsCsv, applyGoodreadsProfile,
   applyAmazonWishlist, applyBookPage, setFavorite, categories, summarize, statusOf, strip,
 };

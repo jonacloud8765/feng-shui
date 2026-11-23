@@ -190,3 +190,15 @@ test('profile links and cover sizes', () => {
     'https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1361355717i/1354.jpg');
   assert.strictEqual(bigGoodreadsImage('https://s.gr-assets.com/assets/nophoto/book/111x148.png'), '');
 });
+
+test('Goodreads search results are read from the new streamed page and the old one', () => {
+  const book = (id, slug, title, author) =>
+    `{\\"__typename\\":\\"Book\\",\\"details\\":{\\"__typename\\":\\"BookDetails\\",\\"publicationTime\\":1}},\\"id\\":\\"kca://book/x\\",\\"legacyId\\":${id},\\"title\\":\\"${title}\\",\\"imageUrl\\":\\"https://example.com/${id}.jpg\\",\\"webUrl\\":\\"https://www.goodreads.com/book/show/${id}-${slug}\\",\\"description\\":\\"$56\\",\\"bookSeries\\":[],\\"primaryContributorEdge\\":{\\"__typename\\":\\"BookContributorEdge\\",\\"node\\":{\\"__typename\\":\\"Contributor\\",\\"legacyId\\":9,\\"id\\":\\"kca://author/x\\",\\"name\\":\\"${author}\\"}}`;
+  const html = `<script>self.__next_f.push([1,"${book(1, 'summary', 'Summary of Breath by James Nestor', 'Genius Reads')}${book(2, 'breath', 'Breath: The New Science of a Lost Art', 'James Nestor')}"])</script>`;
+  const rows = D.parseGoodreadsSearch(html);
+  assert.deepStrictEqual(rows.map((r) => r.path), ['/book/show/1-summary', '/book/show/2-breath']);
+  const want = D.workKey({ title: 'Breath: The New Science of a Lost Art', author: 'James Nestor' });
+  assert.strictEqual(rows.find((r) => D.workKey(r) === want).path, '/book/show/2-breath');
+  const old = '<a class="bookTitle" href="/book/show/7-gorgias?from_search=true"><span itemprop="name">Gorgias</span></a> by <a class="authorName" href="/a"><span itemprop="name">Plato</span></a>';
+  assert.deepStrictEqual(D.parseGoodreadsSearch(old), [{ path: '/book/show/7-gorgias', title: 'Gorgias', author: 'Plato' }]);
+});

@@ -75,10 +75,26 @@ function createLibrary(dataDir, { nativeImage } = {}) {
   }
   function setStatus(s) { status = s; bus.emit('status', s); }
 
+  // Goodreads search answers a cookieless visit with a redirect to the same
+  // page that sets its session cookies; fetch drops cookies and loops, so keep
+  // them here and follow redirects by hand.
+  const cookies = new Map();
   async function get(url) {
-    const res = await fetch(url, { headers: { 'User-Agent': UA, Accept: 'text/html', 'Accept-Language': 'en-US,en;q=0.9' }, redirect: 'follow', signal: AbortSignal.timeout(20000) });
-    if (!res.ok) throw new Error(`Goodreads answered ${res.status}.`);
-    return res.text();
+    for (let hop = 0; hop < 6; hop++) {
+      const res = await fetch(url, {
+        headers: { 'User-Agent': UA, Accept: 'text/html', 'Accept-Language': 'en-US,en;q=0.9', Cookie: [...cookies].map(([k, v]) => `${k}=${v}`).join('; ') },
+        redirect: 'manual', signal: AbortSignal.timeout(20000),
+      });
+      for (const c of res.headers.getSetCookie()) {
+        const [pair] = c.split(';'); const i = pair.indexOf('=');
+        if (i > 0) cookies.set(pair.slice(0, i).trim(), pair.slice(i + 1).trim());
+      }
+      const to = res.status >= 300 && res.status < 400 && res.headers.get('location');
+      if (to) { url = new URL(to, url).href; continue; }
+      if (!res.ok) throw new Error(`Goodreads answered ${res.status}.`);
+      return res.text();
+    }
+    throw new Error('Goodreads kept redirecting.');
   }
 
   // ---------------------------------------------------------------- view
@@ -180,14 +196,13 @@ function createLibrary(dataDir, { nativeImage } = {}) {
     for (const q of [...new Set([`${short} ${surname}`.trim(), short])]) {
       if (!q) continue;
       const html = await get(`${GOODREADS}/search?q=${encodeURIComponent(q)}`);
-      hit = [...html.matchAll(/<a class="bookTitle"[^>]*href="(\/book\/show\/\d+[^"?]*)[^"]*"[^>]*>\s*<span[^>]*>([\s\S]*?)<\/span>[\s\S]*?<a class="authorName"[^>]*><span[^>]*>([\s\S]*?)<\/span>/g)]
-        .find((m) => D.workKey({ title: D.strip(m[2]), author: D.strip(m[3]) }) === D.workKey(b));
+      hit = D.parseGoodreadsSearch(html).find((r) => D.workKey(r) === D.workKey(b));
       if (hit) break;
       await sleep(PAUSE);
     }
     if (!hit) return null;
     await sleep(PAUSE);
-    return D.parseGoodreadsBook(await get(GOODREADS + hit[1]));
+    return D.parseGoodreadsBook(await get(GOODREADS + hit.path));
   }
 
   async function fetchCover(b) {
