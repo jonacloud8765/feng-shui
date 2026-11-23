@@ -247,6 +247,17 @@ class Store extends EventEmitter {
     if (l && name.trim()) { l.name = name.trim(); this.changed('layouts'); }
   }
 
+  // Moves a layout to a new place in the order (the layout bar's order).
+  moveLayout(id, index) {
+    const from = this.doc.layouts.findIndex((l) => l.id === id);
+    if (from < 0) return;
+    const to = Math.max(0, Math.min(this.doc.layouts.length - 1, Math.round(Number(index) || 0)));
+    if (to === from) return;
+    const [l] = this.doc.layouts.splice(from, 1);
+    this.doc.layouts.splice(to, 0, l);
+    this.changed('layouts');
+  }
+
   deleteLayout(id) {
     if (this.doc.layouts.length < 2) return;
     this.doc.layouts = this.doc.layouts.filter((l) => l.id !== id);

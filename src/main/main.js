@@ -510,6 +510,7 @@ function registerIpc() {
   ipcMain.on('fengshui:update-settings', (e, patch) => store.updateSettings(patch));
   ipcMain.handle('fengshui:create-layout', (e, name, fromId) => store.createLayout(name, fromId));
   ipcMain.on('fengshui:rename-layout', (e, id, name) => store.renameLayout(id, name));
+  ipcMain.on('fengshui:move-layout', (e, id, index) => store.moveLayout(id, index));
   ipcMain.on('fengshui:delete-layout', (e, id) => store.deleteLayout(id));
   ipcMain.on('fengshui:switch-layout', (e, id) => store.switchLayout(id));
   ipcMain.handle('fengshui:save-preset', (e, name, appearance) => store.savePreset(name, appearance));

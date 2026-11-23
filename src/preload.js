@@ -43,6 +43,7 @@ contextBridge.exposeInMainWorld('fengshui', {
   updateSettings: (patch) => ipcRenderer.send('fengshui:update-settings', patch),
   createLayout: (name, fromId) => ipcRenderer.invoke('fengshui:create-layout', name, fromId),
   renameLayout: (id, name) => ipcRenderer.send('fengshui:rename-layout', id, name),
+  moveLayout: (id, index) => ipcRenderer.send('fengshui:move-layout', id, index),
   deleteLayout: (id) => ipcRenderer.send('fengshui:delete-layout', id),
   switchLayout: (id) => ipcRenderer.send('fengshui:switch-layout', id),
   savePreset: (name, appearance) => ipcRenderer.invoke('fengshui:save-preset', name, appearance),

@@ -75,7 +75,10 @@ function render() {
     if (state.skin === 'fengshui' && /feng|shui/i.test(l.name)) b.prepend(el('span', { className: 'han', textContent: '风水' }));
     b.append(el('span', { textContent: l.name }));
     b.setAttribute('aria-pressed', String(l.id === state.active));
+    b.dataset.id = l.id;
+    b.addEventListener('pointerdown', (e) => startDrag(e, b, l));
     b.addEventListener('click', () => {
+      if (dragged) { dragged = false; return; }
       // A click also hands the bar the keyboard, so ← → can carry on from here.
       if (!keys) window.fengshui.barKeys(true);
       if (l.id !== state.active) { state.active = l.id; render(); window.fengshui.switchLayout(l.id); }
@@ -102,7 +105,57 @@ function render() {
   fit();
 }
 
-window.fengshui.onBar((s) => { state = s; if (!naming) render(); });
+// Drag a layout sideways to change its place in the bar; the order is saved.
+let drag = null, dragged = false;
+function startDrag(e, b, l) {
+  if (e.button !== 0 || naming) return;
+  drag = { b, l, x0: e.clientX, on: false, id: e.pointerId };
+  b.setPointerCapture(e.pointerId);
+}
+window.addEventListener('pointermove', (e) => {
+  if (!drag || e.pointerId !== drag.id) return;
+  const dx = e.clientX - drag.x0;
+  if (!drag.on) {
+    if (Math.abs(dx) < 5) return;
+    drag.on = true; dragged = true;
+    drag.b.classList.add('dragging'); document.body.classList.add('reordering');
+  }
+  drag.b.style.transform = `translateX(${dx}px)`;
+  // Swap with a neighbour once the pointer passes its middle.
+  const segs = [...bar.querySelectorAll('.seg[data-id]')];
+  const i = segs.indexOf(drag.b);
+  const prev = segs[i - 1], next = segs[i + 1];
+  const swap = (other, before) => {
+    const r0 = drag.b.getBoundingClientRect().left - dx;
+    if (before) bar.insertBefore(drag.b, other); else bar.insertBefore(drag.b, other.nextSibling);
+    const r1 = drag.b.getBoundingClientRect().left;
+    drag.x0 += r1 - r0;
+    drag.b.style.transform = `translateX(${e.clientX - drag.x0}px)`;
+    try { drag.b.setPointerCapture(drag.id); } catch {}
+  };
+  if (prev && e.clientX < prev.getBoundingClientRect().left + prev.offsetWidth / 2) swap(prev, true);
+  else if (next && e.clientX > next.getBoundingClientRect().left + next.offsetWidth / 2) swap(next, false);
+});
+function endDrag(e) {
+  if (!drag || e.pointerId !== drag.id) return;
+  const { b, l, on } = drag;
+  drag = null;
+  if (!on) return;
+  b.style.transform = ''; b.classList.remove('dragging'); document.body.classList.remove('reordering');
+  const order = [...bar.querySelectorAll('.seg[data-id]')].map((x) => x.dataset.id);
+  const index = order.indexOf(l.id);
+  if (index !== state.layouts.findIndex((x) => x.id === l.id)) {
+    state.layouts = order.map((id) => state.layouts.find((x) => x.id === id));
+    window.fengshui.moveLayout(l.id, index);
+  }
+  render();
+  // The click that follows a drag is swallowed; clear the flag if none comes.
+  setTimeout(() => { dragged = false; }, 0);
+}
+window.addEventListener('pointerup', endDrag);
+window.addEventListener('pointercancel', endDrag);
+
+window.fengshui.onBar((s) => { state = s; if (!naming && !drag) render(); });
 // The menu bar's Save Layout As New… asks for a name here.
 window.startNaming = () => { naming = true; render(); };
 

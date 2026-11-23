@@ -69,6 +69,22 @@ test('layouts keep separate widgets; duplicate copies with new ids', () => {
   assert.equal(s.widgets.length, 1);
 });
 
+test('layouts can be put in a new order, and the order is saved', () => {
+  const dir = tmp();
+  const s = new Store(dir);
+  const a = s.layout.id;
+  const b = s.createLayout('B', a).id;
+  const c = s.createLayout('C', a).id;
+  s.moveLayout(c, 0);
+  assert.deepEqual(s.doc.layouts.map((l) => l.id), [c, a, b]);
+  s.moveLayout(c, 99);
+  assert.deepEqual(s.doc.layouts.map((l) => l.id), [a, b, c]);
+  s.moveLayout('nope', 0);
+  assert.equal(s.doc.layouts.length, 3);
+  s.flush?.();
+  assert.deepEqual(new Store(dir).doc.layouts.map((l) => l.id), [a, b, c]);
+});
+
 test('old countdown layouts map onto the new styles', () => {
   const dir = tmp();
   fs.writeFileSync(path.join(dir, 'fengshui-config.json'), JSON.stringify({
