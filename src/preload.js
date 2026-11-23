@@ -74,6 +74,8 @@ contextBridge.exposeInMainWorld('fengshui', {
   records: (force) => ipcRenderer.invoke('fengshui:records', force),
   recordsOpen: (url) => ipcRenderer.send('fengshui:records-open', url),
   recordsExit: () => ipcRenderer.send('fengshui:records-exit'),
+  library: (op, ...args) => ipcRenderer.invoke('fengshui:library', op, ...args),
+  onLibrary: on('fengshui:library-changed'),
   cabinet: (op, ...args) => ipcRenderer.invoke('fengshui:cabinet', op, ...args),
   onCabinetProgress: on('fengshui:cabinet-progress'),
   pickFolder: (current) => ipcRenderer.invoke('fengshui:pick-folder', current),

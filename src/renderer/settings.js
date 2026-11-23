@@ -14,7 +14,7 @@ let page = 'widgets';
 let selected = new URLSearchParams(location.search).get('widget');
 let lastLocalEdit = 0;
 
-const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐', doughcon: '5', neh: '33', nuke: '☢', cabinet: '🗄', records: '◉' };
+const GLYPHS = { note: '✎', image: '▣', clock: '9:41', countdown: '12', random: '37', stopwatch: '0:14', launcher: '⌘', weather: '°', worldclock: '⊕', films: '▶', watched: '#', page: '</>', cork: '📌', board: '✐', doughcon: '5', neh: '33', nuke: '☢', cabinet: '🗄', records: '◉', library: '◍' };
 const ART = {
   clock: ['10:42', 'Thursday · October 9'],
   countdown: ['48', 'days to go'],
@@ -35,6 +35,7 @@ const ART = {
   nuke: ['☢', 'launch.exe'],
   cabinet: ['🗄', 'Downloads, 90s style'],
   records: ['◉', 'crates and a turntable'],
+  library: ['◍', 'four spheres of books'],
 };
 
 const PAGES = [
@@ -217,6 +218,7 @@ function summary(w) {
     case 'neh': return 'Live from PizzINT Watch';
     case 'nuke': return 'Click to open launch.exe';
     case 'records': return [c.crate1, c.crate2, c.crate3].filter(Boolean).map((x) => String(x).replace(/^.*soundcloud\.com\//i, '').split(/[/?#]/)[0]).join(' · ') || 'No crates yet';
+    case 'library': return [c.goodreads && 'Goodreads', c.wishlist && 'Wish List'].filter(Boolean).join(' · ') || 'Drop your exports onto it';
     case 'cabinet': return c.root ? c.root.split('/').pop() : 'Downloads';
     case 'board': return { white: 'Whiteboard', green: 'Green chalkboard', black: 'Black chalkboard' }[c.surface] || 'Whiteboard';
     case 'watched': return c.username ? `@${c.username}` : 'No Letterboxd user';

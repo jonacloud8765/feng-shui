@@ -220,6 +220,19 @@ class Store extends EventEmitter {
     return layout;
   }
 
+  // A new layout holding the given widgets, without switching to it.
+  createLayoutWith(name, widgets) {
+    const layout = { id: newId(), name, widgets: [] };
+    for (const { type, bounds, config } of widgets) {
+      const appearance = merge(this.doc.settings.appearance, TYPES[type]?.appearance || {});
+      const w = normalizeWidget({ type, bounds, appearance, ...(config ? { config: merge(clone(TYPES[type].config), config) } : {}) }, this.doc.settings.appearance);
+      if (w) layout.widgets.push(w);
+    }
+    this.doc.layouts.push(layout);
+    this.changed('layouts');
+    return layout;
+  }
+
   // Small facts about a layout (such as when it was last arranged); saved
   // quietly, without redrawing anything.
   setLayoutMeta(id, patch) {

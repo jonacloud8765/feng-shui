@@ -350,6 +350,22 @@ const TYPES = {
       { key: 'furniture', label: 'Couch & table', type: 'model', hint: 'A furniture .glb laid out for the Record Room (it carries its own layout).' },
     ],
   },
+  library: {
+    name: 'Library',
+    description: 'Four floating sculptures made of your books: reading, want to read, read and favorites. Pull a book out to hold it.',
+    size: { width: 1280, height: 780 },
+    min: { width: 640, height: 420 },
+    max: { width: 3200, height: 2000 },
+    // Currently Reading and Read come from Goodreads, Want to Read from the
+    // Amazon Wish List; the books themselves live in <data>/library.
+    config: { goodreads: '', wishlist: '', motion: 'gentle' },
+    appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 14, padding: 0 },
+    fields: [
+      { key: 'goodreads', label: 'Goodreads profile', placeholder: 'goodreads.com/user/show/…', hint: 'Your public profile shows a few books. For every shelf, ratings and dates, drop your Goodreads export (My Books › Import and export) onto the Library.' },
+      { key: 'wishlist', label: 'Amazon Wish List', placeholder: 'amazon.com/hz/wishlist/ls/…', hint: 'Amazon only lets you read it in your own browser: open it, scroll to the end, save the page (Webpage, Complete) and drop the file onto the Library.' },
+      { key: 'motion', label: 'Motion', type: 'choice', options: { gentle: 'Gentle', still: 'Still' } },
+    ],
+  },
   cabinet: {
     name: 'File Cabinet',
     description: 'A 90s file explorer for your Downloads, with Disk Cleanup.',

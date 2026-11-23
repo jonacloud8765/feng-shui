@@ -12,6 +12,15 @@ const weather = require('./weather').createWeatherService();
 let pizzintService;
 let soundcloudService;
 const soundcloud = () => soundcloudService || (soundcloudService = require('./soundcloud').createSoundCloud(app.getPath('userData')));
+let libraryService;
+const library = () => libraryService || (libraryService = (() => {
+  const lib = require('./library').createLibrary(app.getPath('userData'), { nativeImage });
+  // Every Library widget hears about new books, covers and progress.
+  const tell = () => { if (windows) windows.broadcast('fengshui:library-changed', lib.view()); };
+  lib.on('change', tell);
+  lib.on('status', tell);
+  return lib;
+})());
 const pizzint = () => pizzintService || (pizzintService = require('./pizzint').createPizzint(app.getPath('userData')));
 
 // The app keeps its data in Application Support/Feng Shui.
@@ -596,6 +605,42 @@ function registerIpc() {
   ipcMain.on('fengshui:records-open', (e, url) => {
     if (/^https:\/\/soundcloud\.com\/[^\s]*$/.test(String(url))) shell.openExternal(url);
   });
+  ipcMain.handle('fengshui:library', async (e, op, ...args) => {
+    const w = store.widgets.find((x) => x.id === senderWidgetId(e));
+    if (!w || w.type !== 'library') return { ok: false, error: 'Not a Library.' };
+    const lib = library();
+    try {
+      switch (op) {
+        case 'load': {
+          if (w.config.goodreads) lib.syncProfile(w.config.goodreads).catch(() => {});
+          return { ok: true, data: lib.view() };
+        }
+        case 'sync': return await lib.syncProfile(w.config.goodreads, { force: true });
+        case 'favorite': return { ok: true, favorite: lib.favorite(String(args[0]), !!args[1]) };
+        case 'import-text': return lib.importText(String(args[0] || ''), String(args[1] || ''));
+        case 'import-file': {
+          app.focus({ steal: true });
+          const r = await dialog.showOpenDialog({
+            properties: ['openFile'],
+            message: 'Choose your Goodreads export (.csv) or a saved Amazon Wish List page (.html)',
+            filters: [{ name: 'Goodreads export or Wish List page', extensions: ['csv', 'html', 'htm'] }],
+          });
+          if (r.canceled) return { ok: false, canceled: true };
+          const text = await require('fs').promises.readFile(r.filePaths[0], 'utf8');
+          return lib.importText(path.basename(r.filePaths[0]), text);
+        }
+        case 'retry': lib.retry(); return { ok: true };
+        case 'open': {
+          const url = String(args[0] || '');
+          if (/^https:\/\/(www\.)?(goodreads\.com|amazon\.[a-z.]+)\/[^\s]*$/.test(url)) shell.openExternal(url);
+          return { ok: true };
+        }
+        default: return { ok: false, error: 'Unknown Library request.' };
+      }
+    } catch (err) {
+      return { ok: false, error: err.message };
+    }
+  });
   ipcMain.handle('fengshui:cabinet', async (e, op, ...args) => {
     const cab = require('./cabinet');
     const wid = senderWidgetId(e);
@@ -706,6 +751,14 @@ app.whenReady().then(() => {
       console.error('Self test unavailable:', err.message);
       return app.exit(2);
     }
+  }
+
+  // The Library arrives as a layout of its own, once, filling the main screen.
+  // (Delete it and it stays deleted; the widget is still in the Gallery.)
+  if (!store.doc.settings.libraryLayout && require('fs').existsSync(store.file)) {
+    const area = screen.getPrimaryDisplay().workArea;
+    store.createLayoutWith('Library', [{ type: 'library', bounds: { x: area.x + 16, y: area.y + 16, width: area.width - 32, height: area.height - 32 } }]);
+    store.updateSettings({ libraryLayout: true });
   }
 
   // First launch: start with a calm, useful arrangement instead of an empty desktop.

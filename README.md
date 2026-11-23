@@ -82,7 +82,7 @@ awake and open settings.
 
 Widgets: Clock, Countdown, Random Number, Stopwatch, App Launcher,
 Weather, World Clock, Sticky Note, Photo, Films, Films Watched, Custom Widget, Corkboard, NF Widget,
-Whiteboard, DEFCON and Nothing Ever Happens.
+Whiteboard, DEFCON, Nothing Ever Happens, Record Room and Library.
 
 ## Where things are saved
 
@@ -214,6 +214,48 @@ action as Feng Shui This Layout. On the Feng Shui layout it uses the bagua
 arrangement instead: each widget is placed by its element on a 3×3 grid, with
 no widget over 22% of the screen, no more than a 2.5× size gap and Fire never
 outweighing Water, then each column becomes one even, centred stack.
+
+## Library
+
+A layout of its own: four sculptures made of books float in a dim gallery,
+one for each part of your reading life.
+
+- **Currently Reading** and **Read** come from Goodreads, **Want to Read** from
+  your Amazon Wish List (and only from it), and **Favorites** is yours to pick.
+  Adding a book to Favorites never changes its shelf.
+- **Approach** a sculpture by clicking it; ← and → move to the next one, Esc
+  steps back. Drag the space around a sculpture to turn it.
+- **Pull a book out** by dragging it (or click it). Its neighbours give way,
+  and the book comes into your hands as the same 3D object.
+- **Hold it:** drag to turn it all the way round, scroll to bring it closer,
+  or use Front, Spine, Back and Edges. Its details sit beside it.
+- **Put it back:** press and hold the book, then drag it to its sculpture and
+  let go; or press Esc or "Put it back". It goes into exactly the slot it came
+  from, the same way round.
+
+Every book is its own model: covers, a spine, a page block with page edges and,
+for hardcovers, boards that overhang the pages, a rounded spine and headbands.
+Its proportions come from its cover image and page count. Front covers are the
+real ones; the spine and back are drawn from the book's details (its
+description, publisher and a real ISBN barcode), and the book's panel says so.
+
+**Getting your books in.** Drop files onto the Library, or right-click it and
+choose Import:
+
+- *Goodreads export*: My Books › Import and export › Export Library. This is
+  the complete source for Reading and Read, with your ratings, reviews and dates.
+- *Amazon Wish List*: Amazon doesn't let other apps read it, so save it from
+  your browser. Open the list (or its print view), scroll to the end, and
+  choose File › Save Page As… › Webpage, Complete. Each import replaces Want
+  to Read with what's on the list.
+- *Goodreads profile*: with your profile link in the widget's settings, the
+  Library also reads the few books your public profile shows, twice a day.
+
+Books are matched across sources by ISBN, then by title and author, so a book
+on both lists is one book; different editions stay apart. Details and covers
+come from each book's public Goodreads page, read slowly in the background, then
+from Amazon or Open Library. Everything is kept in the app's data folder under
+`library/`.
 
 ## File Cabinet
 

@@ -40,6 +40,7 @@ const PROFILE = {
   launcher: { weight: 1, aspect: 4.6, cap: [660, 140] },
   cabinet: { weight: 3.6, aspect: 1.42 },
   records: { weight: 3.8, aspect: 1.66 },
+  library: { weight: 4, aspect: 1.64 },
   nuke: { weight: 0.5, aspect: 1.25, cap: [230, 185] },
 };
 // A cap is the size past which a glanceable widget shows nothing more: it stays
