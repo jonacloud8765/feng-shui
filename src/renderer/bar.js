@@ -108,7 +108,7 @@ function render() {
 // Drag a layout sideways to change its place in the bar; the order is saved.
 let drag = null, dragged = false;
 function startDrag(e, b, l) {
-  if (e.button !== 0 || naming) return;
+  if (e.button !== 0 || naming || state.lockOrder) return;
   drag = { b, l, x0: e.clientX, on: false, id: e.pointerId };
   b.setPointerCapture(e.pointerId);
 }

@@ -380,6 +380,7 @@ function rebuildTray() {
     { label: 'Feng Shui This Layout', click: () => fengShui() },
     { label: 'Save Layout As New…', click: () => windows.barWin?.webContents.executeJavaScript('window.startNaming && window.startNaming()') },
     { label: 'Show Layout Bar', type: 'checkbox', checked: (s.bar || {}).show !== false, click: () => store.updateSettings({ bar: { show: (s.bar || {}).show === false } }) },
+    { label: 'Lock Layout Order', type: 'checkbox', checked: !!(s.bar || {}).lockOrder, click: () => store.updateSettings({ bar: { lockOrder: !(s.bar || {}).lockOrder } }) },
     ...awakeMenu(),
     { type: 'separator' },
     { label: `Open ${brand.name}…`, accelerator: 'Command+,', click: () => openSettings() },

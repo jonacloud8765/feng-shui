@@ -83,6 +83,9 @@ test('layouts can be put in a new order, and the order is saved', () => {
   assert.equal(s.doc.layouts.length, 3);
   s.flush?.();
   assert.deepEqual(new Store(dir).doc.layouts.map((l) => l.id), [a, b, c]);
+  s.updateSettings({ bar: { lockOrder: true } });
+  s.moveLayout(c, 0);
+  assert.deepEqual(s.doc.layouts.map((l) => l.id), [a, b, c]);
 });
 
 test('old countdown layouts map onto the new styles', () => {

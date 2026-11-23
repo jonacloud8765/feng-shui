@@ -249,6 +249,7 @@ class Store extends EventEmitter {
 
   // Moves a layout to a new place in the order (the layout bar's order).
   moveLayout(id, index) {
+    if ((this.doc.settings.bar || {}).lockOrder) return; // the order is locked
     const from = this.doc.layouts.findIndex((l) => l.id === id);
     if (from < 0) return;
     const to = Math.max(0, Math.min(this.doc.layouts.length - 1, Math.round(Number(index) || 0)));

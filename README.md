@@ -190,8 +190,8 @@ requests of any kind.
 ## Layout bar
 
 A small liquid-glass switcher in the top-right corner lists every layout with
-an icon; click one to switch, or drag one sideways to change the order. The
-button at its end saves the layout as it is
+an icon; click one to switch, or drag one sideways to change the order (Lock
+Layout Order in the menu bar or Settings keeps it from changing). The button at its end saves the layout as it is
 and locks it. Turn it off in Settings or from the menu bar icon. Feng Shui
 keeps the space under it clear.
 

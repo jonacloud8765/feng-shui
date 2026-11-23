@@ -766,6 +766,8 @@ function generalPage() {
     h('div.group', {},
       row('Layout bar', toggle(s.bar?.show !== false, (v) => { editSettings({ bar: { show: v } }); render(); }, 'Layout bar'),
         'A small switcher in the top-right corner with every layout, and a button to save the current one as a new layout.'),
+      row('Lock layout order', toggle(!!s.bar?.lockOrder, (v) => { editSettings({ bar: { lockOrder: v } }); render(); }, 'Lock layout order'),
+        'Drag a layout sideways in the bar to change the order. Lock it here (or from the menu bar icon) so it stays put.'),
       row('Feng Shui button', toggle(s.fengShui?.show !== false, (v) => { editSettings({ fengShui: { ...(s.fengShui || {}), show: v } }); render(); }, 'Feng Shui button'),
         'A button in the lower-right corner of the screen. Click it and the widgets in this layout rearrange into a calm, balanced composition.'),
       row('Button', segmented(s.fengShui?.icon === 'dragon' ? 'dragon' : 'yinyang', { yinyang: '☯ Yin-yang', dragon: '龍 Dragon' }, (v) => { editSettings({ fengShui: { ...(s.fengShui || {}), icon: v } }); render(); })),

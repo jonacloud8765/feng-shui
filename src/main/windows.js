@@ -277,7 +277,7 @@ class WidgetWindows {
     const skin = this.skin;
     if (win && !win.isDestroyed() && (!want || win.barMode !== mode || win.barSkin !== skin)) { win.destroy(); win = this.barWin = null; }
     if (!want) return;
-    const state = { layouts: layouts.map((l) => ({ id: l.id, name: l.name })), active: activeLayoutId, skin, locked: !!settings.locked };
+    const state = { layouts: layouts.map((l) => ({ id: l.id, name: l.name })), active: activeLayoutId, skin, locked: !!settings.locked, lockOrder: !!(settings.bar || {}).lockOrder };
     if (win && !win.isDestroyed()) { win.webContents.send('fengshui:bar', state); return; }
     const a = screen.getPrimaryDisplay().workArea;
     const H = 34;
@@ -297,7 +297,7 @@ class WidgetWindows {
     if (mode === 'desktop') native.setDesktopLevel(win, true);
     native.setCornerRadius(win, H / 2);
     win.loadFile(path.join(__dirname, '..', 'renderer', 'bar.html'));
-    win.webContents.once('did-finish-load', () => win.webContents.send('fengshui:bar', this.store.doc && { layouts: this.store.doc.layouts.map((l) => ({ id: l.id, name: l.name })), active: this.store.doc.activeLayoutId, skin: this.skin, locked: !!this.store.doc.settings.locked }));
+    win.webContents.once('did-finish-load', () => win.webContents.send('fengshui:bar', this.store.doc && { layouts: this.store.doc.layouts.map((l) => ({ id: l.id, name: l.name })), active: this.store.doc.activeLayoutId, skin: this.skin, locked: !!this.store.doc.settings.locked, lockOrder: !!(this.store.doc.settings.bar || {}).lockOrder }));
     win.once('ready-to-show', () => {
       // A bar rebuilt mid-way through keyboard switching (the Feng Shui skin
       // comes and goes with its layout) picks the keyboard straight back up.
