@@ -757,7 +757,8 @@ app.whenReady().then(() => {
   // (Delete it and it stays deleted; the widget is still in the Gallery.)
   if (!store.doc.settings.libraryLayout && require('fs').existsSync(store.file)) {
     const area = screen.getPrimaryDisplay().workArea;
-    store.createLayoutWith('Library', [{ type: 'library', bounds: { x: area.x + 16, y: area.y + 16, width: area.width - 32, height: area.height - 32 } }]);
+    // Leave the top strip clear for the layout bar (10px down, 34px tall).
+    store.createLayoutWith('Library', [{ type: 'library', bounds: { x: area.x + 16, y: area.y + 56, width: area.width - 32, height: area.height - 72 } }]);
     store.updateSettings({ libraryLayout: true });
   }
 
