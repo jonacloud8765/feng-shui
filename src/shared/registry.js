@@ -362,7 +362,6 @@ const TYPES = {
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 14, padding: 0 },
     fields: [
       { key: 'goodreads', label: 'Goodreads profile', placeholder: 'goodreads.com/user/show/…', hint: 'Your public profile shows a few books. For every shelf, ratings and dates, drop your Goodreads export (My Books › Import and export) onto the Library.' },
-      { key: 'wishlist', label: 'Amazon Wish List', placeholder: 'amazon.com/hz/wishlist/ls/…', hint: 'Amazon only lets you read it in your own browser: open it, scroll to the end, save the page (Webpage, Complete) and drop the file onto the Library.' },
       { key: 'motion', label: 'Motion', type: 'choice', options: { gentle: 'Gentle', still: 'Still' } },
     ],
   },

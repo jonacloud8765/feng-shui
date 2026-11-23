@@ -1,6 +1,6 @@
 import { h } from '../dom.js';
 
-// Library: four floating sculptures made of your books (library/library.html)
+// Library: three floating sculptures made of your books (library/library.html)
 // in a frame that fills the widget. The 3D room runs on its own page, like the
 // Record Room; this side brings it the catalogue from the main process,
 // passes on imports and favorites, and forwards the room's menu.
@@ -35,7 +35,7 @@ export function mount(root, ctx) {
   const off = ctx.api.onLibrary((data) => post({ type: 'data', data }));
 
   const menu = () => [
-    { label: 'Import Goodreads Export or Wish List Page…', action: 'import' },
+    { label: 'Import Goodreads Export…', action: 'import' },
     { label: 'Refresh from Goodreads Profile', action: 'sync' },
     { label: 'Look for Missing Covers Again', action: 'retry' },
     { type: 'separator' },

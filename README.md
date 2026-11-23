@@ -217,11 +217,11 @@ outweighing Water, then each column becomes one even, centred stack.
 
 ## Library
 
-A layout of its own: four sculptures made of books float in a dim gallery,
+A layout of its own: three sculptures made of books float in a dim gallery,
 one for each part of your reading life.
 
-- **Currently Reading** and **Read** come from Goodreads, **Want to Read** from
-  your Amazon Wish List (and only from it), and **Favorites** is yours to pick.
+- **Currently Reading** and **Read** come from Goodreads, and **Favorites** is
+  yours to pick.
   Adding a book to Favorites never changes its shelf.
 - **Approach** a sculpture by clicking it; ← and → move to the next one, Esc
   steps back. Drag the space around a sculpture to turn it.
@@ -244,10 +244,6 @@ choose Import:
 
 - *Goodreads export*: My Books › Import and export › Export Library. This is
   the complete source for Reading and Read, with your ratings, reviews and dates.
-- *Amazon Wish List*: Amazon doesn't let other apps read it, so save it from
-  your browser. Open the list (or its print view), scroll to the end, and
-  choose File › Save Page As… › Webpage, Complete. Each import replaces Want
-  to Read with what's on the list.
 - *Goodreads profile*: with your profile link in the widget's settings, the
   Library also reads the few books your public profile shows, twice a day.
 

@@ -35,7 +35,7 @@ const ART = {
   nuke: ['☢', 'launch.exe'],
   cabinet: ['🗄', 'Downloads, 90s style'],
   records: ['◉', 'crates and a turntable'],
-  library: ['◍', 'four spheres of books'],
+  library: ['◍', 'three spheres of books'],
 };
 
 const PAGES = [
@@ -218,7 +218,7 @@ function summary(w) {
     case 'neh': return 'Live from PizzINT Watch';
     case 'nuke': return 'Click to open launch.exe';
     case 'records': return [c.crate1, c.crate2, c.crate3].filter(Boolean).map((x) => String(x).replace(/^.*soundcloud\.com\//i, '').split(/[/?#]/)[0]).join(' · ') || 'No crates yet';
-    case 'library': return [c.goodreads && 'Goodreads', c.wishlist && 'Wish List'].filter(Boolean).join(' · ') || 'Drop your exports onto it';
+    case 'library': return (c.goodreads ? 'Goodreads' : 'Drop your Goodreads export onto it');
     case 'cabinet': return c.root ? c.root.split('/').pop() : 'Downloads';
     case 'board': return { white: 'Whiteboard', green: 'Green chalkboard', black: 'Black chalkboard' }[c.surface] || 'Whiteboard';
     case 'watched': return c.username ? `@${c.username}` : 'No Letterboxd user';

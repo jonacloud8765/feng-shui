@@ -30,7 +30,6 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 // how many their page edges, how loosely they sit, how they turn, its light.
 const CATS = [
   { key: 'reading', name: 'Currently Reading', tile: 0.55, fore: 0.08, spread: 1.22, spin: 0.055, light: '#ffd7a6', empty: 'Nothing on your currently-reading shelf' },
-  { key: 'want', name: 'Want to Read', tile: 0.3, fore: 0.08, spread: 1.0, spin: 0.034, light: '#d4e0f4', empty: 'Waiting for your Amazon Wish List' },
   { key: 'read', name: 'Read', tile: 0.45, fore: 0.12, spread: 1.04, spin: 0.026, light: '#fff0de', empty: 'Waiting for your Goodreads export' },
   { key: 'favorites', name: 'Favorites', tile: 0.78, fore: 0.04, spread: 1.12, spin: 0.042, light: '#ffcd8a', empty: 'Hold a book and add it to Favorites' },
 ];
@@ -162,6 +161,23 @@ function beam(color) {
 // Books on a sphere: spread evenly (a Fibonacci spiral turned at random), each
 // turned its own way. Some lie flat with a cover out, some point their spine
 // out, a few their page edges. The sphere's size follows the books it holds.
+// Separating-axis test for two boxes, each { c, ax: [3 unit axes], h: [3 half sizes] }.
+function boxesOverlap(a, b, gap) {
+  const d = tmpA.subVectors(b.c, a.c);
+  const axes = [...a.ax, ...b.ax];
+  for (const u of a.ax) for (const v of b.ax) { const c = tmpB.crossVectors(u, v); if (c.lengthSq() > 1e-8) axes.push(c.clone().normalize()); }
+  for (const L of axes) {
+    let ra = 0, rb = 0;
+    for (let k = 0; k < 3; k++) { ra += a.h[k] * Math.abs(a.ax[k].dot(L)); rb += b.h[k] * Math.abs(b.ax[k].dot(L)); }
+    if (Math.abs(d.dot(L)) > ra + rb + gap) return false;
+  }
+  return true;
+}
+const tmpA = new T.Vector3(), tmpB = new T.Vector3();
+
+// Places every book on a sphere as a solid object: no two books touch. Books
+// start on an even spiral; any pair that would meet is nudged apart over the
+// surface, and if that is not enough the whole sphere opens up a little.
 function arrange(books, cat) {
   const r = rng(hash(cat.key));
   const N = books.length;
@@ -172,40 +188,74 @@ function arrange(books, cat) {
   const foreP = cat.fore * (1 - tileP) / Math.max(0.01, 1 - cat.tile);
   const modes = books.map((b) => { const x = rng(hash(b.id + cat.key))(); return x < tileP ? 'tile' : x < tileP + foreP ? 'fore' : 'spine'; });
   let area = 0, maxW = 0;
-  books.forEach((b, i) => { area += modes[i] === 'tile' ? b.d.W * b.d.H * 0.78 : b.d.T * b.d.H * 1.9; maxW = Math.max(maxW, b.d.W); });
+  books.forEach((b, i) => { area += modes[i] === 'tile' ? b.d.W * b.d.H : b.d.T * b.d.H * 2.4; maxW = Math.max(maxW, b.d.W); });
   const allTiles = modes.every((m) => m === 'tile');
-  const R = Math.max(Math.sqrt(area / (4 * Math.PI)) * cat.spread, allTiles ? maxW * 0.42 : maxW * 0.6, 0.1);
+  let R = Math.max(Math.sqrt(area / (4 * Math.PI)) * cat.spread * 1.12, allTiles ? maxW * 0.5 : maxW * 0.66, 0.1);
   const turn = new T.Quaternion().setFromEuler(new T.Euler(r() * 6.28, r() * 6.28, r() * 6.28));
-  const slots = new Map();
   const golden = Math.PI * (3 - Math.sqrt(5));
-  books.forEach((b, i) => {
+  const GAP = 0.012; // the air between neighbours, in metres of book
+
+  const items = books.map((b, i) => {
     const y = 1 - ((i + 0.5) / N) * 2, rad = Math.sqrt(1 - y * y), th = i * golden;
     const n = new T.Vector3(Math.cos(th) * rad, y, Math.sin(th) * rad).applyQuaternion(turn);
-    const jit = 0.22 / Math.sqrt(Math.max(N, 4) / 4);
+    const jit = 0.12 / Math.sqrt(Math.max(N, 4) / 4);
     n.add(new T.Vector3((r() - 0.5) * jit, (r() - 0.5) * jit, (r() - 0.5) * jit)).normalize();
+    const twist = (r() < 0.22 ? Math.PI / 2 : 0) + (r() - 0.5) * 0.8;
+    const layer = (i % 3) - 1, wobble = (r() - 0.5) * 0.018;
+    const { W, H, T: t } = b.d;
+    // Half sizes with a little extra for rounded spines and overhanging boards.
+    const h = [W / 2 + 0.004, H / 2 + 0.002, t / 2 + 0.001];
+    return { b, n, twist, layer, wobble, mode: modes[i], h, W, H, t };
+  });
+
+  const place = (it) => {
+    const n = it.n;
     const up = new T.Vector3(0, 1, 0).addScaledVector(n, -n.y);
     if (up.lengthSq() < 1e-3) up.set(1, 0, 0).addScaledVector(n, -n.x);
-    up.normalize();
-    const twist = (r() < 0.22 ? Math.PI / 2 : 0) + (r() - 0.5) * 0.95;
-    up.applyAxisAngle(n, twist);
-    const { W, H, T: th2 } = b.d;
-    const mode = modes[i];
-    let X, Z, depth, out;
-    const Y = up;
-    if (mode === 'tile') {
-      Z = n.clone(); X = new T.Vector3().crossVectors(Y, Z);
-      depth = R - th2 / 2 + (i % 3) * th2 * 0.85 - th2 * 0.5;
-      out = th2 * 2 + 0.05;
+    up.normalize().applyAxisAngle(n, it.twist);
+    let X, Z, depth;
+    if (it.mode === 'tile') {
+      Z = n.clone(); X = new T.Vector3().crossVectors(up, Z);
+      depth = R - it.t / 2 + it.layer * it.t * 0.9;
+      it.out = it.t * 2 + 0.05;
     } else {
-      X = mode === 'spine' ? n.clone().negate() : n.clone();
-      Z = new T.Vector3().crossVectors(X, Y);
-      depth = R - W / 2 + (r() - 0.5) * 0.018;
-      out = W * 1.08 + 0.02;
+      X = it.mode === 'spine' ? n.clone().negate() : n.clone();
+      Z = new T.Vector3().crossVectors(X, up);
+      depth = R - it.W / 2 + it.wobble;
+      it.out = it.W * 1.08 + 0.02;
     }
-    const q = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(X, Y, Z));
-    slots.set(b.id, { pos: n.clone().multiplyScalar(depth), quat: q, normal: n, out, mode });
-  });
-  return { R, slots };
+    it.box = { c: n.clone().multiplyScalar(depth), ax: [X, up, Z], h: it.h };
+    it.rad = Math.hypot(...it.h);
+  };
+
+  let clean = false;
+  for (let round = 0; round < 60 && !clean; round++) {
+    for (let pass = 0; pass < 12; pass++) {
+      items.forEach(place);
+      let hits = 0;
+      for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
+        const a = items[i], c = items[j];
+        if (a.box.c.distanceTo(c.box.c) > a.rad + c.rad + GAP) continue;
+        if (!boxesOverlap(a.box, c.box, GAP)) continue;
+        hits++;
+        // Slide the two apart over the sphere.
+        const away = tmpA.subVectors(a.n, c.n);
+        if (away.lengthSq() < 1e-8) away.set(r() - 0.5, r() - 0.5, r() - 0.5);
+        away.normalize().multiplyScalar(0.018);
+        a.n.add(away).normalize(); c.n.sub(away).normalize();
+      }
+      if (!hits) { clean = true; break; }
+    }
+    if (!clean) R *= 1.035;
+  }
+  items.forEach(place);
+
+  const slots = new Map();
+  for (const it of items) {
+    const q = new T.Quaternion().setFromRotationMatrix(new T.Matrix4().makeBasis(...it.box.ax));
+    slots.set(it.b.id, { pos: it.box.c.clone(), quat: q, normal: it.n.clone(), out: it.out, mode: it.mode });
+  }
+  return { R, slots, clean };
 }
 
 const balls = [];
@@ -565,7 +615,7 @@ function updateHeld(dt) {
     if (held.auto) { held.t += dt / 0.42; held.s = slot.out * easeOut(Math.min(1, held.t)); if (held.t >= 1) { toHold(); return; } }
     const e = slot.out * (1 - Math.exp(-held.s / (slot.out * 0.8)));
     book.group.position.copy(slot.pos).addScaledVector(slot.normal, e);
-    ball.disturb.amount = 0.014 * Math.min(1, e / slot.out) * (held.phase === 'snap' ? 0.5 : 1);
+    ball.disturb.amount = 0.008 * Math.min(1, e / slot.out) * (held.phase === 'snap' ? 0.5 : 1);
     if (!held.auto && held.phase === 'pull' && e > slot.out * 0.85) freeBook();
     return;
   }
@@ -943,7 +993,6 @@ function toast(text, err) {
 function showEmpty(ball) {
   const el = $('#empty');
   const how = {
-    want: 'Open your Wish List on Amazon, scroll to the end, and save the page (File › Save Page As… › Webpage, Complete). Drop the file here.',
     read: 'On Goodreads, choose My Books › Import and export › Export Library, then drop the CSV here.',
     reading: 'Books on your Goodreads currently-reading shelf appear here.',
     favorites: 'Hold any book and choose Add to Favorites. It stays on its own shelf too.',
@@ -968,7 +1017,7 @@ function applyData(data) {
   pumpCovers();
   $('#status').textContent = data.status || '';
   const total = balls.reduce((a, b) => a + b.count, 0);
-  if (!total) { $('#empty').innerHTML = 'Your Library is empty. Drop your Goodreads export (.csv) or a saved Amazon Wish List page here.<br><button id="choose">Choose a file…</button>'; $('#empty').classList.add('on'); $('#empty #choose').addEventListener('click', () => send({ type: 'import-file' })); }
+  if (!total) { $('#empty').innerHTML = 'Your Library is empty. Drop your Goodreads export (.csv) here.<br><button id="choose">Choose a file…</button>'; $('#empty').classList.add('on'); $('#empty #choose').addEventListener('click', () => send({ type: 'import-file' })); }
   if (held) { const fresh = data.books[held.book.id]; if (fresh) held.book.data = { ...fresh }; }
 }
 
@@ -1071,6 +1120,17 @@ window.__library = {
   slotCheck(key, id) {
     const ball = balls.find((b) => b.cat.key === key); const b = ball.books.get(id); const s = ball.slots.get(id);
     return { inSlot: b.group.parent === ball.spin, dPos: b.group.position.distanceTo(s.pos), dRot: b.group.quaternion.angleTo(s.quat), scale: b.group.scale.x, objectId: b.group.id };
+  },
+  // Pairs of books in a sculpture whose solid boxes touch (should be none), and the narrowest gap.
+  collisions() {
+    const out = {};
+    for (const ball of balls) {
+      const boxes = [...ball.slots.entries()].map(([id, s]) => { const d = ball.books.get(id).d; const ax = [new T.Vector3(1, 0, 0), new T.Vector3(0, 1, 0), new T.Vector3(0, 0, 1)].map((v) => v.applyQuaternion(s.quat)); return { c: s.pos, ax, h: [d.W / 2, d.H / 2, d.T / 2] }; });
+      let n = 0;
+      for (let i = 0; i < boxes.length; i++) for (let j = i + 1; j < boxes.length; j++) if (boxesOverlap(boxes[i], boxes[j], 0)) n++;
+      out[ball.cat.key] = { books: boxes.length, touching: n, R: +ball.R.toFixed(3) };
+    }
+    return out;
   },
   pickAt(x, y) { const b = pickBook(x, y); return b ? b.data.title : null; },
   objectId(key, id) { return balls.find((b) => b.cat.key === key).books.get(id).group.id; },
