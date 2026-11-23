@@ -31,7 +31,6 @@ const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<
 const CATS = [
   { key: 'reading', name: 'Currently Reading', tile: 0.55, fore: 0.08, spread: 1.22, spin: 0.055, light: '#ffd7a6', empty: 'Nothing on your currently-reading shelf' },
   { key: 'read', name: 'Read', tile: 0.45, fore: 0.12, spread: 1.04, spin: 0.026, light: '#fff0de', empty: 'Waiting for your Goodreads export' },
-  { key: 'favorites', name: 'Favorites', tile: 0.78, fore: 0.04, spread: 1.12, spin: 0.042, light: '#ffcd8a', empty: 'Hold a book and add it to Favorites' },
 ];
 const SCALE = 2.4; // the sculptures are made of books a little larger than life
 const FLOAT_Y = 1.32;
@@ -471,6 +470,9 @@ function overviewGoal() {
   goal.target.set(0, FLOAT_Y + 0.05, -0.25);
   goal.dist = clamp((room.width / 2 + 0.7) / Math.tan(hfov / 2), 3.5, 16) * look.zoom;
   goal.yaw = look.yaw; goal.pitch = 0.07 + look.pitch;
+  // With the favorites up, look a little higher: the sculptures settle low in
+  // the frame and the books hang in the light above them.
+  if (mode === 'favorites') { goal.target.y += goal.dist * 0.16; goal.pitch -= 0.05; }
 }
 function focusGoal(b) {
   const c = b.base;
@@ -772,7 +774,7 @@ canvas.addEventListener('pointermove', (e) => {
     focused.user.premultiply(qa).premultiply(qb).normalize();
     return;
   }
-  if (mode === 'overview') {
+  if (mode === 'overview' || mode === 'favorites') {
     look.yaw = clamp(look.yaw - dx * 0.0032, -0.85, 0.85);
     look.pitch = clamp(look.pitch + dy * 0.0024, -0.06, 0.55);
     updateGoal();
@@ -797,6 +799,10 @@ function endPointer(e) {
       if (held.snap) putBack();
       else { held.phase = 'toHold'; held.t = 0; held.from = held.book.group.position.clone(); held.fromQ = held.book.group.quaternion.clone(); document.body.classList.add('inspect'); held.ball.hotGoal = 0; hint(); }
     }
+  } else if (click && mode === 'favorites') {
+    const f = pickFavorite(e.clientX, e.clientY);
+    if (f) { fav.open = { id: f.id, ball: f.ball }; closeFavorites(); }
+    else { const b = pickBall(e.clientX, e.clientY); if (b) focusOn(b); }
   } else if (click) {
     if (pressBook && focused) { grab(pressBook, focused, pointer.sx, pointer.sy); held.auto = true; }
     else {
@@ -829,6 +835,11 @@ function hoverAt(x, y) {
     if (b) tip(b, x, y); else tip(null);
     const other = b ? null : pickBall(x, y);
     hoveredBall = other && other !== focused ? other : null;
+  } else if (mode === 'favorites') {
+    const f = pickFavorite(x, y);
+    setHover(f ? f.book : null);
+    if (f) tip(f.book, x, y); else tip(null);
+    hoveredBall = null;
   } else if (mode === 'overview') {
     hoveredBall = pickBall(x, y);
     tip(null);
@@ -859,10 +870,216 @@ function tip(book, x, y) {
   el.classList.add('on');
 }
 
+
+// ---------------------------------------------------------------- favorites rising
+
+// Favorites are not a sculpture. The Favorites button lifts each favorite out
+// of the sculpture it lives in: the books rise, weightless, into an arc in
+// front of you, in a warm aura with light rising from beneath, and bob there.
+// The button again (or Esc) lets them sink back into exactly the slots they
+// came from. Click one to hold it.
+const easeLevitate = (t) => 1 - Math.pow(1 - t, 5); // ≈ cubic-bezier(0.22, 1, 0.36, 1)
+const fav = { on: false, list: [], amt: 0, open: null, queued: false, D: 3, span: 1 };
+const halo = (() => {
+  const g = new T.Group();
+  const add = (mesh) => { mesh.renderOrder = -1; mesh.frustumCulled = false; g.add(mesh); return mesh; };
+  const common = { transparent: true, depthWrite: false, blending: T.AdditiveBlending };
+  const aura = add(new T.Mesh(new T.PlaneGeometry(1, 1), new T.ShaderMaterial({ ...common,
+    uniforms: { uAmt: { value: 0 }, uTime: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `uniform float uAmt, uTime; varying vec2 vUv;
+      void main(){ vec2 d = (vUv - vec2(0.5, 0.42)) * vec2(1.0, 1.7); float r = length(d);
+        float core = exp(-r * r * 9.0), wide = exp(-r * r * 6.0);
+        vec3 gold = vec3(1.0, 0.80, 0.52), white = vec3(1.0, 0.97, 0.9);
+        float breathe = 0.92 + 0.08 * sin(uTime * 0.9);
+        float edge = smoothstep(0.5, 0.18, abs(vUv.x - 0.5)) * smoothstep(0.5, 0.12, abs(vUv.y - 0.5));
+        vec3 c = (gold * wide * 0.13 + white * core * 0.10) * edge;
+        gl_FragColor = vec4(c * uAmt * breathe, 1.0); }`,
+  })));
+  const rays = add(new T.Mesh(new T.PlaneGeometry(1, 1), new T.ShaderMaterial({ ...common,
+    uniforms: { uAmt: { value: 0 }, uTime: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.0); }',
+    fragmentShader: `uniform float uAmt, uTime; varying vec2 vUv;
+      float h(float n){ return fract(sin(n) * 43758.5453); }
+      void main(){ float x = vUv.x, y = vUv.y; float s = 0.0;
+        for (int i = 0; i < 9; i++) { float fi = float(i); float cx = 0.12 + 0.76 * h(fi * 3.1 + 1.0);
+          float w = 0.010 + 0.022 * h(fi * 7.7); float lean = (cx - 0.5) * 0.35 * y;
+          float band = exp(-pow((x - cx - lean) / w, 2.0));
+          float flicker = 0.55 + 0.45 * sin(uTime * (0.6 + h(fi) * 0.9) + fi * 2.3);
+          float rise = 0.7 + 0.3 * sin(y * 9.0 - uTime * (1.2 + h(fi + 4.0)) + fi);
+          s += band * flicker * rise * (0.5 + 0.5 * h(fi * 1.7)); }
+        float fade = smoothstep(0.0, 0.18, y) * pow(1.0 - y, 1.6);
+        float edge = smoothstep(0.0, 0.2, x) * smoothstep(1.0, 0.8, x);
+        vec3 c = mix(vec3(1.0, 0.82, 0.55), vec3(1.0, 0.98, 0.92), y);
+        gl_FragColor = vec4(c * s * fade * edge * 0.09 * uAmt, 1.0); }`,
+  })));
+  const n = 90, pos = new Float32Array(n * 3), seed = new Float32Array(n), r = rng(77);
+  for (let i = 0; i < n; i++) { pos[i * 3] = r() - 0.5; pos[i * 3 + 1] = r(); pos[i * 3 + 2] = (r() - 0.5) * 0.3; seed[i] = r() * 100; }
+  const pg = new T.BufferGeometry();
+  pg.setAttribute('position', new T.BufferAttribute(pos, 3)); pg.setAttribute('seed', new T.BufferAttribute(seed, 1));
+  const specks = new T.Points(pg, new T.ShaderMaterial({ ...common,
+    uniforms: { uAmt: { value: 0 }, uTime: { value: 0 }, uPx: motes.uniforms.uPx, uSize: { value: new T.Vector2(1, 1) } },
+    vertexShader: `attribute float seed; uniform float uTime, uPx; uniform vec2 uSize; varying float vA;
+      void main(){ float sp = 0.06 + 0.08 * fract(seed * 3.7); float y = fract(position.y + uTime * sp);
+        vec3 p = vec3((position.x + sin(uTime * 0.7 + seed) * 0.02) * uSize.x, (y - 0.15) * uSize.y, position.z);
+        vec4 mv = modelViewMatrix * vec4(p, 1.0); gl_Position = projectionMatrix * mv;
+        gl_PointSize = max(1.0, uPx * (0.006 + 0.008 * fract(seed * 5.3)) / -mv.z);
+        vA = smoothstep(0.0, 0.2, y) * (1.0 - y) * (0.5 + 0.5 * sin(uTime * 2.0 + seed)); }`,
+    fragmentShader: `uniform float uAmt; varying float vA; void main(){ float a = smoothstep(0.5, 0.0, length(gl_PointCoord - 0.5)); gl_FragColor = vec4(vec3(1.0, 0.9, 0.7) * a * vA * 0.55 * uAmt, 1.0); }`,
+  }));
+  add(specks);
+  const glowLight = new T.PointLight('#ffd9a0', 0, 6, 1.6);
+  g.add(glowLight);
+  g.visible = false;
+  camera.add(g);
+  return { g, aura, rays, specks, glowLight, mats: [aura.material, rays.material, specks.material] };
+})();
+
+function favoriteBooks() {
+  if (!catalogue) return [];
+  const out = [];
+  for (const id of catalogue.categories.favorites || []) {
+    const ball = balls.find((b) => b.books.has(id) && !b.books.get(id).leaving);
+    if (ball) out.push({ id, ball, book: ball.books.get(id) });
+  }
+  return out;
+}
+
+// Where the favorites float: an arc in front of the camera, sized to fit.
+function favFrame() {
+  const n = Math.max(1, fav.list.length);
+  const vfov = T.MathUtils.degToRad(camera.fov), hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
+  const maxH = Math.max(...fav.list.map((f) => f.book.d.H), 0.22) * SCALE;
+  const gap = Math.max(...fav.list.map((f) => f.book.d.W), 0.15) * SCALE * 1.45;
+  const span = gap * (n - 1) + gap * 0.9;
+  fav.D = Math.max(span / 0.74 / (2 * Math.tan(hfov / 2)), maxH / 0.42 / (2 * Math.tan(vfov / 2)));
+  fav.gap = gap; fav.span = span; fav.maxH = maxH;
+  const visH = 2 * Math.tan(vfov / 2) * fav.D;
+  fav.y = visH * 0.04;
+  halo.g.position.set(0, fav.y - maxH * 0.15, -fav.D - 0.25);
+  halo.aura.scale.set(span * 1.7 + 1, maxH * 2.6, 1);
+  halo.rays.scale.set(span * 1.5 + 0.8, visH * 1.05, 1); halo.rays.position.set(0, visH * 0.18, -0.05);
+  halo.specks.material.uniforms.uSize.value.set(span * 1.3 + 0.6, visH * 0.95);
+  halo.glowLight.position.set(0, -maxH * 0.55, 0.6);
+}
+function favTarget(f, t, out) {
+  const n = fav.list.length, k = n > 1 ? f.i / (n - 1) * 2 - 1 : 0;
+  const bob = Math.sin(t * 1.05 + f.i * 1.3) * 0.022 * (motionOn ? 1 : 0);
+  out.pos.set(k * (fav.span - fav.gap * 0.9) / 2, fav.y - k * k * fav.maxH * 0.09 + bob, -fav.D + k * k * 0.18).applyMatrix4(camera.matrixWorld);
+  const sway = Math.sin(t * 0.7 + f.i * 2.1) * 0.035 * (motionOn ? 1 : 0);
+  out.quat.copy(camera.quaternion).multiply(tmpQf.setFromEuler(tmpE.set(0.02 + sway * 0.4, -k * 0.28 + sway, sway * 0.3)));
+  return out;
+}
+const tmpQf = new T.Quaternion(), tmpE = new T.Euler(), tmpM = new T.Matrix4(), tmpS = new T.Vector3();
+const slotPose = (f, out) => {
+  const s = f.ball.slots.get(f.id);
+  f.ball.spin.updateMatrixWorld(true);
+  tmpM.compose(s.pos, s.quat, tmpS.set(1, 1, 1)).premultiply(f.ball.spin.matrixWorld).decompose(out.pos, out.quat, out.scl);
+  return out;
+};
+const pose = () => ({ pos: new T.Vector3(), quat: new T.Quaternion(), scl: new T.Vector3() });
+
+function openFavorites() {
+  if (fav.on) return;
+  if (held) { putBack(); fav.queued = true; return; }
+  const list = favoriteBooks();
+  if (!list.length) { toast('No favorites yet. Hold a book and choose Add to Favorites.'); return; }
+  if (focused) { focused = null; look.yaw = 0; look.pitch = 0; look.zoom = 1; }
+  mode = 'favorites';
+  fav.on = true; fav.open = null;
+  fav.list = list.map((f, i) => ({ ...f, i, phase: 'up', t: -i * 0.11, from: pose(), to: pose() }));
+  favFrame();
+  for (const f of fav.list) {
+    const g = f.book.group;
+    slotPose(f, f.from);
+    scene.attach(g);
+    g.position.copy(f.from.pos); g.quaternion.copy(f.from.quat);
+    f.book.setDetail(true);
+    const j = f.ball.jostle.get(f.id); if (j) { j.x = 0; j.v = 0; j.hover = 0; }
+  }
+  setHover(null); tip(null);
+  halo.g.visible = true;
+  document.body.classList.add('favorites');
+  updateGoal(); crumb(); hint(); labels(); favButton();
+}
+function closeFavorites() {
+  if (!fav.on) return;
+  fav.on = false;
+  for (const f of fav.list) if (f.phase !== 'home') { f.phase = 'down'; f.t = -(fav.list.length - 1 - f.i) * 0.07; f.from.pos.copy(f.book.group.position); f.from.quat.copy(f.book.group.quaternion); f.from.scl.copy(f.book.group.scale); }
+  setHover(null); tip(null);
+  document.body.classList.remove('favorites');
+  mode = 'overview';
+  updateGoal(); crumb(); hint(); favButton();
+}
+function updateFavorites(dt, t) {
+  fav.amt = lerp(fav.amt, fav.on ? 1 : 0, damp(fav.on ? 1.6 : 3, dt));
+  for (const m of halo.mats) { m.uniforms.uAmt.value = fav.amt; m.uniforms.uTime.value = t; }
+  halo.glowLight.intensity = fav.amt * 1.3;
+  halo.g.visible = fav.amt > 0.003;
+  if (!fav.list.length) return;
+  if (fav.on) favFrame();
+  const cur = pose();
+  for (const f of fav.list) {
+    const g = f.book.group;
+    if (f.phase === 'up' || f.phase === 'float') {
+      favTarget(f, t, f.to);
+      if (f.phase === 'up') {
+        f.t += dt / 1.6;
+        const e = easeLevitate(clamp(f.t, 0, 1));
+        slotPose(f, f.from);
+        // Out of the sculpture along its own face first, then up into the light.
+        const lift = Math.sin(Math.PI * Math.min(1, e * 1.2)) * 0.25;
+        g.position.lerpVectors(f.from.pos, f.to.pos, e).y += lift * (1 - e);
+        g.quaternion.slerpQuaternions(f.from.quat, f.to.quat, e);
+        if (f.t >= 1) f.phase = 'float';
+      } else {
+        g.position.lerp(f.to.pos, damp(6, dt));
+        g.quaternion.slerp(f.to.quat, damp(6, dt));
+      }
+    } else if (f.phase === 'down') {
+      f.t += dt / 1.15;
+      const e = ease(clamp(f.t, 0, 1));
+      slotPose(f, cur);
+      g.position.lerpVectors(f.from.pos, cur.pos, e);
+      g.quaternion.slerpQuaternions(f.from.quat, cur.quat, e);
+      if (f.t >= 1) homeFavorite(f);
+    }
+  }
+  if (!fav.on && fav.list.every((f) => f.phase === 'home')) {
+    const open = fav.open;
+    fav.list = []; fav.open = null;
+    if (open) { const b = open.ball.books.get(open.id); focusOn(open.ball); if (b && !b.leaving) { grab(b, open.ball, innerWidth / 2, innerHeight / 2); held.auto = true; } }
+  }
+}
+// Back in its slot, exactly as it was.
+function homeFavorite(f) {
+  const g = f.book.group, s = f.ball.slots.get(f.id);
+  f.ball.spin.add(g);
+  g.position.copy(s.pos); g.quaternion.copy(s.quat); g.scale.setScalar(1);
+  const j = f.ball.jostle.get(f.id); if (j) { j.x = 0; j.v = 0; j.hover = 0; }
+  f.phase = 'home';
+  if (f.ball.pending && ![...f.ball.books.values()].some((b) => f.ball.isOut(b) && !b.leaving)) f.ball.sync(f.ball.pending, catalogue);
+}
+function pickFavorite(x, y) {
+  const live = fav.list.filter((f) => f.phase === 'float' || f.phase === 'up');
+  const h = pick(x, y, live.map((f) => f.book.hit));
+  return h ? live.find((f) => f.book.hit === h.object) : null;
+}
+function favButton() {
+  const el = $('#favbtn');
+  const n = catalogue ? (catalogue.categories.favorites || []).length : 0;
+  el.querySelector('.n').textContent = n || '';
+  el.querySelector('.l').textContent = fav.on ? 'Put them back' : 'Favorites';
+  el.classList.toggle('on', fav.on);
+  el.setAttribute('aria-pressed', String(fav.on));
+}
+$('#favbtn').addEventListener('click', () => (fav.on ? closeFavorites() : openFavorites()));
+
 // ---------------------------------------------------------------- moving between sculptures
 
 function focusOn(b) {
   if (held) return;
+  if (fav.on) closeFavorites();
   focused = b;
   mode = 'focus';
   look.yaw = 0; look.pitch = 0; look.zoom = 1;
@@ -872,6 +1089,7 @@ function focusOn(b) {
 }
 function overview() {
   if (held) { putBack(); return; }
+  if (fav.on) { closeFavorites(); return; }
   focused = null; mode = 'overview';
   look.yaw = 0; look.pitch = 0; look.zoom = 1;
   setHover(null); tip(null);
@@ -885,7 +1103,7 @@ function step(dir) {
 }
 
 addEventListener('keydown', (e) => {
-  if (e.key === 'Escape') { if (held) putBack(); else if (focused) overview(); }
+  if (e.key === 'Escape') { if (held) putBack(); else if (fav.on) closeFavorites(); else if (focused) overview(); }
   else if (held && held.phase === 'hold') {
     const views = { f: 'front', b: 'back', s: 'spine', e: 'edges' };
     if (views[e.key.toLowerCase()]) setView(views[e.key.toLowerCase()]);
@@ -905,6 +1123,7 @@ function crumb() {
   const el = $('#crumb');
   el.querySelectorAll('.sep, .here').forEach((n) => n.remove());
   if (focused) el.insertAdjacentHTML('beforeend', `<span class="sep">/</span><span class="here">${esc(focused.cat.name)}</span>`);
+  else if (fav.on) el.insertAdjacentHTML('beforeend', '<span class="sep">/</span><span class="here">Favorites</span>');
 }
 
 function hint() {
@@ -912,6 +1131,7 @@ function hint() {
   let h = '';
   if (held && held.phase === 'carry') h = 'Bring it to its sculpture and let go';
   else if (mode === 'inspect') h = 'Drag to turn it &nbsp;·&nbsp; scroll to bring it closer &nbsp;·&nbsp; press and hold, then drag it back &nbsp;·&nbsp; <kbd>esc</kbd> puts it back';
+  else if (mode === 'favorites') h = 'Your favorites &nbsp;·&nbsp; click one to hold it &nbsp;·&nbsp; <kbd>esc</kbd> lets them settle back';
   else if (mode === 'focus') h = 'Drag a book out to hold it &nbsp;·&nbsp; drag around the sculpture to turn it &nbsp;·&nbsp; <kbd>←</kbd> <kbd>→</kbd> next sculpture &nbsp;·&nbsp; <kbd>esc</kbd> step back';
   else h = 'Choose a sculpture to approach it &nbsp;·&nbsp; drag to look around &nbsp;·&nbsp; scroll to step closer';
   el.innerHTML = h;
@@ -1014,6 +1234,7 @@ function applyData(data) {
   layoutBalls();
   updateGoal();
   labels();
+  favButton();
   pumpCovers();
   $('#status').textContent = data.status || '';
   const total = balls.reduce((a, b) => a + b.count, 0);
@@ -1067,10 +1288,12 @@ function frame(fixed, draw = true) {
   if (draw) renderer.info.reset();
   elapsed += dt;
   const motion = motionOn ? 1 : 0;
-  if (!held || held.phase === 'back') lightLevel = lerp(lightLevel, mode === 'inspect' ? 0.32 : 1, damp(2.5, dt));
+  if (!held || held.phase === 'back') lightLevel = lerp(lightLevel, mode === 'inspect' ? 0.32 : mode === 'favorites' ? 0.34 : 1, damp(2.5, dt));
   for (const b of balls) b.update(dt, elapsed, motion);
   placeCamera(dt);
   updateHeld(dt);
+  updateFavorites(dt, elapsed);
+  if (fav.queued && !held) { fav.queued = false; openFavorites(); }
   const holding = held && ['toHold', 'hold', 'carry'].includes(held.phase) ? 1 : 0;
   holdKey.intensity = lerp(holdKey.intensity, holding * 2.4, damp(4, dt));
   holdFill.intensity = lerp(holdFill.intensity, holding * 0.7, damp(4, dt));
@@ -1080,6 +1303,7 @@ function frame(fixed, draw = true) {
   motes.uniforms.uTime.value = elapsed * motion + 1;
   motes.uniforms.uAmt.value = lightLevel;
   slitMat.uniforms.uAmt.value = 0.5 + 0.5 * lightLevel;
+  if (hovered && !held && fav.on) hovered.setGlow(lerp(hovered.hoverT, 1, damp(10, dt)));
   if (hovered && !held && focused) { const j = focused.jostle.get(hovered.id); hovered.setGlow(lerp(hovered.hoverT, 1, damp(10, dt))); if (j) j.hover = 1; }
   for (const b of balls) for (const bk of b.books.values()) if (bk !== hovered && bk.hoverT > 0) bk.setGlow(lerp(bk.hoverT, 0, damp(8, dt)));
   if (!draw) return;
@@ -1132,6 +1356,9 @@ window.__library = {
     }
     return out;
   },
+  get favorites() { return { on: fav.on, books: fav.list.map((f) => ({ id: f.id, ball: f.ball.cat.key, phase: f.phase, title: f.book.data.title })) }; },
+  openFavorites, closeFavorites,
+  favoriteScreen(i) { const f = fav.list[i]; if (!f) return null; const p = f.book.group.getWorldPosition(new T.Vector3()).project(camera); return { x: (p.x + 1) / 2 * innerWidth, y: (1 - p.y) / 2 * innerHeight }; },
   pickAt(x, y) { const b = pickBook(x, y); return b ? b.data.title : null; },
   objectId(key, id) { return balls.find((b) => b.cat.key === key).books.get(id).group.id; },
   hasFullModel(key, id) { const b = balls.find((x) => x.cat.key === key).books.get(id); return { detailed: b.detailed, meshes: b.detail.children.length, kind: b.d.kind }; },

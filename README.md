@@ -218,12 +218,15 @@ outweighing Water, then each column becomes one even, centred stack.
 
 ## Library
 
-A layout of its own: three sculptures made of books float in a dim gallery,
-one for each part of your reading life.
+A layout of its own: sculptures made of books float in a dim gallery, one
+for what you're reading and one for what you've read.
 
-- **Currently Reading** and **Read** come from Goodreads, and **Favorites** is
-  yours to pick.
-  Adding a book to Favorites never changes its shelf.
+- **Currently Reading** and **Read** come from Goodreads.
+- **Favorites** is a button, not a sculpture: press it and your favorite books
+  rise out of the sculptures they live in, into a warm glow with light rising
+  beneath them. Click one to hold it; press the button again (or Esc) and they
+  sink back into their places. Adding a book to Favorites never changes its
+  shelf.
 - **Approach** a sculpture by clicking it; ← and → move to the next one, Esc
   steps back. Drag the space around a sculpture to turn it.
 - **Pull a book out** by dragging it (or click it). Its neighbours give way,

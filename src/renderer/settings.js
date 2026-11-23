@@ -35,7 +35,7 @@ const ART = {
   nuke: ['☢', 'launch.exe'],
   cabinet: ['🗄', 'Downloads, 90s style'],
   records: ['◉', 'crates and a turntable'],
-  library: ['◍', 'three spheres of books'],
+  library: ['◍', 'spheres of books'],
 };
 
 const PAGES = [
