@@ -24,7 +24,7 @@ const COVER_HOSTS = /^https:\/\/(i\.gr-assets\.com|m\.media-amazon\.com|images-n
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// "goodreads.com/user/show/183433585-name", "183433585" or a review/list link → "183433585".
+// "goodreads.com/user/show/12345678-name", "12345678" or a review/list link → "12345678".
 function profileId(input) {
   const s = String(input || '').trim();
   const m = s.match(/goodreads\.com\/(?:user\/show|review\/list)\/(\d+)/i) || s.match(/^(\d{3,})(?:-[\w-]+)?$/);
@@ -172,10 +172,19 @@ function createLibrary(dataDir, { nativeImage } = {}) {
       await sleep(PAUSE);
     }
     // No ISBN (a Kindle edition, say): search, and only trust a result whose title and author match.
-    const q = encodeURIComponent(`${b.title} ${b.author}`.trim());
-    const html = await get(`${GOODREADS}/search?q=${q}`);
-    const hit = [...html.matchAll(/<a class="bookTitle"[^>]*href="(\/book\/show\/\d+[^"?]*)[^"]*"[^>]*>\s*<span[^>]*>([\s\S]*?)<\/span>[\s\S]*?<a class="authorName"[^>]*><span[^>]*>([\s\S]*?)<\/span>/g)]
-      .find((m) => D.workKey({ title: D.strip(m[2]), author: D.strip(m[3]) }) === D.workKey(b));
+    // Goodreads search finds nothing for a full title with a long subtitle, so
+    // ask with the short title and surname first, then the short title alone.
+    const short = String(b.title || '').replace(/[‘’]/g, "'").replace(/[“”]/g, '"').split(/[:;]| - /)[0].trim();
+    const surname = String(b.author || '').trim().split(/\s+/).pop() || '';
+    let hit = null;
+    for (const q of [...new Set([`${short} ${surname}`.trim(), short])]) {
+      if (!q) continue;
+      const html = await get(`${GOODREADS}/search?q=${encodeURIComponent(q)}`);
+      hit = [...html.matchAll(/<a class="bookTitle"[^>]*href="(\/book\/show\/\d+[^"?]*)[^"]*"[^>]*>\s*<span[^>]*>([\s\S]*?)<\/span>[\s\S]*?<a class="authorName"[^>]*><span[^>]*>([\s\S]*?)<\/span>/g)]
+        .find((m) => D.workKey({ title: D.strip(m[2]), author: D.strip(m[3]) }) === D.workKey(b));
+      if (hit) break;
+      await sleep(PAUSE);
+    }
     if (!hit) return null;
     await sleep(PAUSE);
     return D.parseGoodreadsBook(await get(GOODREADS + hit[1]));

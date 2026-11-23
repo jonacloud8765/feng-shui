@@ -183,8 +183,8 @@ test('a Goodreads book page gives description, genres, rating, cover and edition
 });
 
 test('profile links and cover sizes', () => {
-  assert.strictEqual(profileId('https://www.goodreads.com/user/show/183433585-someone'), '183433585');
-  assert.strictEqual(profileId('183433585'), '183433585');
+  assert.strictEqual(profileId('https://www.goodreads.com/user/show/12345678-someone'), '12345678');
+  assert.strictEqual(profileId('12345678'), '12345678');
   assert.strictEqual(profileId('https://example.com/user/show/1'), '');
   assert.strictEqual(bigGoodreadsImage('https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1361355717l/1354._SX98_.jpg'),
     'https://i.gr-assets.com/images/S/compressed.photo.goodreads.com/books/1361355717i/1354.jpg');
