@@ -432,7 +432,11 @@ class Engine extends EventEmitter {
     const before = await fsp.stat(it.path);
     if (before.size !== it.size) it.size = before.size;
     const ext = path.extname(it.name);
-    const plan = await this.plan(it, ext);
+    let plan = await this.plan(it, ext);
+    // A result is never allowed to be bigger than its original.
+    if (plan.file && plan.size > it.size) {
+      plan = await this.copyPlan(it, ext, [...(plan.notes || []), `The result would have been ${human(plan.size - it.size)} larger than the original, so it was not kept. The original was left as it is, metadata included.`]);
+    }
     if (this.canceled) throw new Error('Canceled.');
     const after = await fsp.stat(it.path);
     if (after.size !== before.size || after.mtimeMs !== before.mtimeMs) throw new Error('The original changed while it was being read (another app is writing to it), so the result was thrown away.');
@@ -500,7 +504,7 @@ class Engine extends EventEmitter {
     // HEIC photos become JPG when that setting is on (it is by default).
     if (it.format === 'heif' && o.convertHeic) {
       try {
-        return await this.heicToJpeg(it, mode === 'maximum' && o.approved && o.lossyImages ? (o.imageQuality || 0.85) : 0.92);
+        return await this.heicToJpeg(it, mode === 'maximum' && o.approved && o.lossyImages ? Math.max(0.72, o.imageQuality || 0.85) : 0.92);
       } catch (err) {
         if (this.canceled) throw err;
         best = await tryLossless();
@@ -533,10 +537,6 @@ class Engine extends EventEmitter {
     if (!best) throw Object.assign(new Error('No safe way to optimise this file was found.'), { skipOnly: true });
     // Nothing gained and nothing removed: hand back an exact copy.
     if (best.size >= it.size && !best.removed.length && !best.lossy && !best.converted) return this.copyPlan(it, ext, best.notes);
-    if (best.size > it.size * 1.02 && !best.lossy) {
-      if (best.removed.length) best.notes.push('The file grew slightly because its structure was rewritten; it was kept because personal metadata was removed.');
-      else return this.copyPlan(it, ext, best.notes);
-    }
     return best;
   }
 
@@ -629,9 +629,24 @@ class Engine extends EventEmitter {
 
   // HEIC → JPG: a new JPEG at high quality, without personal metadata. Size,
   // orientation, colour profile and the HDR gain map are kept and checked.
-  async heicToJpeg(it, quality) {
-    const aux = it.info?.auxiliary || [];
+  // Tries high qualities first and keeps the best one that is smaller than
+  // the HEIC and still looks the same (PSNR 38 dB or more).
+  async heicToJpeg(it, start) {
     if ((it.info?.frames || 1) > 1) throw new Error('it holds more than one picture, and a JPG can hold only one');
+    let last = null;
+    for (const q of [0.92, 0.88, 0.84, 0.80, 0.76, 0.72].filter((x) => x <= start + 1e-9)) {
+      if (this.canceled) throw new Error('Canceled.');
+      let r;
+      try { r = await this.heicToJpegAt(it, q); } catch (err) { if (/visibly different/.test(err.message)) break; throw err; }
+      if (r.size < it.size) return r;
+      last = r;
+      if (r.psnr < 40) break;
+    }
+    throw new Error(last ? 'a JPG that looks the same would be larger than the HEIC, so it was not converted' : 'a JPG that looks the same could not be made');
+  }
+
+  async heicToJpegAt(it, quality) {
+    const aux = it.info?.auxiliary || [];
     this.step(it, `Converting to JPG at quality ${Math.round(quality * 100)}`, 0.4);
     const raw = this.temp(it, '.jpg');
     const r = await this.helper(['image-encode', it.path, raw, '--type', 'public.jpeg', '--quality', String(quality)]);
@@ -659,11 +674,10 @@ class Engine extends EventEmitter {
     const dropped = aux.filter((a) => a === 'depth' || a === 'disparity' || a === 'matte');
     if (dropped.length) notes.push('Portrait depth and matte data cannot go into a JPG, so the portrait effect can no longer be edited.');
     const size = c.size;
-    if (size > it.size) notes.push(`JPG is a less efficient format than HEIC, so this file is ${human(size - it.size)} larger. You asked for HEIC photos to be converted; you can turn this off in the widget’s settings.`);
     const checks = ['Opens as a JPEG', `Same size: ${cmp.width} × ${cmp.height}`, 'Orientation and colour profile kept', `Visual difference measured: PSNR ${cmp.psnr} dB`];
     if (gain(info.auxiliary)) checks.push('Kept: HDR gain map');
     return {
-      file, size, ext: '.jpg', converted: true, lossy: true, removed: [...(it.found || []), ...(c.removed || [])], checks, notes: [...notes, ...(c.notes || [])], after: this.afterMeta(it),
+      file, size, psnr: cmp.psnr, ext: '.jpg', converted: true, lossy: true, removed: [...(it.found || []), ...(c.removed || [])], checks, notes: [...notes, ...(c.notes || [])], after: this.afterMeta(it),
       method: `Converted from HEIC to JPG at quality ${Math.round(quality * 100)}; personal metadata left out`,
       quality: `Re-encoded · high quality, not identical (PSNR ${cmp.psnr} dB)`,
     };

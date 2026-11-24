@@ -175,7 +175,7 @@ const ICON = {
 const GLYPH = `<svg viewBox="0 0 54 54" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="36" height="36" rx="9" opacity=".45"/><path d="M27 4v14M21.5 12.5L27 18l5.5-5.5M27 50V36M21.5 41.5L27 36l5.5 5.5"/><path d="M15 27h24" opacity=".7"/></svg>`;
 
 const MODES = {
-  quick: { label: 'QUICK SQUEEZE', desc: '<b>Default.</b> Safe, lossless optimisation and metadata removal. Nothing you can see or hear changes, except that HEIC photos become high-quality JPGs.' },
+  quick: { label: 'QUICK SQUEEZE', desc: '<b>Default.</b> Safe, lossless optimisation and metadata removal. Nothing you can see or hear changes, except that HEIC photos become JPGs when that makes them smaller.' },
   pure: { label: 'PURE CLEAN', desc: '<b>Metadata only.</b> Personal data is removed; the encoded picture and sound are kept exactly as they are.' },
   maximum: { label: 'MAXIMUM SQUEEZE', desc: '<b>Stronger.</b> May trade a little quality for size, using settings you approve. You see exactly what first.' },
 };
