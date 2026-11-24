@@ -363,72 +363,207 @@
 
   const DRAW = {
     water(s, t, c, act) {
-      g.lineWidth = 0.9;
-      g.strokeStyle = c;
+      // A drop falls, meets the surface and sends flat rings outward; below,
+      // layered currents roll at different speeds.
+      const surf = -s * 0.05;
+      const wave = (x, i, amp) => surf + i * s * 0.24 + Math.sin((x / s) * Math.PI * (1.2 + i * 0.35) + t * (1.4 - i * 0.25) + i * 1.7) * amp
+        + Math.sin((x / s) * Math.PI * 2.7 - t * 0.9 + i) * amp * 0.35;
       for (let i = 0; i < 4; i++) {
+        const amp = s * (0.06 - i * 0.008) * (1 + 0.6 * act);
         g.beginPath();
-        for (let x = -s; x <= s; x += 1.5) {
-          const y = (i - 1.5) * s * 0.3 + Math.sin((x / s) * Math.PI * 1.4 + t * 1.5 + i * 0.8) * s * (0.07 + 0.05 * act);
-          if (x === -s) g.moveTo(x, y); else g.lineTo(x, y);
-        }
-        g.globalAlpha = 0.45 + 0.15 * i;
-        g.stroke();
+        g.moveTo(-s, s);
+        for (let x = -s; x <= s; x += 1) g.lineTo(x, wave(x, i, amp));
+        g.lineTo(s, s); g.closePath();
+        g.fillStyle = rgba('#527698', 0.1 + i * 0.07); g.fill();
+        g.beginPath();
+        for (let x = -s; x <= s; x += 1) { const y = wave(x, i, amp); if (x === -s) g.moveTo(x, y); else g.lineTo(x, y); }
+        g.strokeStyle = rgba(i ? '#46698c' : '#6f93b5', 0.9 - i * 0.12); g.lineWidth = i ? 0.7 : 1; g.stroke();
       }
-      g.globalAlpha = 1;
-      const p = (t / 3.1) % 1;
-      g.beginPath(); g.arc(0, 0, p * s, 0, TAU);
-      g.strokeStyle = rgba('#527698', 0.6 * (1 - p)); g.stroke();
+      // Glints riding the top current.
+      for (let k = 0; k < 4; k++) {
+        const x = ((t * 0.18 + k / 4) % 1) * 2 * s - s;
+        g.beginPath(); g.moveTo(x - s * 0.06, wave(x, 0, s * 0.06) + s * 0.07); g.lineTo(x + s * 0.06, wave(x, 0, s * 0.06) + s * 0.07);
+        g.strokeStyle = 'rgba(255,255,255,0.75)'; g.lineWidth = 0.8; g.stroke();
+      }
+      // The drop and its rings, every 3.2 s.
+      const p = (t / 3.2) % 1;
+      if (p < 0.3) {
+        const q = p / 0.3, y = -s * 0.9 + (surf + s * 0.85) * q * q;
+        g.beginPath();
+        g.moveTo(0, y - s * 0.13); g.bezierCurveTo(s * 0.07, y - s * 0.02, s * 0.07, y + s * 0.06, 0, y + s * 0.06);
+        g.bezierCurveTo(-s * 0.07, y + s * 0.06, -s * 0.07, y - s * 0.02, 0, y - s * 0.13);
+        g.fillStyle = '#527698'; g.fill();
+      } else {
+        const q = (p - 0.3) / 0.7;
+        for (let k = 0; k < 3; k++) {
+          const r = (q - k * 0.12) * s * 1.1;
+          if (r <= 0) continue;
+          g.beginPath(); g.ellipse(0, surf, r, r * 0.26, 0, 0, TAU);
+          g.strokeStyle = rgba('#3e6185', 0.7 * (1 - q)); g.lineWidth = 0.8; g.stroke();
+        }
+        if (q < 0.25) { // a small crown of spray
+          for (let k = -1; k <= 1; k += 2) {
+            const u = q / 0.25;
+            g.beginPath(); g.arc(k * s * 0.12 * (1 + u), surf - s * 0.22 * Math.sin(Math.PI * u), 1, 0, TAU);
+            g.fillStyle = rgba('#527698', 1 - u); g.fill();
+          }
+        }
+      }
     },
     fire(s, t, c, act) {
-      const p = (t / 2.3) % 1;
-      g.beginPath(); g.arc(0, s * 0.18, s * (0.25 + 0.6 * p), 0, TAU);
-      g.strokeStyle = rgba('#d4582f', 0.55 * (1 - p)); g.lineWidth = 0.8; g.stroke();
-      const core = s * (0.2 + 0.03 * Math.sin(t * 7.3) + 0.02 * Math.sin(t * 12.1)) * (1 + 0.25 * act);
-      g.beginPath(); g.arc(0, s * 0.18, core, 0, TAU); g.fillStyle = c; g.fill();
-      for (let i = 0; i < 10; i++) {
-        const q = (t * 0.55 + i / 10) % 1;
-        const x = Math.sin(i * 2.4 + t * 1.3) * s * 0.32 * (1 - q * 0.6);
-        const y = s * 0.18 - q * s * 1.05;
-        g.beginPath(); g.arc(x, y, Math.max(0.4, s * 0.055 * (1 - q)), 0, TAU);
-        g.fillStyle = q < 0.4 ? rgba('#d4582f', 1 - q) : rgba('#e8873f', 1 - q);
-        g.fill();
+      // A candle-like flame: three nested tongues that sway and stretch on
+      // their own rhythms, a blue root, embers lifting off the tip.
+      const base = s * 0.62;
+      const flick = (k) => Math.sin(t * (5.1 + k)) * 0.5 + Math.sin(t * (8.3 + k * 1.7) + k) * 0.3 + Math.sin(t * 13.7 + k * 2) * 0.2;
+      function tongue(scale, k, fill) {
+        const h = s * 1.25 * scale * (1 + 0.07 * flick(k) + 0.12 * act);
+        const w = s * 0.42 * scale * (1 + 0.04 * flick(k + 3));
+        const sway = s * 0.09 * scale * (Math.sin(t * 1.9 + k) + 0.5 * flick(k + 1));
+        const tipX = sway, tipY = base - h;
+        g.beginPath();
+        g.moveTo(0, base);
+        g.bezierCurveTo(-w * 1.25, base - h * 0.05, -w * 0.95, base - h * 0.55, tipX - w * 0.05, tipY + h * 0.08);
+        g.quadraticCurveTo(tipX, tipY - h * 0.02, tipX, tipY);
+        g.quadraticCurveTo(tipX + w * 0.1, tipY + h * 0.1, tipX + w * 0.2, tipY + h * 0.12);
+        g.bezierCurveTo(w * 0.95, base - h * 0.5, w * 1.25, base - h * 0.05, 0, base);
+        g.closePath();
+        g.fillStyle = fill; g.fill();
+      }
+      // Heat haze ring.
+      const p = (t / 2.4) % 1;
+      g.beginPath(); g.arc(0, base - s * 0.45, s * (0.4 + 0.55 * p), 0, TAU);
+      g.strokeStyle = rgba('#d4582f', 0.35 * (1 - p)); g.lineWidth = 0.7; g.stroke();
+      tongue(1, 0, rgba('#d4582f', 0.9));
+      tongue(0.72, 1.3, '#e9823f');
+      tongue(0.46, 2.6, '#f4c06a');
+      // The blue root.
+      g.beginPath(); g.ellipse(0, base - s * 0.06, s * 0.11, s * 0.07, 0, 0, TAU);
+      g.fillStyle = rgba('#527698', 0.55); g.fill();
+      // Wick.
+      g.beginPath(); g.moveTo(0, base); g.lineTo(0, base + s * 0.2);
+      g.strokeStyle = INK; g.lineWidth = 1; g.stroke();
+      // Embers.
+      for (let i = 0; i < 7; i++) {
+        const q = (t * 0.45 + i / 7) % 1;
+        const x = Math.sin(i * 2.4 + t * 2.1 + q * 4) * s * 0.18 * q;
+        const y = base - s * 1.1 - q * s * 0.55;
+        g.beginPath(); g.arc(x, y, Math.max(0.4, 1.3 * (1 - q)), 0, TAU);
+        g.fillStyle = rgba('#e9823f', 0.9 * (1 - q)); g.fill();
       }
     },
     earth(s, t, c, act) {
-      const b = 1 + 0.04 * Math.sin(t * 0.9);
-      g.beginPath(); g.arc(0, 0, s * 0.62 * b, 0, Math.PI); g.fillStyle = rgba('#bfa274', 0.35 + 0.15 * act); g.fill();
-      g.lineWidth = 0.8;
-      g.strokeStyle = rgba('#a88b5c', 0.8);
-      for (const k of [0.24, 0.43, 0.62]) { g.beginPath(); g.arc(0, 0, s * k * b, 0, TAU); g.stroke(); }
-      g.beginPath(); g.moveTo(-s, 0); g.lineTo(s, 0); g.stroke();
-      g.save();
-      g.rotate(Math.sin(t * 0.13) * 0.4);
-      g.strokeStyle = rgba('#8a7148', 0.7);
-      const q = s * 0.6;
-      g.strokeRect(-q, -q, 2 * q, 2 * q);
-      g.restore();
+      // A sun crossing behind layered hills, strata below, a cairn of stones
+      // keeping its balance.
+      const p = (t / 16) % 1;
+      const sx = -s * 0.7 + p * s * 1.4, sy = -s * 0.05 - Math.sin(Math.PI * p) * s * 0.55;
+      g.beginPath(); g.arc(sx, sy, s * 0.2, 0, TAU); g.fillStyle = rgba('#e2b96f', 0.85); g.fill();
+      g.beginPath(); g.arc(sx, sy, s * 0.28 + Math.sin(t * 1.3) * s * 0.02, 0, TAU); g.strokeStyle = rgba('#d1a75e', 0.5); g.lineWidth = 0.6; g.stroke();
+      const hills = [
+        [[-s, 0.12], [-s * 0.35, -0.42], [s * 0.2, 0.05], [s * 0.7, -0.28], [s, 0.0]],
+        [[-s, 0.2], [-s * 0.6, -0.05], [-s * 0.05, 0.14], [s * 0.5, -0.12], [s, 0.18]],
+      ];
+      hills.forEach((pts, i) => {
+        g.beginPath(); g.moveTo(-s, s);
+        for (const [x, y] of pts) g.lineTo(x, (y + 0.015 * Math.sin(t * 0.3 + i)) * s);
+        g.lineTo(s, s); g.closePath();
+        g.fillStyle = ['#d9c39b', '#c4a877'][i]; g.fill();
+      });
+      // Strata: bands that drift very slowly, with fine dashed seams.
+      for (let k = 0; k < 4; k++) {
+        const y = s * (0.3 + k * 0.17);
+        g.beginPath(); g.moveTo(-s, s);
+        for (let x = -s; x <= s; x += 2) g.lineTo(x, y + Math.sin(x / s * 2 + k + t * 0.15) * s * 0.025);
+        g.lineTo(s, s); g.closePath();
+        g.fillStyle = ['#b89a68', '#a88b5c', '#957a4f', '#836b44'][k]; g.fill();
+        g.setLineDash([2, 3]); g.lineDashOffset = -t * (2 + k);
+        g.beginPath();
+        for (let x = -s; x <= s; x += 2) { const yy = y + s * 0.07 + Math.sin(x / s * 2 + k + t * 0.15) * s * 0.025; if (x === -s) g.moveTo(x, yy); else g.lineTo(x, yy); }
+        g.strokeStyle = 'rgba(250,248,243,0.35)'; g.lineWidth = 0.5; g.stroke();
+        g.setLineDash([]);
+      }
+      // The cairn on the near ridge.
+      let y = -s * 0.02;
+      const stones = [[0.2, 0.07], [0.15, 0.06], [0.1, 0.05]];
+      stones.forEach(([rx, ry], i) => {
+        const sway = Math.sin(t * 0.8 + i * 0.9) * s * 0.012 * (i + 1) * (1 + act);
+        y -= ry * s;
+        g.beginPath(); g.ellipse(s * 0.38 + sway, y, rx * s, ry * s, Math.sin(t * 0.5 + i) * 0.05, 0, TAU);
+        g.fillStyle = ['#8a7148', '#a88b5c', '#bfa274'][i]; g.fill();
+        y -= ry * s * 0.9;
+      });
     },
     metal(s, t, c, act) {
-      g.lineWidth = 0.7;
-      g.strokeStyle = c;
-      g.beginPath(); g.arc(0, 0, s * 0.72, 0, TAU); g.stroke();
-      g.beginPath(); g.arc(0, 0, s * 0.42, 0, TAU); g.stroke();
-      g.beginPath();
-      for (let i = 0; i < 24; i++) {
-        const a = t * 0.4 + (i * TAU) / 24;
-        const l = i % 6 === 0 ? 0.16 : 0.08;
-        g.moveTo(Math.cos(a) * s * 0.72, Math.sin(a) * s * 0.72);
-        g.lineTo(Math.cos(a) * s * (0.72 + l), Math.sin(a) * s * (0.72 + l));
+      // A small foundry: two gears meshing, driven by a third, turning a
+      // conveyor that carries ingots under a stamping press.
+      function gear(x, y, r, n, ang, fill) {
+        const th = Math.max(1.4, r * 0.22);
+        g.beginPath();
+        for (let i = 0; i < n; i++) {
+          const a = ang + (i * TAU) / n, w = TAU / n;
+          g.lineTo(x + Math.cos(a - w * 0.3) * (r - th * 0.5), y + Math.sin(a - w * 0.3) * (r - th * 0.5));
+          g.lineTo(x + Math.cos(a - w * 0.17) * (r + th * 0.5), y + Math.sin(a - w * 0.17) * (r + th * 0.5));
+          g.lineTo(x + Math.cos(a + w * 0.17) * (r + th * 0.5), y + Math.sin(a + w * 0.17) * (r + th * 0.5));
+          g.lineTo(x + Math.cos(a + w * 0.3) * (r - th * 0.5), y + Math.sin(a + w * 0.3) * (r - th * 0.5));
+        }
+        g.closePath();
+        g.fillStyle = fill; g.fill();
+        g.strokeStyle = '#5f646b'; g.lineWidth = 0.6; g.stroke();
+        // Spokes and hub.
+        g.beginPath(); g.arc(x, y, r * 0.62, 0, TAU); g.fillStyle = '#f6f4ef'; g.fill(); g.stroke();
+        g.beginPath();
+        for (let k = 0; k < 4; k++) { const a = ang + (k * Math.PI) / 2; g.moveTo(x + Math.cos(a) * r * 0.2, y + Math.sin(a) * r * 0.2); g.lineTo(x + Math.cos(a) * r * 0.62, y + Math.sin(a) * r * 0.62); }
+        g.lineWidth = Math.max(1, r * 0.14); g.strokeStyle = fill; g.stroke();
+        g.beginPath(); g.arc(x, y, r * 0.22, 0, TAU); g.fillStyle = fill; g.fill();
+        g.lineWidth = 0.6; g.strokeStyle = '#5f646b'; g.stroke();
+        g.beginPath(); g.arc(x, y, r * 0.08, 0, TAU); g.fillStyle = INK; g.fill();
       }
-      g.stroke();
-      g.beginPath(); g.moveTo(-s, 0); g.lineTo(s, 0); g.moveTo(0, -s); g.lineTo(0, s);
-      g.strokeStyle = rgba('#8f949b', 0.45); g.stroke();
-      const a = -t * (1.1 + act);
-      g.beginPath(); g.arc(Math.cos(a) * s * 0.42, Math.sin(a) * s * 0.42, 1.8, 0, TAU); g.fillStyle = INK; g.fill();
-      g.beginPath();
-      const tri = s * 0.2;
-      for (let i = 0; i < 3; i++) { const b = t * 0.25 + (i * TAU) / 3 - Math.PI / 2; g[i ? 'lineTo' : 'moveTo'](Math.cos(b) * tri, Math.sin(b) * tri); }
-      g.closePath(); g.strokeStyle = c; g.stroke();
+      const speed = 0.7; // steady: scaling t by a changing factor would make the gears lurch
+      const A = { x: -s * 0.3, y: -s * 0.22, r: s * 0.36, n: 12 };
+      const B = { r: s * 0.24, n: 8 };
+      const d = A.r + B.r + s * 0.02, ab = -0.35;
+      B.x = A.x + Math.cos(ab) * d; B.y = A.y + Math.sin(ab) * d;
+      const C = { r: s * 0.15, n: 6 };
+      const dc = B.r + C.r + s * 0.015, bc = 1.25;
+      C.x = B.x + Math.cos(bc) * dc; C.y = B.y + Math.sin(bc) * dc;
+      const aA = t * speed;
+      const aB = -aA * (A.n / B.n) + Math.PI / B.n + ab * (1 + A.n / B.n);
+      const aC = -aB * (B.n / C.n) + Math.PI / C.n + bc * (1 + B.n / C.n);
+      gear(A.x, A.y, A.r, A.n, aA, '#b8bcc2');
+      gear(B.x, B.y, B.r, B.n, aB, '#a3a8af');
+      gear(C.x, C.y, C.r, C.n, aC, '#c9ccd1');
+      // Conveyor belt with rollers.
+      const by = s * 0.62, bl = -s * 0.85, br = s * 0.85, rr = s * 0.07;
+      g.strokeStyle = '#5f646b'; g.lineWidth = 0.8;
+      g.beginPath(); g.moveTo(bl, by - rr); g.lineTo(br, by - rr); g.moveTo(bl, by + rr); g.lineTo(br, by + rr); g.stroke();
+      for (let k = 0; k < 6; k++) {
+        const x = bl + (k * (br - bl)) / 5;
+        g.beginPath(); g.arc(x, by, rr * 0.8, 0, TAU); g.fillStyle = '#d5d7da'; g.fill(); g.stroke();
+        const a = -t * speed * 4;
+        g.beginPath(); g.moveTo(x, by); g.lineTo(x + Math.cos(a) * rr * 0.8, by + Math.sin(a) * rr * 0.8); g.stroke();
+      }
+      // Ingots ride the belt; the press stamps each one as it passes.
+      const px = s * 0.62, period = 2.4;
+      const ph = (t * speed / 0.7 % period) / period;
+      for (let k = 0; k < 3; k++) {
+        const u = (ph + k / 3 + 0.565) % 1;
+        const x = bl + u * (br - bl);
+        const stamped = x > px;
+        const w = s * 0.2, h = stamped ? s * 0.07 : s * 0.11;
+        g.fillStyle = stamped ? '#8f949b' : '#d4582f';
+        g.globalAlpha = Math.min(1, u * 8, (1 - u) * 8);
+        g.fillRect(x - w / 2, by - rr - h, w, h);
+        g.globalAlpha = 1;
+      }
+      // The press: a ram that drops each time an ingot reaches it.
+      const hit = (ph * 3) % 1, ram = hit > 0.9 ? 1 - (hit - 0.9) / 0.1 : hit > 0.8 ? (hit - 0.8) / 0.1 : 0;
+      const top = s * 0.12, low = by - rr - s * 0.16;
+      const ry = top + (low - top) * ram;
+      g.fillStyle = '#5f646b';
+      g.fillRect(px - s * 0.025, -s, s * 0.05, ry + s);
+      g.fillRect(px - s * 0.13, ry, s * 0.26, s * 0.07);
+      if (ram > 0.85) { // a spark at impact
+        for (let k = -1; k <= 1; k += 2) { g.beginPath(); g.arc(px + k * s * 0.18, low + s * 0.02, 1, 0, TAU); g.fillStyle = '#e9823f'; g.fill(); }
+      }
     },
     wood(s, t, c, act) {
       const cycle = 11;

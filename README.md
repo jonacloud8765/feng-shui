@@ -52,10 +52,14 @@ awake and open settings.
   yang at its centre on warm paper: two halves that keep changing shape and
   trade places, orbits, particles and rose curves that draw themselves and
   fade. The Five Elements sit around it as small animated systems on the
-  generating ring marked with alchemical symbols (Fire, Earth and Water triangles, Venus for Metal, Jupiter for Wood), with the controlling star inside and live
-  readings. Widgets take a light, warm glass with charcoal type, and the
-  bagua arrangement keeps the centre open; the yin yang finds the free space
-  and sizes itself to it.
+  generating ring marked with alchemical symbols (Fire, Earth and Water
+  triangles, Venus for Metal, Jupiter for Wood), with the controlling star
+  inside and live readings. Fire is a flickering flame, Water a falling drop
+  with ripples over layered currents, Earth a sun crossing layered hills with
+  a balancing cairn, and Metal meshing gears driving a conveyor and stamping
+  press. Widgets take a light, warm glass with charcoal type, and the bagua
+  arrangement keeps the centre open; the yin yang finds the free space and
+  sizes itself to it.
 - **The Feng Shui look.** A layout named "Feng Shui" puts every widget on one
   shared liquid glass, with the same tint, radius and light, over ink
   mountains in mist at dusk. Each widget carries one quiet note of its element
