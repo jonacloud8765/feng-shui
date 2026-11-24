@@ -332,22 +332,19 @@ const TYPES = {
     fields: [],
   },
   records: {
-    name: 'Record Room',
-    description: 'A 3D listening room: three crates of SoundCloud records and a turntable.',
+    name: 'Music Player',
+    description: 'A 3D music player for the SoundCloud tracks of up to three artists.',
     size: { width: 1100, height: 660 },
     min: { width: 560, height: 360 },
     max: { width: 2600, height: 1600 },
-    // Each crate holds one SoundCloud profile: a link like soundcloud.com/name, or just the name.
-    config: { crate1: '', crate2: '', crate3: '', view: 'third', autoplay: true, avatar: '', avatarName: '', furniture: '', furnitureName: '', photos: [], posters: [], cigarettes: '', trevor: '', beer: '', guest: '', guestPickup: 'auto' },
+    // Each artist is one SoundCloud profile: a link like soundcloud.com/name, or just the name.
+    config: { crate1: '', crate2: '', crate3: '', autoplay: true },
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 14, padding: 0 },
     fields: [
-      { key: 'crate1', label: 'Left crate', placeholder: 'soundcloud.com/your-name', hint: 'A SoundCloud profile link, or just the name.' },
-      { key: 'crate2', label: 'Middle crate', placeholder: 'soundcloud.com/a-friend' },
-      { key: 'crate3', label: 'Right crate', placeholder: 'soundcloud.com/another' },
-      { key: 'view', label: 'View', type: 'choice', options: { third: 'From the couch', first: 'First person' } },
-      { key: 'autoplay', label: 'Play the next record', type: 'toggle' },
-      { key: 'avatar', label: 'You', type: 'model', hint: 'A standing .glb character in an A or T pose; the room rigs it to sit, walk and reach.' },
-      { key: 'furniture', label: 'Couch & table', type: 'model', hint: 'A furniture .glb laid out for the Record Room (it carries its own layout).' },
+      { key: 'crate1', label: 'Artist 1', placeholder: 'soundcloud.com/your-name', hint: 'A SoundCloud profile link, or just the name.' },
+      { key: 'crate2', label: 'Artist 2', placeholder: 'soundcloud.com/a-friend' },
+      { key: 'crate3', label: 'Artist 3', placeholder: 'soundcloud.com/another' },
+      { key: 'autoplay', label: 'Play the next track', type: 'toggle' },
     ],
   },
   library: {

@@ -1,4 +1,4 @@
-// The parts of three.js the Record Room uses, bundled into one ES module so the
+// The parts of three.js the Music Player and the Library use, bundled into one ES module so the
 // room needs no build step at runtime. Rebuild after changing this file:
 //   npx esbuild@0.25.10 scripts/three-entry.mjs --bundle --format=esm --minify --outfile=src/renderer/records/three.js
 // (with three@0.180.0 installed next to it)

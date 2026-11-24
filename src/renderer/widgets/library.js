@@ -2,7 +2,7 @@ import { h } from '../dom.js';
 
 // Library: floating sculptures made of your books (library/library.html)
 // in a frame that fills the widget. The 3D room runs on its own page, like the
-// Record Room; this side brings it the catalogue from the main process,
+// Music Player; this side brings it the catalogue from the main process,
 // passes on imports and favorites, and forwards the room's menu.
 
 const css = `

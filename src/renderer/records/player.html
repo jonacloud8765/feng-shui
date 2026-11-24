@@ -1,0 +1,143 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://w.soundcloud.com; frame-src https://w.soundcloud.com; img-src 'self' data: blob: https://*.sndcdn.com; connect-src 'self' blob: data: https://*.sndcdn.com; style-src 'self' 'unsafe-inline'">
+  <title>Music Player</title>
+  <style>
+    :root { color-scheme: dark; --ink: #f6f2ee; --dim: rgba(246,242,238,0.6); --faint: rgba(246,242,238,0.36); --pane: rgba(14,13,18,0.5); --line: rgba(255,255,255,0.1); --hi: rgba(255,255,255,0.1); --accent: #ff8a5c; }
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #08080b; font: 13px/1.35 -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif; color: var(--ink); user-select: none; -webkit-user-select: none; }
+    canvas { position: absolute; inset: 0; display: block; width: 100%; height: 100%; outline: none; }
+    button { appearance: none; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; padding: 0; }
+    svg { display: block; fill: currentColor; }
+    .glass { background: var(--pane); border: 1px solid var(--line); backdrop-filter: blur(22px) saturate(1.5); -webkit-backdrop-filter: blur(22px) saturate(1.5); box-shadow: 0 12px 34px rgba(0,0,0,0.32); }
+    .ib { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; color: var(--dim); transition: color 0.15s, background-color 0.15s, transform 0.1s; }
+    .ib:hover { color: var(--ink); background: var(--hi); }
+    .ib:active { transform: scale(0.94); }
+    .ib.on { color: var(--accent); }
+    .ib svg { width: 17px; height: 17px; }
+
+    /* Top: the artists, search, the list. */
+    #top { position: absolute; top: 12px; left: 12px; right: 12px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
+    #top > * { pointer-events: auto; }
+    #tabs { display: flex; gap: 2px; padding: 3px; border-radius: 12px; min-width: 0; overflow-x: auto; scrollbar-width: none; }
+    #tabs::-webkit-scrollbar { display: none; }
+    #tabs button { padding: 7px 12px; border-radius: 9px; color: var(--dim); font-weight: 600; font-size: 12px; white-space: nowrap; display: flex; gap: 7px; align-items: center; }
+    #tabs button img { width: 18px; height: 18px; border-radius: 50%; object-fit: cover; background: #333; }
+    #tabs button:hover { color: var(--ink); }
+    #tabs button.on { background: rgba(255,255,255,0.14); color: var(--ink); }
+    #tabs button .n { color: var(--faint); font-weight: 500; }
+    #search { display: flex; align-items: center; gap: 6px; border-radius: 12px; padding: 0 10px; height: 36px; box-sizing: border-box; flex: 0 1 220px; min-width: 120px; margin-left: auto; color: var(--faint); }
+    #search input { flex: 1; min-width: 0; border: 0; outline: none; background: transparent; color: var(--ink); font: inherit; }
+    #search input::placeholder { color: var(--faint); }
+    #search svg { width: 14px; height: 14px; flex: none; }
+    #listBtn { border-radius: 12px; width: 36px; height: 36px; }
+
+    /* The track list. */
+    #list { position: absolute; top: 58px; right: 12px; bottom: 104px; width: 310px; border-radius: 16px; display: flex; flex-direction: column; overflow: hidden; transition: transform 0.35s cubic-bezier(.2,.8,.2,1), opacity 0.3s; }
+    body:not(.list) #list { transform: translateX(calc(100% + 24px)); opacity: 0; pointer-events: none; }
+    #list .hd { padding: 12px 14px 8px; display: flex; justify-content: space-between; align-items: baseline; }
+    #list .hd b { font-size: 13px; }
+    #list .hd span { color: var(--faint); font-size: 11.5px; }
+    #list ol { list-style: none; margin: 0; padding: 0 6px 8px; overflow-y: auto; flex: 1; scrollbar-width: thin; }
+    #list li { display: grid; grid-template-columns: 34px 1fr auto; gap: 10px; align-items: center; padding: 5px 8px 5px 5px; border-radius: 9px; cursor: pointer; }
+    #list li:hover { background: var(--hi); }
+    #list li.focus { background: rgba(255,255,255,0.07); }
+    #list li img { width: 34px; height: 34px; border-radius: 6px; object-fit: cover; background: #2a2a30; }
+    #list li .t { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-weight: 550; }
+    #list li .a { color: var(--faint); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #list li .d { color: var(--faint); font-size: 11px; font-variant-numeric: tabular-nums; }
+    #list li.now .t { color: var(--accent); }
+    #list .empty { color: var(--faint); padding: 24px 16px; text-align: center; }
+    .eq { display: inline-flex; gap: 2px; align-items: flex-end; height: 11px; }
+    .eq i { width: 3px; background: var(--accent); border-radius: 1px; height: 4px; }
+    body.playing .eq i { animation: eq 0.9s ease-in-out infinite; }
+    .eq i:nth-child(2) { animation-delay: -0.3s !important; } .eq i:nth-child(3) { animation-delay: -0.6s !important; }
+    @keyframes eq { 0%, 100% { height: 3px; } 50% { height: 11px; } }
+
+    /* What the cover flow is resting on. */
+    #cap { position: absolute; left: 0; right: 0; top: 70%; text-align: center; pointer-events: none; transition: opacity 0.3s, right 0.35s cubic-bezier(.2,.8,.2,1); }
+    body.list #cap { right: 322px; }
+    #cap .t { font-size: 14px; font-weight: 650; text-shadow: 0 2px 10px rgba(0,0,0,0.6); max-width: 70%; margin: 0 auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #cap .a { color: var(--dim); font-size: 11.5px; margin-top: 2px; text-shadow: 0 2px 10px rgba(0,0,0,0.6); }
+
+    /* The transport. */
+    #bar { position: absolute; left: 12px; right: 12px; bottom: 12px; height: 80px; border-radius: 20px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 1.5fr) minmax(0, 1fr); align-items: center; gap: 14px; padding: 0 14px 0 10px; box-sizing: border-box; }
+    #np { display: flex; gap: 11px; align-items: center; min-width: 0; }
+    #np img { width: 58px; height: 58px; border-radius: 10px; object-fit: cover; background: #2a2a30; box-shadow: 0 6px 16px rgba(0,0,0,0.4); flex: none; cursor: pointer; }
+    #np img[src=""] { visibility: hidden; }
+    #np .m { min-width: 0; }
+    #np .t { font-size: 14px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    #np .a { color: var(--dim); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; width: fit-content; max-width: 100%; }
+    #np .a:hover { color: var(--ink); text-decoration: underline; }
+    #mid { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+    #ctl { display: flex; gap: 8px; align-items: center; }
+    #pp { width: 42px; height: 42px; border-radius: 50%; background: var(--ink); color: #111; display: grid; place-items: center; transition: transform 0.1s, background-color 0.2s; }
+    #pp:hover { transform: scale(1.05); }
+    #pp:active { transform: scale(0.95); }
+    #pp svg { width: 18px; height: 18px; }
+    #seekRow { display: flex; gap: 9px; align-items: center; width: 100%; color: var(--faint); font-size: 10.5px; font-variant-numeric: tabular-nums; }
+    #seekRow span { width: 34px; text-align: center; }
+    input[type=range] { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 2px; background: linear-gradient(90deg, var(--ink) 0 var(--p, 0%), rgba(255,255,255,0.16) var(--p, 0%)); outline: none; cursor: pointer; margin: 0; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border-radius: 50%; background: var(--ink); box-shadow: 0 1px 4px rgba(0,0,0,0.4); opacity: 0; transition: opacity 0.15s; }
+    input[type=range]:hover::-webkit-slider-thumb, input[type=range]:active::-webkit-slider-thumb { opacity: 1; }
+    input[type=range]:hover { background: linear-gradient(90deg, var(--accent) 0 var(--p, 0%), rgba(255,255,255,0.16) var(--p, 0%)); }
+    #seek { flex: 1; }
+    #right { display: flex; justify-content: flex-end; align-items: center; gap: 4px; }
+    #vol { width: 96px; }
+
+    #toast { position: absolute; left: 50%; top: 60px; transform: translate(-50%, -8px); padding: 9px 14px; border-radius: 12px; font-size: 12.5px; opacity: 0; transition: opacity 0.25s, transform 0.25s; pointer-events: none; max-width: 80%; text-align: center; }
+    #toast.on { opacity: 1; transform: translate(-50%, 0); }
+    #empty { position: absolute; inset: 0; display: none; place-items: center; text-align: center; }
+    body.none #empty { display: grid; }
+    body.none #bar, body.none #cap, body.none #list, body.none #search, body.none #listBtn { display: none; }
+    #empty .card { padding: 22px 26px; border-radius: 18px; max-width: 340px; }
+    #empty h2 { margin: 0 0 6px; font-size: 16px; }
+    #empty p { margin: 0 0 14px; color: var(--dim); }
+    #empty button { background: var(--ink); color: #111; border-radius: 10px; padding: 8px 14px; font-weight: 650; }
+    #veil { position: absolute; inset: 0; background: #08080b; display: grid; place-items: center; color: var(--faint); transition: opacity 0.6s; pointer-events: none; }
+    #veil.gone { opacity: 0; }
+    #sc { position: absolute; width: 1px; height: 1px; left: -10px; top: -10px; opacity: 0; pointer-events: none; border: 0; }
+
+    @media (max-width: 760px) {
+      #bar { grid-template-columns: minmax(0, 1fr) auto; }
+      #right { display: none; }
+      #list { width: calc(100% - 24px); }
+      body.list #cap { right: 0; }
+    }
+  </style>
+</head>
+<body>
+  <canvas id="c" tabindex="0"></canvas>
+  <div id="top">
+    <div id="tabs" class="glass"></div>
+    <label id="search" class="glass"><svg viewBox="0 0 16 16"><path d="M6.8 1.5a5.3 5.3 0 0 1 4.2 8.5l3.4 3.4-1.1 1.1-3.4-3.4A5.3 5.3 0 1 1 6.8 1.5zm0 1.6a3.7 3.7 0 1 0 0 7.4 3.7 3.7 0 0 0 0-7.4z"/></svg><input id="q" type="search" placeholder="Search" spellcheck="false" dir="auto"></label>
+    <button id="listBtn" class="ib glass" title="Track list (L)"><svg viewBox="0 0 16 16"><path d="M2 3.5h9v1.5H2zm0 3.75h9v1.5H2zM2 11h6v1.5H2zm10.5-1.6V4h1.5v7.4a1.9 1.9 0 1 1-1.5-1.86z"/></svg></button>
+  </div>
+  <div id="list" class="glass"><div class="hd"><b id="listName">Tracks</b><span id="listCount"></span></div><ol></ol></div>
+  <div id="cap"><div class="t" dir="auto"></div><div class="a"></div></div>
+  <div id="bar" class="glass">
+    <div id="np"><img alt="" src=""><div class="m"><div class="t" dir="auto"></div><div class="a" title="Open on SoundCloud"></div></div></div>
+    <div id="mid">
+      <div id="ctl">
+        <button class="ib" id="shuf" title="Shuffle (S)"><svg viewBox="0 0 16 16"><path d="M11.5 2.5 14 5l-2.5 2.5V5.8h-1.2c-.9 0-1.5.4-2.1 1.2L5.6 10c-.8 1.1-1.8 1.7-3.1 1.7H1.5v-1.5h1c.8 0 1.3-.3 1.9-1.1L7 6.1c.8-1.1 1.9-1.8 3.3-1.8h1.2zm-9 1.8c1.3 0 2.3.6 3.1 1.7l.4.6-.9 1.2-.7-.9c-.6-.8-1.1-1.1-1.9-1.1h-1V4.3zm6.7 5.4c.6.8 1.2 1.1 2.1 1.1h1.2V9l2.5 2.5-2.5 2.5v-1.7h-1.2c-1.4 0-2.5-.7-3.3-1.8l-.3-.4.9-1.2z"/></svg></button>
+        <button class="ib" id="prev" title="Previous (Shift ←)"><svg viewBox="0 0 16 16"><path d="M3 2.5h1.6v11H3zm2.2 5.5L13 2.8v10.4z"/></svg></button>
+        <button id="pp" title="Play (Space)"></button>
+        <button class="ib" id="next" title="Next (Shift →)"><svg viewBox="0 0 16 16"><path d="M11.4 2.5H13v11h-1.6zM10.8 8 3 13.2V2.8z"/></svg></button>
+        <button class="ib" id="rep" title="Repeat (R)"></button>
+      </div>
+      <div id="seekRow"><span id="tpos">0:00</span><input id="seek" type="range" min="0" max="1000" value="0"><span id="tdur">0:00</span></div>
+    </div>
+    <div id="right">
+      <button class="ib" id="mute" title="Mute (M)"></button>
+      <input id="vol" type="range" min="0" max="100" value="80" title="Volume (↑ ↓)">
+      <button class="ib" id="open" title="Open on SoundCloud"><svg viewBox="0 0 16 16"><path d="M9 2h5v5h-1.5V4.6L7.6 9.5 6.5 8.4l4.9-4.9H9zM3 4h4v1.5H3.5v7h7V9H12v5H2V4z"/></svg></button>
+    </div>
+  </div>
+  <div id="empty"><div class="card glass"><h2>No music yet</h2><p>Add up to three SoundCloud artists in this widget’s settings, and their tracks show up here.</p><button id="setup">Open settings</button></div></div>
+  <div id="toast" class="glass"></div>
+  <div id="veil">Loading your music…</div>
+  <script src="https://w.soundcloud.com/player/api.js"></script>
+  <script type="module" src="player.js"></script>
+</body>
+</html>

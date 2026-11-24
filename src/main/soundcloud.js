@@ -1,6 +1,6 @@
 'use strict';
 
-// Record Room crates: the tracks of a SoundCloud profile.
+// Music Player artists: the tracks of a SoundCloud profile.
 //
 // SoundCloud's API needs a registered app key, but every profile also has a
 // public RSS feed (the one podcast apps use), which lists its tracks with
