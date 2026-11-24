@@ -52,7 +52,7 @@ awake and open settings.
   yang at its centre on warm paper: two halves that keep changing shape and
   trade places, orbits, particles and rose curves that draw themselves and
   fade. The Five Elements sit around it as small animated systems on the
-  generating ring (火 土 金 水 木), with the controlling star inside and live
+  generating ring marked with alchemical symbols (Fire, Earth and Water triangles, Venus for Metal, Jupiter for Wood), with the controlling star inside and live
   readings. Widgets take a light, warm glass with charcoal type, and the
   bagua arrangement keeps the centre open; the yin yang finds the free space
   and sizes itself to it.

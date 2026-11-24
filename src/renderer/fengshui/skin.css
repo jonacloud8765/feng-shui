@@ -27,7 +27,7 @@ body.fs:not(.self-drawn) .fs-frame {
     inset 0 1px 0 rgba(255,255,255,0.75),
     inset 0 0 0 0.5px rgba(26,26,25,0.10);
 }
-/* The seal: the element's character in a fine ring, top right, with a small
+/* The seal: the element's alchemical glyph in a fine ring, top right, with a small
    dot orbiting it. A whisper at rest, clear on hover. */
 .fs-seal {
   position: absolute; top: 10px; right: 10px; width: 18px; height: 18px;
@@ -44,6 +44,7 @@ body.fs:not(.self-drawn) .fs-frame {
 }
 @keyframes fs-orbit { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .fs-seal::after { animation: none; } }
+.fs-seal svg { display: block; }
 body.fs:hover .fs-seal { opacity: 0.9; transform: none; }
 body.fs.tiny .fs-seal { display: none; }
 

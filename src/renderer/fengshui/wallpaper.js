@@ -28,7 +28,10 @@
   const SANS = '-apple-system, "SF Pro Text", "Helvetica Neue", sans-serif';
   const HAN = '"Songti SC", "STSong", "PingFang SC", serif';
 
-  // Generating order, Fire at the top (the south is up on old maps).
+  // Generating order, Fire at the top (the south is up on old maps). Each
+  // element is marked with an alchemical glyph, drawn as paths: the classical
+  // triangles for Fire, Earth and Water; Jupiter (tin) for Wood and Venus
+  // (copper) for Metal, the planets the Chinese call the Wood and Metal stars.
   const ELEMENTS = [
     { key: 'fire', han: '火', name: 'FIRE', color: '#d4582f' },
     { key: 'earth', han: '土', name: 'EARTH', color: '#bfa274' },
@@ -36,6 +39,27 @@
     { key: 'water', han: '水', name: 'WATER', color: '#527698' },
     { key: 'wood', han: '木', name: 'WOOD', color: '#5f8d76' },
   ];
+  // Alchemical glyphs in a unit box (-1..1), stroked.
+  const GLYPH = {
+    fire(c) { c.moveTo(0, -0.9); c.lineTo(0.85, 0.7); c.lineTo(-0.85, 0.7); c.closePath(); },
+    water(c) { c.moveTo(0, 0.9); c.lineTo(0.85, -0.7); c.lineTo(-0.85, -0.7); c.closePath(); },
+    earth(c) { GLYPH.water(c); c.moveTo(-0.62, -0.18); c.lineTo(0.62, -0.18); },
+    metal(c) { c.moveTo(0.46, -0.4); c.arc(0, -0.4, 0.46, 0, TAU); c.moveTo(0, 0.06); c.lineTo(0, 0.95); c.moveTo(-0.38, 0.52); c.lineTo(0.38, 0.52); },
+    wood(c) {
+      c.moveTo(-0.62, -0.5); c.bezierCurveTo(-0.62, -0.98, 0.08, -1.02, 0.08, -0.56);
+      c.bezierCurveTo(0.08, -0.18, -0.38, 0.12, -0.78, 0.32); c.lineTo(0.8, 0.32);
+      c.moveTo(0.38, -0.62); c.lineTo(0.38, 0.95);
+    },
+  };
+  function glyph(key, x, y, size, color, width = 1) {
+    g.save();
+    g.translate(x, y); g.scale(size / 2, size / 2);
+    g.beginPath(); GLYPH[key](g);
+    g.lineWidth = (width * 2) / size; g.lineJoin = 'round'; g.lineCap = 'round';
+    g.strokeStyle = color; g.stroke();
+    g.restore();
+  }
+
   // The twelve double hours and their elements.
   const BRANCH = '子丑寅卯辰巳午未申酉戌亥';
   const BRANCH_EL = ['water', 'earth', 'wood', 'wood', 'earth', 'fire', 'fire', 'earth', 'metal', 'metal', 'earth', 'water'];
@@ -507,8 +531,14 @@
       g.textBaseline = 'top';
       g.font = `500 ${fs}px ${SANS}`;
       try { g.letterSpacing = `${(fs * 0.18).toFixed(1)}px`; } catch {}
+      const gw = fs * 1.05, nw = g.measureText(el.name).width, total = gw + fs * 0.6 + nw;
+      const x0 = g.textAlign === 'left' ? lx : g.textAlign === 'right' ? lx - total : lx - total / 2;
+      glyph(el.key, x0 + gw / 2, top + fs * 0.5, gw, rgba(el.color, 0.7 + 0.3 * act), 1 + 0.3 * act);
+      const align = g.textAlign;
+      g.textAlign = 'left';
       g.fillStyle = rgba('#1a1a19', 0.55 + 0.35 * act);
-      g.fillText(`${el.han}  ${el.name}`, lx, top);
+      g.fillText(el.name, x0 + gw + fs * 0.6, top);
+      g.textAlign = align;
       try { g.letterSpacing = '0px'; } catch {}
       g.font = `400 ${fs}px ${MONO}`;
       g.fillStyle = rgba(el.color, 0.65 + 0.35 * act);
@@ -565,7 +595,11 @@
     g.font = `400 ${fs}px ${MONO}`;
     g.fillStyle = 'rgba(26,26,25,0.5)';
     const hh = String(now.getHours()).padStart(2, '0'), mm = String(now.getMinutes()).padStart(2, '0'), ss = String(now.getSeconds()).padStart(2, '0');
-    g.fillText(`${BRANCH[hb]}時 ${hourEl.han}  ·  ${hh}:${mm}:${ss}  ·  ${el.han} ${el.name.toLowerCase()}`, room.cx, y + fs + 6);
+    const line = `${BRANCH[hb]}時 ${hourEl.name.toLowerCase()}  ·  ${hh}:${mm}:${ss}  ·  ${el.name.toLowerCase()}`;
+    g.fillText(line, room.cx, y + fs + 6);
+    // The active element's glyph beside the reading.
+    const half = g.measureText(line).width / 2;
+    glyph(el.key, room.cx + half + fs * 1.1, y + fs + 6 + fs * 0.55, fs * 1.05, el.color, 1.1);
   }
 
   // ---- Frame ------------------------------------------------------------
