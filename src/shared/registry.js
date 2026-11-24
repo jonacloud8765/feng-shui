@@ -371,12 +371,10 @@ const TYPES = {
     size: { width: 1180, height: 760 },
     min: { width: 820, height: 560 },
     max: { width: 3200, height: 2000 },
-    // An empty folder means Documents/SQUEEZE. Results always go to a new
-    // folder inside it, one per batch.
-    config: { outDir: '', mode: 'quick', keepTags: true, keepArt: true, imageQuality: 85, lossyImages: true, video: true, flac: true, aac: false },
+    // Results are saved beside their originals as "name (squeezed).ext".
+    config: { mode: 'quick', keepTags: true, keepArt: true, imageQuality: 85, lossyImages: true, video: true, flac: true, aac: false },
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 16, padding: 0 },
     fields: [
-      { key: 'outDir', label: 'Save results in', type: 'folder', hint: 'Empty means Documents › SQUEEZE. Each batch gets its own new folder; originals are never changed.' },
       { key: 'keepTags', label: 'Keep song details', type: 'toggle', hint: 'Title, artist, album, track and year stay in music files.' },
       { key: 'keepArt', label: 'Keep album artwork', type: 'toggle' },
     ],

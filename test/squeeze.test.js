@@ -209,3 +209,12 @@ test('files are recognised by their contents, not their names', async () => {
   assert.ok((await sniff(put('e.txt', Buffer.alloc(0)))).unsupported);
   fs.rmSync(dir, { recursive: true, force: true });
 });
+
+test('results are named beside their originals and never re-added from a folder', () => {
+  const { SQUEEZED, commonDir } = require('../src/main/squeeze/engine');
+  for (const n of ['photo (squeezed).jpg', 'photo (squeezed) (2).jpg', 'notes (squeezed)']) assert.ok(SQUEEZED.test(n), n);
+  for (const n of ['photo.jpg', 'squeezed.jpg', 'photo (squeezed) copy.jpg']) assert.ok(!SQUEEZED.test(n), n);
+  assert.strictEqual(commonDir(['/a/b/c', '/a/b/d', '/a/b']), '/a/b');
+  assert.strictEqual(commonDir(['/a/b']), '/a/b');
+  assert.strictEqual(commonDir(['/x', '/y']), '/');
+});

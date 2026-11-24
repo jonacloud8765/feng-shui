@@ -133,7 +133,6 @@ const css = `
 .sq-overall .sq-prog { margin: 0; height: 4px; }
 .sq-overall .lbl { font-size: 11px; color: var(--mute); margin-bottom: 5px; display: flex; justify-content: space-between; }
 .sq .sq-out { font-size: 11.5px; color: var(--mute); border: 0; background: transparent; padding: 4px 6px; border-radius: 6px; max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sq .sq-out:hover { color: var(--fg); background: var(--panel); }
 .sq-foot .acts { display: flex; gap: 8px; margin-left: auto; }
 
 /* Sheets */
@@ -201,7 +200,6 @@ export function mount(root, ctx) {
   root.append(el);
 
   let state = { items: [], totals: {}, running: false, paused: false, overall: 0, batch: null, helper: true };
-  let outDir = '';
   let mode = ['quick', 'pure', 'maximum'].includes(ctx.config.mode) ? ctx.config.mode : 'quick';
   let selected = null;
   let sheet = null; // 'max' | 'done' | null
@@ -209,7 +207,6 @@ export function mount(root, ctx) {
   let page = 1;
   let error = '';
   let estimates = null;
-  const home = (outDir.match(/^\/Users\/[^/]+/) || [''])[0];
 
   const api = (op, ...args) => ctx.api.squeeze(op, ...args);
 
@@ -235,7 +232,7 @@ export function mount(root, ctx) {
   const overallLbl = h('div.lbl');
   const overallBar = h('i');
   const overall = h('div.sq-overall', {}, overallLbl, h('div.sq-prog', {}, overallBar));
-  const outBtn = h('button.sq-out', { title: 'Choose where results are saved', onclick: async () => { const r = await api('pick-output'); if (r.ok) { outDir = r.outDir; render(); } } });
+  const outBtn = h('span.sq-out', { title: 'Each result is saved in the same folder as its original, with “(squeezed)” added to the name. Originals are never changed.' }, 'Saved beside the originals as “name (squeezed)”');
   const acts = h('div.acts');
   const foot = h('div.sq-foot', {}, totals, overall, outBtn, acts);
   const veil = h('div.sq-dropveil', {}, h('div', {}, 'Drop to add to SQUEEZE'));
@@ -411,8 +408,8 @@ export function mount(root, ctx) {
       h('div', {}, h('div.n', {}, it.name), h('div.m', {}, [it.formatLabel, human(it.size), ...techProps(it.info, it.kind)].filter(Boolean).join(' · '))),
       h('div.acts', {},
         h('button.sq-btn', { onclick: () => api('reveal', it.id, 'before'), title: 'Show the original in Finder' }, 'Original in Finder'),
-        r ? h('button.sq-btn', { onclick: () => api('reveal', it.id, 'after'), title: 'Show the squeezed file in Finder' }, 'Reveal in Finder') : null,
-        r ? h('button.sq-btn', { onclick: () => api('open', it.id, 'after') }, 'Open') : null)));
+        r && !r.noCopy ? h('button.sq-btn', { onclick: () => api('reveal', it.id, 'after'), title: 'Show the squeezed file in Finder' }, 'Reveal in Finder') : null,
+        r && !r.noCopy ? h('button.sq-btn', { onclick: () => api('open', it.id, 'after') }, 'Open') : null)));
     if (it.status === 'unsupported' || it.status === 'skipped' || it.status === 'failed') {
       parts.push(h('div.sq-sec', {}, kv('Status', it.status === 'failed' ? 'Not processed. The original is untouched and nothing was saved.' : 'Skipped. The original is untouched.', it.status === 'failed' ? 'bad' : 'warn'), kv('Why', it.reason || '')));
     }
@@ -433,7 +430,7 @@ export function mount(root, ctx) {
         h('div.sq-stat', {}, h('div.k', {}, 'Saved'), h('div.v.ok', {}, r.saved > 0 ? human(r.saved) : '0 B')),
         h('div.sq-stat', {}, h('div.k', {}, 'Reduction'), h('div.v.ok', {}, r.saved > 0 ? `${r.percent.toFixed(1)}%` : '0%'))));
       parts.push(h('div.sq-sec', {},
-        kv('Saved as', r.name),
+        kv('Saved as', r.noCopy ? 'No copy made; the original is already as small and clean as it gets' : r.name),
         kv('Metadata removed', chips(r.removed, true)),
         ...(r.remaining?.length || r.after?.length ? [kv('Still present', chips([...(r.remaining || []), ...(r.after || [])]), 'warn')] : []),
         kv('Method', r.method),
@@ -479,7 +476,6 @@ export function mount(root, ctx) {
     overall.style.visibility = state.running || (state.batch && inBatch.length) ? 'visible' : 'hidden';
     overallLbl.replaceChildren(h('span', {}, state.running ? (state.paused ? 'Paused, safe to leave as it is' : 'Squeezing') : state.batch?.finished ? 'Complete' : ''), h('span', {}, `${Math.round((state.overall || 0) * 100)}%`));
     overallBar.style.width = `${Math.round((state.overall || 0) * 100)}%`;
-    outBtn.textContent = `Saving to ${tildify(state.batch?.dir && state.running ? state.batch.dir : outDir, homeDir)}`;
     const btns = [];
     if (state.running) {
       btns.push(h('button.sq-btn', { onclick: () => api(state.paused ? 'resume' : 'pause') }, state.paused ? 'Resume' : 'Pause'));
@@ -552,7 +548,7 @@ export function mount(root, ctx) {
         ...(canceled ? [row('Canceled', `${canceled}`)] : []),
         ...(t.lossy ? [row('Lossy, as approved', `${t.lossy}`, 'warn')] : [])),
       h('div.foot', {},
-        h('button.sq-btn', { onclick: () => api('open-output') }, 'Open Output Folder'),
+        h('button.sq-btn', { onclick: () => api('open-output'), title: state.batch?.dir ? tildify(state.batch.dir, homeDir) : '' }, 'Open Output Folder'),
         h('button.sq-btn', { onclick: () => api('reveal', 'batch') }, 'Reveal in Finder'),
         h('button.sq-btn', { onclick: () => { sheet = null; const first = state.items.find((i) => i.status === 'done'); if (first) { selected = first.id; page = 1; } render(); } }, 'Preview Files'),
         h('button.sq-btn.primary', { onclick: () => { sheet = null; selected = null; api('clear'); } }, 'PROCESS ANOTHER BATCH')));
@@ -560,7 +556,7 @@ export function mount(root, ctx) {
   }
 
   // ---- Data ----
-  let homeDir = home;
+  let homeDir = '';
   function apply(s) {
     const wasRunning = state.running;
     state = s;
@@ -570,7 +566,7 @@ export function mount(root, ctx) {
   }
   async function refresh() {
     const r = await api('state');
-    if (r.ok) { outDir = r.outDir; homeDir = (r.outDir.match(/^\/Users\/[^/]+/) || [''])[0]; apply(r.state); }
+    if (r.ok) { homeDir = ((r.state.items[0]?.path || '').match(/^\/Users\/[^/]+/) || [''])[0]; apply(r.state); }
   }
   const off = ctx.api.onSqueeze((s) => apply(s));
 
@@ -611,8 +607,7 @@ export function mount(root, ctx) {
   const menu = () => [
     { label: 'Add Files…', action: 'add' },
     { label: 'Add Folder…', action: 'add-folder' },
-    { label: 'Open Output Folder', action: 'output' },
-    { label: 'Change Output Folder…', action: 'pick-output' },
+    ...(state.batch?.dir ? [{ label: 'Open Output Folder', action: 'output' }] : []),
     { type: 'separator' },
     { label: 'Clear the List', action: 'clear' },
   ];
@@ -623,7 +618,6 @@ export function mount(root, ctx) {
       if (a === 'add') pick('files');
       if (a === 'add-folder') pick('folder');
       if (a === 'output') api('open-output');
-      if (a === 'pick-output') { const r = await api('pick-output'); if (r.ok) { outDir = r.outDir; render(); } }
       if (a === 'clear') api('clear');
     },
     update() { render(); },

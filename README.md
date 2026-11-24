@@ -53,8 +53,8 @@ awake and open settings.
   photos, PDFs, video and audio, all on this Mac. Drop files or folders in,
   pick Quick Squeeze (lossless, the default), Pure Clean (metadata only) or
   Maximum Squeeze (smaller, with any quality loss shown and approved first).
-  Originals are never touched: results go to `~/Documents/SQUEEZE`, and every
-  result is checked against its original before it is kept.
+  Originals are never touched: each result is saved beside its original as
+  `name (squeezed).ext`, and is checked against the original before it is kept.
 
 - **A living yin yang.** The Feng Shui layout now has a flat, generative yin
   yang at its centre on warm paper: two halves that keep changing shape and

@@ -6,16 +6,19 @@
 // Safety rules, in the order they are applied to every file:
 //   1. The original is only ever opened for reading. Its size and change
 //      time are noted before and checked again after.
-//   2. All work happens in temporary files inside the batch's own output
-//      folder (".squeeze-work"), on the same disk as the final file.
+//   2. All work happens in temporary files in a private work folder. The
+//      result is saved next to its original under a new name
+//      ("photo (squeezed).jpg"); the original keeps its name and contents.
 //   3. Every result is opened again and checked: the right kind of file, the
 //      same dimensions, pages, duration and tracks, and for lossless results
 //      the same pixels, page renderings, text or audio/video samples.
 //   4. A result that fails a check is deleted and the next safer option is
 //      tried; if none passes, the file is skipped with the reason.
 //   5. The finished file is moved into place with a hard link, which fails
-//      rather than replace anything already there; then the temporary file
-//      is removed. Nothing is ever overwritten, and originals are never
+//      rather than replace anything already there (across disks it is first
+//      copied to a hidden temporary name beside it); then the temporary file
+//      is removed. A file that cannot get any smaller or cleaner gets no
+//      copy at all. Nothing is ever overwritten, and originals are never
 //      moved, changed or deleted.
 
 const { EventEmitter } = require('events');
@@ -113,6 +116,22 @@ async function sniff(file) {
 
 // ---- Engine -----------------------------------------------------------------
 
+// "photo (squeezed).jpg", "photo (squeezed) (2).jpg": SQUEEZE's own results.
+const SQUEEZED = / \(squeezed\)( \(\d+\))?(\.[^.]*)?$/;
+
+// The deepest folder that contains every one of the given folders.
+function commonDir(dirs) {
+  if (!dirs.length) return os.homedir();
+  let parts = dirs[0].split(path.sep);
+  for (const d of dirs.slice(1)) {
+    const q = d.split(path.sep);
+    let i = 0;
+    while (i < parts.length && i < q.length && parts[i] === q[i]) i++;
+    parts = parts.slice(0, i);
+  }
+  return parts.join(path.sep) || path.sep;
+}
+
 const human = (n) => {
   if (n < 1024) return `${n} B`;
   const u = ['KB', 'MB', 'GB', 'TB'];
@@ -179,14 +198,13 @@ class Engine extends EventEmitter {
   }
 
   // ---- Adding files ----
-  async add(paths, { outDir } = {}) {
+  async add(paths) {
     const found = [];
-    const out = outDir ? path.resolve(outDir) : null;
     const walk = async (p, base, depth) => {
       let st;
       try { st = await fsp.lstat(p); } catch { return; }
       if (st.isSymbolicLink()) return;
-      if (out && (p === out || p.startsWith(out + path.sep))) return; // never squeeze SQUEEZE's own output
+      if (depth > 0 && SQUEEZED.test(path.basename(p))) return; // earlier results inside an added folder
       if (st.isDirectory()) {
         if (depth > 12 || /\.(app|bundle|photoslibrary|framework|pkg|lproj|xcassets)$/i.test(p)) return;
         let names = [];
@@ -347,19 +365,16 @@ class Engine extends EventEmitter {
   }
 
   // ---- Running a batch ----
-  async start({ mode = 'quick', options = {}, outDir }) {
+  async start({ mode = 'quick', options = {} }) {
     if (this.running) return { ok: false, error: 'Already squeezing.' };
     if (!this.helperAvailable) return { ok: false, error: 'The SQUEEZE helper is missing from this build.' };
     const todo = this.items.filter((i) => i.status === 'ready');
     if (!todo.length) return { ok: false, error: 'There is nothing ready to squeeze.' };
     if (mode === 'maximum' && !options.approved) return { ok: false, error: 'Maximum Squeeze needs your approval of the quality trade-offs first.' };
-    const stamp = new Date();
-    const name = `SQUEEZE ${stamp.getFullYear()}-${String(stamp.getMonth() + 1).padStart(2, '0')}-${String(stamp.getDate()).padStart(2, '0')} at ${String(stamp.getHours()).padStart(2, '0')}.${String(stamp.getMinutes()).padStart(2, '0')}.${String(stamp.getSeconds()).padStart(2, '0')}`;
-    const root = path.resolve(outDir || path.join(os.homedir(), 'Documents', 'SQUEEZE'));
-    const dir = path.join(root, name);
-    await fsp.mkdir(dir, { recursive: true });
-    const workDir = path.join(dir, '.squeeze-work');
-    await fsp.mkdir(workDir, { recursive: true });
+    // Results go beside their originals; "the output folder" is the folder
+    // all of this batch's originals share.
+    const dir = commonDir(todo.map((i) => path.dirname(i.path)));
+    const workDir = await fsp.mkdtemp(path.join(os.tmpdir(), 'squeeze-work-'));
     this.batch = { dir, workDir, mode, options, started: Date.now(), finished: null };
     this.running = true;
     this.canceled = false;
@@ -422,12 +437,11 @@ class Engine extends EventEmitter {
     const after = await fsp.stat(it.path);
     if (after.size !== before.size || after.mtimeMs !== before.mtimeMs) throw new Error('The original changed while it was being read (another app is writing to it), so the result was thrown away.');
     this.step(it, 'Saving', 0.98);
-    const finalRel = plan.ext && plan.ext !== ext ? it.rel.slice(0, it.rel.length - ext.length) + plan.ext : it.rel;
-    const dest = await this.place(plan.file, path.join(this.batch.dir, finalRel));
+    const dest = plan.file ? await this.place(plan.file, path.join(path.dirname(it.path), `${path.basename(it.name, ext)} (squeezed)${plan.ext || ext}`)) : it.path;
     it.result = {
       size: plan.size, path: dest, name: path.basename(dest), saved: it.size - plan.size, percent: it.size ? (1 - plan.size / it.size) * 100 : 0,
       removed: [...new Set(plan.removed)].map((k) => LABELS[k] || k), remaining: plan.remaining || [], method: plan.method, quality: plan.quality, lossy: !!plan.lossy,
-      verified: true, checks: plan.checks, notes: [...new Set(plan.notes || [])], unchanged: !!plan.unchanged, after: plan.after || null,
+      verified: true, checks: plan.checks, notes: [...new Set(plan.notes || [])], unchanged: !!plan.unchanged, noCopy: !plan.file, after: plan.after || null,
     };
     it.status = 'done';
     it.progress = 1;
@@ -447,8 +461,20 @@ class Engine extends EventEmitter {
       } catch (err) {
         if (err.code === 'EEXIST') continue;
         if (err.code === 'EXDEV' || err.code === 'EPERM' || err.code === 'ENOTSUP') {
-          await fsp.copyFile(file, target, fs.constants.COPYFILE_EXCL);
-          return target;
+          // Another disk: copy to a hidden name beside the target, check it,
+          // then link it into place so a half-written file never shows.
+          const hidden = path.join(path.dirname(dest), `.${path.basename(dest)}.squeeze-${crypto.randomUUID()}`);
+          try {
+            await fsp.copyFile(file, hidden, fs.constants.COPYFILE_EXCL);
+            if ((await hashFile(hidden)) !== (await hashFile(file))) throw new Error('The result was damaged while it was being saved, so it was thrown away.');
+            for (let m = n; m < 1000; m++) {
+              const t = m === 1 ? dest : `${stem} (${m})${ext}`;
+              try { await fsp.link(hidden, t); await fsp.rm(file, { force: true }); return t; } catch (e) { if (e.code !== 'EEXIST') throw e; }
+            }
+            throw new Error('Could not find a free name for the result.');
+          } finally {
+            await fsp.rm(hidden, { force: true }).catch(() => {});
+          }
         }
         throw err;
       }
@@ -503,14 +529,11 @@ class Engine extends EventEmitter {
     return best;
   }
 
+  // Nothing to gain: no second, identical file is made next to the original.
   async copyPlan(it, ext, notes = []) {
-    const file = this.temp(it, ext);
-    await fsp.copyFile(it.path, file, fs.constants.COPYFILE_EXCL);
-    const [a, b] = await Promise.all([hashFile(it.path), hashFile(file)]);
-    if (a !== b) throw new Error('The copy did not match the original.');
     return {
-      file, size: it.size, removed: [], method: 'Already as small as it safely gets: copied unchanged', quality: 'Identical (exact copy)', unchanged: true,
-      checks: ['Copy matches the original byte for byte'], notes,
+      file: null, size: it.size, removed: [], method: 'Already as small and clean as it safely gets, so no copy was made', quality: 'Identical (the original, untouched)', unchanged: true,
+      checks: ['Original left exactly as it was'], notes,
     };
   }
 
@@ -790,4 +813,4 @@ function hashFile(file) {
   });
 }
 
-module.exports = { Engine, sniff, human, FORMATS, LABELS, HELPER };
+module.exports = { SQUEEZED, commonDir, Engine, sniff, human, FORMATS, LABELS, HELPER };
