@@ -55,6 +55,12 @@ class WidgetWindows {
   constructor(store, { onContextMenu } = {}) {
     this.store = store;
     this.windows = new Map(); // widget id -> BrowserWindow
+    // Music that keeps playing on other layouts: a Music Player that's playing
+    // when its layout goes away is hidden instead of closed (parked), and only
+    // closed once it's paused or stops. It comes back when its layout does.
+    this.playing = new Map(); // widget id -> what's playing
+    this.parked = new Map(); // widget id -> hidden BrowserWindow
+    this.onPlaying = null;
     this.arranging = false;
     this.onContextMenu = onContextMenu;
     this.gesture = null;
@@ -92,8 +98,12 @@ class WidgetWindows {
     this.sendRoom();
     const wanted = new Map(this.store.widgets.filter((w) => w.visible).map((w) => [w.id, w]));
     for (const [id, win] of this.windows) {
-      if (!wanted.has(id) || !settings.widgetsVisible) this.close(id, fade);
+      if (wanted.has(id) && settings.widgetsVisible) continue;
+      if (this.playing.has(id) && this.store.doc.layouts.some((l) => l.widgets.some((w) => w.id === id))) this.park(id, win);
+      else this.close(id, fade);
     }
+    // A parked player whose widget was deleted goes for good.
+    for (const id of this.parked.keys()) if (!this.store.doc.layouts.some((l) => l.widgets.some((w) => w.id === id))) this.unpark(id, true);
     if (!settings.widgetsVisible) return;
     for (const w of wanted.values()) {
       const win = this.windows.get(w.id);
@@ -102,7 +112,54 @@ class WidgetWindows {
     }
   }
 
+  park(id, win) {
+    this.windows.delete(id);
+    if (win.isDestroyed()) return;
+    win.webContents.setBackgroundThrottling(false);
+    win.hide();
+    this.parked.set(id, win);
+  }
+
+  // Back from parking: shown again (back), or closed (gone).
+  unpark(id, gone) {
+    const win = this.parked.get(id);
+    this.parked.delete(id);
+    if (!win || win.isDestroyed()) return null;
+    if (gone) { win.destroy(); return null; }
+    win.webContents.setBackgroundThrottling(true);
+    this.windows.set(id, win);
+    win.showInactive();
+    return win;
+  }
+
+  // A Music Player says whether it's playing (or loading the next track).
+  setPlaying(id, on, title) {
+    clearTimeout(this.stopTimers?.get(id));
+    if (on) this.playing.set(id, title || '');
+    else {
+      this.playing.delete(id);
+      // Paused or stopped while parked: close it, after a moment in case the next track is starting.
+      if (this.parked.has(id)) {
+        this.stopTimers = this.stopTimers || new Map();
+        this.stopTimers.set(id, setTimeout(() => { if (!this.playing.has(id)) this.unpark(id, true); }, 1500));
+      }
+    }
+    this.onPlaying?.();
+  }
+
+  // Pause every player (from the menu bar).
+  pauseMusic() {
+    for (const id of this.playing.keys()) {
+      const win = this.windows.get(id) || this.parked.get(id);
+      if (win && !win.isDestroyed()) win.webContents.send('fengshui:records-cmd', 'pause');
+    }
+  }
+
   open(widget, fade) {
+    if (this.parked.has(widget.id)) {
+      const back = this.unpark(widget.id);
+      if (back) { this.apply(widget, back); return; }
+    }
     const bounds = this.onScreen(widget.bounds);
     const mode = this.mode;
     const material = materialOf(widget);
@@ -151,6 +208,8 @@ class WidgetWindows {
     });
     win.on('closed', () => {
       if (this.windows.get(widget.id) === win) this.windows.delete(widget.id);
+      if (this.parked.get(widget.id) === win) this.parked.delete(widget.id);
+      if (this.playing.delete(widget.id)) this.onPlaying?.();
     });
     this.windows.set(widget.id, win);
   }

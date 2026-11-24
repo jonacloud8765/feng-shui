@@ -378,10 +378,18 @@ function awakeMenu() {
   ];
 }
 
+// While music plays (here or on another layout), the menu bar can pause it.
+function musicMenu() {
+  if (!windows?.playing.size) return [];
+  const title = [...windows.playing.values()].find(Boolean);
+  return [{ label: title ? `Pause “${title.length > 40 ? title.slice(0, 39) + '…' : title}”` : 'Pause Music', click: () => windows.pauseMusic() }, { type: 'separator' }];
+}
+
 function rebuildTray() {
   if (!tray) return;
   const s = store.doc.settings;
   const menu = Menu.buildFromTemplate([
+    ...musicMenu(),
     { label: s.widgetsVisible ? 'Hide Widgets' : 'Show Widgets', accelerator: 'Alt+Command+W', click: toggleWidgets },
     desktopToggle(),
     { label: 'Show in Dock', type: 'checkbox', checked: !!s.showDock, click: () => store.updateSettings({ showDock: !s.showDock }) },
@@ -609,6 +617,10 @@ function registerIpc() {
     const inputs = [w.config.crate1, w.config.crate2, w.config.crate3];
     return { ok: true, data: await soundcloud().crates(inputs, { force: !!force }) };
   });
+  ipcMain.on('fengshui:records-playing', (e, on, title) => {
+    const id = senderWidgetId(e);
+    if (id) windows.setPlaying(id, !!on, String(title || '').slice(0, 120));
+  });
   ipcMain.on('fengshui:records-open', (e, url) => {
     if (/^https:\/\/soundcloud\.com\/[^\s]*$/.test(String(url))) shell.openExternal(url);
   });
@@ -778,6 +790,7 @@ app.whenReady().then(() => {
   pages = require('./pages').createPages(app.getPath('userData'));
   movies = require('./movies').createMovies(app.getPath('userData'), { openExternal: (u) => shell.openExternal(u) });
   windows = new WidgetWindows(store);
+  windows.onPlaying = () => rebuildTray();
   registerIpc();
   appMenu();
 

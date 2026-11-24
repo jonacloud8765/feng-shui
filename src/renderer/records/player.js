@@ -581,6 +581,9 @@ function paint() {
   paintTime(true);
   paintListNow();
   media();
+  // Tell the app, so it keeps playing when you switch layouts (until you pause).
+  const on = !!tr && (np.playing || np.loading);
+  if (paint.on !== on || (on && paint.id !== tr.id)) { paint.on = on; paint.id = tr?.id; send({ type: 'playing', on, title: tr ? tr.title : '' }); }
 }
 function paintTime(force) {
   if (seeking && !force) return;
@@ -613,7 +616,9 @@ function media() {
     ms.playbackState = np.playing ? 'playing' : 'paused';
     if (!media.bound) {
       media.bound = true;
-      ms.setActionHandler('play', () => { if (!np.playing) toggle(); });
+      // Only resumes what was started in this session: macOS may send Play to a new
+      // session at launch, and that shouldn't start music on its own.
+      ms.setActionHandler('play', () => { if (!np.playing && sc) toggle(); });
       ms.setActionHandler('pause', () => { if (np.playing) toggle(); });
       ms.setActionHandler('nexttrack', () => next());
       ms.setActionHandler('previoustrack', () => prev());
@@ -816,6 +821,8 @@ addEventListener('message', (e) => {
     if (sig !== rebuild.sig) { rebuild.sig = sig; rebuild(); }
     if (errs.length) toast(`Couldn’t load ${errs.length === 1 ? 'one of the artists' : `${errs.length} of the artists`}: check the links in settings.`);
     $('#veil').classList.add('gone');
+  } else if (m.type === 'cmd') {
+    if (m.cmd === 'pause' && np.playing) toggle();
   } else if (m.type === 'loading') {
     $('#veil').textContent = 'Loading your music…';
   }

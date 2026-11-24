@@ -46,12 +46,17 @@ export function mount(root, ctx) {
       ready = true;
       post({ type: 'settings', ...settings() });
       if (crates) post({ type: 'crates', crates }); else load(false);
+    } else if (m.type === 'playing') {
+      ctx.api.recordsPlaying(!!m.on, m.title || '');
     } else if (m.type === 'settings') {
       ctx.api.openSettings(ctx.widget.id);
     } else if (m.type === 'open' && typeof m.url === 'string') {
       ctx.api.recordsOpen(m.url);
     }
   });
+
+  // The menu bar's Pause (this player may be playing on another layout, hidden).
+  ctx.api.onRecordsCmd?.((cmd) => post({ type: 'cmd', cmd }));
 
   return {
     update() {
