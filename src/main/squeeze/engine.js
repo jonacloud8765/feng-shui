@@ -497,6 +497,17 @@ class Engine extends EventEmitter {
       if (it.format === 'mp4' || it.format === 'mov' || it.format === 'm4v' || it.format === 'm4a') return this.remux(it, ext, o);
       return this.audioClean(it, ext, o);
     };
+    // HEIC photos become JPG when that setting is on (it is by default).
+    if (it.format === 'heif' && o.convertHeic) {
+      try {
+        return await this.heicToJpeg(it, mode === 'maximum' && o.approved && o.lossyImages ? (o.imageQuality || 0.85) : 0.92);
+      } catch (err) {
+        if (this.canceled) throw err;
+        best = await tryLossless();
+        best.notes.push(`It stayed a HEIC: ${err.message}.`);
+        return best;
+      }
+    }
     best = await tryLossless();
     // Maximum Squeeze: an approved lossy (or format-changing) step, kept only
     // when it is clearly smaller and passes its checks.
@@ -613,6 +624,48 @@ class Engine extends EventEmitter {
       file, size: c.size, removed: [...(it.found || []), ...(c.removed || [])], lossy: true, checks, notes: c.notes || [], after: this.afterMeta(it),
       method: `Re-encoded as ${FORMATS[it.format].label} at quality ${Math.round(quality * 100)} (you approved this)`,
       quality: `Lossy · high quality, not identical (PSNR ${cmp.psnr} dB)`,
+    };
+  }
+
+  // HEIC → JPG: a new JPEG at high quality, without personal metadata. Size,
+  // orientation, colour profile and the HDR gain map are kept and checked.
+  async heicToJpeg(it, quality) {
+    const aux = it.info?.auxiliary || [];
+    if ((it.info?.frames || 1) > 1) throw new Error('it holds more than one picture, and a JPG can hold only one');
+    this.step(it, `Converting to JPG at quality ${Math.round(quality * 100)}`, 0.4);
+    const raw = this.temp(it, '.jpg');
+    const r = await this.helper(['image-encode', it.path, raw, '--type', 'public.jpeg', '--quality', String(quality)]);
+    if (!r.ok) throw new Error(r.error);
+    this.step(it, 'Removing metadata', 0.6);
+    const file = this.temp(it, '.jpg');
+    const c = await this.work({ op: 'clean', format: 'jpeg', input: raw, output: file, opts: {} });
+    if (!c.ok) throw new Error(c.error);
+    this.step(it, 'Verifying', 0.8);
+    const cmp = await this.helper(['image-compare', it.path, file]);
+    if (!cmp.ok) throw new Error(cmp.error);
+    if (!cmp.opens) throw new Error(cmp.reason || 'the JPG does not open');
+    if (cmp.reason) throw new Error(cmp.reason.replace(/\.$/, ''));
+    if (cmp.psnr < 38) throw new Error(`the JPG would look visibly different (PSNR ${cmp.psnr} dB)`);
+    const info = await this.helper(['image-info', file]);
+    if (!info.ok) throw new Error('the JPG does not open as an image');
+    if (info.type && info.type !== 'public.jpeg') throw new Error('the result is not a JPEG');
+    const want = it.info || {};
+    if (want.orientation && info.orientation !== want.orientation) throw new Error('the orientation would change');
+    if ((want.profile || '') !== (info.profile || '')) throw new Error('the colour profile would change');
+    it.afterInfo = info;
+    const gain = (l) => (l || []).some((a) => a === 'gainmap' || a === 'isogainmap');
+    const notes = [];
+    if (gain(aux) && !gain(info.auxiliary)) notes.push('The HDR brightness boost (gain map) could not be carried into the JPG, so it shows as a normal photo on HDR screens.');
+    const dropped = aux.filter((a) => a === 'depth' || a === 'disparity' || a === 'matte');
+    if (dropped.length) notes.push('Portrait depth and matte data cannot go into a JPG, so the portrait effect can no longer be edited.');
+    const size = c.size;
+    if (size > it.size) notes.push(`JPG is a less efficient format than HEIC, so this file is ${human(size - it.size)} larger. You asked for HEIC photos to be converted; you can turn this off in the widget’s settings.`);
+    const checks = ['Opens as a JPEG', `Same size: ${cmp.width} × ${cmp.height}`, 'Orientation and colour profile kept', `Visual difference measured: PSNR ${cmp.psnr} dB`];
+    if (gain(info.auxiliary)) checks.push('Kept: HDR gain map');
+    return {
+      file, size, ext: '.jpg', converted: true, lossy: true, removed: [...(it.found || []), ...(c.removed || [])], checks, notes: [...notes, ...(c.notes || [])], after: this.afterMeta(it),
+      method: `Converted from HEIC to JPG at quality ${Math.round(quality * 100)}; personal metadata left out`,
+      quality: `Re-encoded · high quality, not identical (PSNR ${cmp.psnr} dB)`,
     };
   }
 

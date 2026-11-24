@@ -685,7 +685,7 @@ function registerIpc() {
           const options = {
             approved: !!o.approved, lossyImages: !!o.lossyImages, video: !!o.video, flac: !!o.flac, aac: !!o.aac,
             imageQuality: Math.min(0.95, Math.max(0.6, Number(o.imageQuality) || 0.85)),
-            keepTags: w.config.keepTags !== false, keepArt: w.config.keepArt !== false,
+            keepTags: w.config.keepTags !== false, keepArt: w.config.keepArt !== false, convertHeic: w.config.convertHeic !== false,
           };
           return await eng.start({ mode: ['quick', 'pure', 'maximum'].includes(args[0]) ? args[0] : 'quick', options });
         }
@@ -868,7 +868,7 @@ app.whenReady().then(() => {
           if (store.widget(win.widgetId)?.type === 'squeeze') win.webContents.executeJavaScript(`[...document.querySelectorAll('.sq-sheet button')].find((b) => /Preview/.test(b.textContent))?.click(); setTimeout(() => document.querySelectorAll('.sq-row')[${Number(process.env.FENGSHUI_SQUEEZE_PICK) || 0}]?.click(), 300);`);
         }
       }, 600));
-      if (process.env.FENGSHUI_SQUEEZE_RUN) setTimeout(() => squeeze().start({ mode: process.env.FENGSHUI_SQUEEZE_RUN, options: {} }), 1500);
+      if (process.env.FENGSHUI_SQUEEZE_RUN) setTimeout(() => squeeze().start({ mode: process.env.FENGSHUI_SQUEEZE_RUN, options: { convertHeic: w?.config.convertHeic !== false } }), 1500);
     }, 800);
   }
 

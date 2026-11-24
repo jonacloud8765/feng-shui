@@ -55,6 +55,7 @@ awake and open settings.
   Maximum Squeeze (smaller, with any quality loss shown and approved first).
   Originals are never touched: each result is saved beside its original as
   `name (squeezed).ext`, and is checked against the original before it is kept.
+  HEIC photos are converted to high-quality JPGs (a setting turns this off).
 
 - **A living yin yang.** The Feng Shui layout now has a flat, generative yin
   yang at its centre on warm paper: two halves that keep changing shape and

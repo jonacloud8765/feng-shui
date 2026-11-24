@@ -175,7 +175,7 @@ const ICON = {
 const GLYPH = `<svg viewBox="0 0 54 54" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="36" height="36" rx="9" opacity=".45"/><path d="M27 4v14M21.5 12.5L27 18l5.5-5.5M27 50V36M21.5 41.5L27 36l5.5 5.5"/><path d="M15 27h24" opacity=".7"/></svg>`;
 
 const MODES = {
-  quick: { label: 'QUICK SQUEEZE', desc: '<b>Default.</b> Safe, lossless optimisation and metadata removal. Nothing you can see or hear changes.' },
+  quick: { label: 'QUICK SQUEEZE', desc: '<b>Default.</b> Safe, lossless optimisation and metadata removal. Nothing you can see or hear changes, except that HEIC photos become high-quality JPGs.' },
   pure: { label: 'PURE CLEAN', desc: '<b>Metadata only.</b> Personal data is removed; the encoded picture and sound are kept exactly as they are.' },
   maximum: { label: 'MAXIMUM SQUEEZE', desc: '<b>Stronger.</b> May trade a little quality for size, using settings you approve. You see exactly what first.' },
 };
@@ -232,7 +232,7 @@ export function mount(root, ctx) {
   const overallLbl = h('div.lbl');
   const overallBar = h('i');
   const overall = h('div.sq-overall', {}, overallLbl, h('div.sq-prog', {}, overallBar));
-  const outBtn = h('span.sq-out', { title: 'Each result is saved in the same folder as its original, with “(squeezed)” added to the name. Originals are never changed.' }, 'Saved beside the originals as “name (squeezed)”');
+  const outBtn = h('span.sq-out', { title: 'Each result is saved in the same folder as its original, with “(squeezed)” added to the name. Originals are never changed.' }, 'Saved next to the originals');
   const acts = h('div.acts');
   const foot = h('div.sq-foot', {}, totals, overall, outBtn, acts);
   const veil = h('div.sq-dropveil', {}, h('div', {}, 'Drop to add to SQUEEZE'));
@@ -337,7 +337,7 @@ export function mount(root, ctx) {
       row._prog.firstChild.style.width = `${Math.round((it.progress || 0) * 100)}%`;
       row._x.style.display = it.status === 'working' || state.running ? 'none' : '';
       row._side.replaceChildren(...(it.status === 'done'
-        ? [h('div.pct', {}, it.result.saved > 0 ? `−${it.result.percent.toFixed(1)}%` : '0%'), h('div.sub', {}, it.result.saved > 0 ? `${human(it.result.saved)} saved` : 'unchanged')]
+        ? [h('div.pct', {}, it.result.saved > 0 ? `−${it.result.percent.toFixed(1)}%` : it.result.saved < 0 ? `+${(-it.result.percent).toFixed(1)}%` : '0%'), h('div.sub', {}, it.result.saved > 0 ? `${human(it.result.saved)} saved` : it.result.saved < 0 ? `${human(-it.result.saved)} larger` : 'unchanged')]
         : it.status === 'working' ? [h('div.sub', {}, `${Math.round(it.progress * 100)}%`)] : []));
       return row;
     });
@@ -427,8 +427,12 @@ export function mount(root, ctx) {
       parts.push(h('div.sq-stats', {},
         h('div.sq-stat', {}, h('div.k', {}, 'Original'), h('div.v', {}, human(it.size))),
         h('div.sq-stat', {}, h('div.k', {}, 'Optimised'), h('div.v', {}, human(r.size))),
-        h('div.sq-stat', {}, h('div.k', {}, 'Saved'), h('div.v.ok', {}, r.saved > 0 ? human(r.saved) : '0 B')),
-        h('div.sq-stat', {}, h('div.k', {}, 'Reduction'), h('div.v.ok', {}, r.saved > 0 ? `${r.percent.toFixed(1)}%` : '0%'))));
+        r.saved < 0
+          ? h('div.sq-stat', {}, h('div.k', {}, 'Larger by'), h('div.v', {}, human(-r.saved)))
+          : h('div.sq-stat', {}, h('div.k', {}, 'Saved'), h('div.v.ok', {}, r.saved > 0 ? human(r.saved) : '0 B')),
+        r.saved < 0
+          ? h('div.sq-stat', {}, h('div.k', {}, 'Change'), h('div.v', {}, `+${(-r.percent).toFixed(1)}%`))
+          : h('div.sq-stat', {}, h('div.k', {}, 'Reduction'), h('div.v.ok', {}, r.saved > 0 ? `${r.percent.toFixed(1)}%` : '0%'))));
       parts.push(h('div.sq-sec', {},
         kv('Saved as', r.noCopy ? 'No copy made; the original is already as small and clean as it gets' : r.name),
         kv('Metadata removed', chips(r.removed, true)),
@@ -453,6 +457,7 @@ export function mount(root, ctx) {
       if (f === 'png') return m === 'pure' ? 'Remove metadata chunks; the image data stays byte for byte.' : `Remove metadata and recompress losslessly${m === 'maximum' ? ' (thorough)' : ''}. Every pixel is checked.`;
       if (f === 'tiff') return 'Rewrite with lossless LZW compression, without personal metadata. Every pixel is checked.';
       if (f === 'svg') return 'Remove comments, metadata and editor data. Both versions are drawn and compared.';
+      if (f === 'heif' && ctx.config.convertHeic !== false) return `Convert to JPG at quality ${m === 'maximum' ? 'you approve' : '92'}, without personal metadata. Size, orientation and colour profile are checked; JPG is re-encoded and usually larger than HEIC.`;
       if ((f === 'jpeg' || f === 'heif') && m === 'maximum') return 'Remove metadata losslessly; then, if you approve, try re-encoding at high quality and keep it only if clearly smaller.';
       return 'Remove metadata without decoding the picture. Orientation, colour profile and HDR data are kept; every pixel is checked.';
     }
@@ -472,7 +477,9 @@ export function mount(root, ctx) {
       h('span', {}, 'Failed', h('b', {}, `${t.failed || 0}`)),
       h('span', {}, 'Original', h('b', {}, human(t.original || 0))),
       h('span', {}, 'Result', h('b', {}, human(t.result || 0))),
-      h('span', {}, 'Saved', h('b.ok', {}, `${human(Math.max(0, (t.original || 0) - (t.result || 0)))}${t.original ? ` · ${pct(t.original, t.result)}` : ''}`)));
+      (t.result || 0) > (t.original || 0)
+        ? h('span', {}, 'Grew', h('b', {}, `${human(t.result - t.original)} · +${((t.result / t.original - 1) * 100).toFixed(1)}%`))
+        : h('span', {}, 'Saved', h('b.ok', {}, `${human(Math.max(0, (t.original || 0) - (t.result || 0)))}${t.original ? ` · ${pct(t.original, t.result)}` : ''}`)));
     overall.style.visibility = state.running || (state.batch && inBatch.length) ? 'visible' : 'hidden';
     overallLbl.replaceChildren(h('span', {}, state.running ? (state.paused ? 'Paused, safe to leave as it is' : 'Squeezing') : state.batch?.finished ? 'Complete' : ''), h('span', {}, `${Math.round((state.overall || 0) * 100)}%`));
     overallBar.style.width = `${Math.round((state.overall || 0) * 100)}%`;
@@ -538,8 +545,9 @@ export function mount(root, ctx) {
       h('div.grid', {},
         row('Original size', human(t.original)),
         row('Optimised size', human(t.result)),
-        row('Space saved', human(Math.max(0, t.original - t.result)), 'ok'),
-        row('Reduction', t.original ? pct(t.original, t.result) : '0%', 'ok'),
+        ...(t.result > t.original
+          ? [row('Grew by', `${human(t.result - t.original)} (+${((t.result / t.original - 1) * 100).toFixed(1)}%)`)]
+          : [row('Space saved', human(Math.max(0, t.original - t.result)), 'ok'), row('Reduction', t.original ? pct(t.original, t.result) : '0%', 'ok')]),
         row('Metadata', t.cleaned ? `Cleaned (${t.cleaned} file${t.cleaned === 1 ? '' : 's'})` : 'None found', t.cleaned ? 'ok' : ''),
         row('Integrity', t.done ? 'Verified' : '—', t.done ? 'ok' : ''),
         row('Succeeded', `${t.done}`),
