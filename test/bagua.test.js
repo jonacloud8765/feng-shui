@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert');
-const { arrange, classify, skinFor, isFengShuiLayout } = require('../src/main/bagua');
+const { arrange, classify, skinFor, isFengShuiLayout, openCentre } = require('../src/main/bagua');
 const { TYPES } = require('../src/shared/registry');
 
 const work = { x: 0, y: 25, width: 1440, height: 875 };
@@ -55,4 +55,25 @@ test('only the Feng Shui layout is skinned', () => {
 test('a lone Fire-heavy desk still keeps Fire in check', () => {
   const { report } = arrange([w('films'), w('watched'), w('doughcon'), w('nuke'), w('worldclock')], work);
   assert.ok(Object.values(report.cells).includes('career'), 'a Fire widget is restrained in Career');
+});
+
+test('the middle column leaves the centre open for the yin yang', () => {
+  const { placed, report } = arrange(desk, work);
+  const cx = work.x + work.width / 2, cy = work.y + 32 + 40 + (work.height - 32 * 2 - 40) / 2;
+  for (const [id, r] of Object.entries(placed)) {
+    if (!['fame', 'center', 'career'].includes(report.cells[id])) continue;
+    assert.ok(r.y + r.height <= cy - 80 || r.y >= cy + 80, 'middle widgets rest against the top or the bottom');
+  }
+  const c = openCentre(Object.values(placed), work);
+  assert.ok(c.r >= 64, 'the yin yang has room');
+  for (const r of Object.values(placed)) {
+    const nx = Math.max(r.x, Math.min(c.cx, r.x + r.width)), ny = Math.max(r.y, Math.min(c.cy, r.y + r.height));
+    assert.ok(Math.hypot(nx - c.cx, ny - c.cy) >= c.r * 1.13, 'no widget covers the disc or its tick ring');
+  }
+});
+
+test('an empty room gives the yin yang the middle of the screen', () => {
+  const c = openCentre([], work);
+  assert.ok(Math.abs(c.cx - 720) < 2);
+  assert.ok(c.r > 120);
 });

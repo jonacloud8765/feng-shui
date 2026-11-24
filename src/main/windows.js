@@ -39,13 +39,14 @@ function paperNote(widget) {
   if (widget.type === 'image' && widget.config.frame && widget.config.frame !== 'glass') return true;
   return widget.type === 'note' && (widget.config.paper || 'butter') !== 'glass';
 }
-// The Feng Shui layout puts every glass widget on one shared liquid glass:
-// the same material, tint, radius and light, with only a small element accent
+// The Feng Shui layout puts every glass widget on one shared light glass,
+// warm off-white with charcoal type over the living yin yang wallpaper: the
+// same material, tint, radius and light, with only a small element accent
 // telling them apart. Widgets that draw themselves (paper, cork, tickets) keep
 // their own look. Every other layout is untouched.
 let skinned = false;
-const HARMONY = { material: 'hud', tint: '#10161d', tintOpacity: 0.26, text: '#f6f1e7', highlight: 1, radius: 26, padding: 18, shadow: true, weight: 300 };
-const ELEMENT_ACCENT = { wood: '#a8d8b9', fire: '#f3b09c', earth: '#e6cd96', metal: '#dfe3ea', water: '#a9c9ec' };
+const HARMONY = { material: 'popover', tint: '#f7f5f0', tintOpacity: 0.62, text: '#1d1c1a', highlight: 0.7, radius: 18, padding: 18, shadow: true, weight: 300 };
+const ELEMENT_ACCENT = { wood: '#5f8d76', fire: '#d4582f', earth: '#a88b5c', metal: '#7d828a', water: '#527698' };
 const appearanceOf = (widget) => (skinned && !paperNote(widget) ? { ...widget.appearance, ...HARMONY } : widget.appearance);
 const materialOf = (widget) => (paperNote(widget) ? 'none' : appearanceOf(widget).material);
 const shadowOf = (widget) => !paperNote(widget) && !!appearanceOf(widget).shadow;
@@ -88,6 +89,7 @@ class WidgetWindows {
     this.syncWallpaper();
     this.syncFengShui();
     this.syncBar();
+    this.sendRoom();
     const wanted = new Map(this.store.widgets.filter((w) => w.visible).map((w) => [w.id, w]));
     for (const [id, win] of this.windows) {
       if (!wanted.has(id) || !settings.widgetsVisible) this.close(id, fade);
@@ -208,9 +210,10 @@ class WidgetWindows {
     if (native.setCornerRadius(win, r)) win.widgetRadius = r;
   }
 
-  // The Feng Shui layout's wallpaper: rice paper and ink wash on a window at
-  // the desktop level, under the desktop icons and every widget. The real
-  // wallpaper is never changed, so leaving the layout restores it at once.
+  // The Feng Shui layout's wallpaper: a living yin yang on warm paper, on a
+  // window at the desktop level, under the desktop icons and every widget.
+  // The real wallpaper is never changed, so leaving the layout restores it at
+  // once.
   syncWallpaper() {
     const want = this.store.doc.settings.widgetsVisible && !!this.skin;
     let win = this.wallWin;
@@ -222,7 +225,7 @@ class WidgetWindows {
     if (win && !win.isDestroyed()) return;
     const d = screen.getPrimaryDisplay();
     win = this.wallWin = new BrowserWindow({
-      ...d.bounds, show: false, frame: false, transparent: false, backgroundColor: '#e9e6dc', hasShadow: false,
+      ...d.bounds, show: false, frame: false, transparent: false, backgroundColor: '#eeebe4', hasShadow: false,
       resizable: false, movable: false, minimizable: false, maximizable: false, fullscreenable: false, focusable: false,
       skipTaskbar: true, type: 'desktop', title: 'Feng Shui wallpaper', enableLargerThanScreen: true,
       webPreferences: { contextIsolation: true, sandbox: true },
@@ -231,6 +234,21 @@ class WidgetWindows {
     win.setVisibleOnAllWorkspaces(!!this.store.doc.settings.allSpaces, { visibleOnFullScreen: false, skipTransformProcessType: true });
     win.loadFile(path.join(__dirname, '..', 'renderer', 'fengshui', 'wallpaper.html'));
     win.once('ready-to-show', () => { if (!win.isDestroyed()) win.showInactive(); });
+    win.webContents.on('did-finish-load', () => { win.roomKey = null; this.sendRoom(); });
+  }
+
+  // Tell the wallpaper where the open centre of the room is, so the yin yang
+  // sits in the space the widgets leave free and grows or shrinks to fit.
+  sendRoom() {
+    const win = this.wallWin;
+    if (!win || win.isDestroyed() || win.webContents.isLoading()) return;
+    const d = screen.getPrimaryDisplay();
+    const rects = this.store.widgets.filter((w) => w.visible).map((w) => w.bounds);
+    const c = bagua.openCentre(rects, d.workArea);
+    const room = JSON.stringify({ cx: c.cx - d.bounds.x, cy: c.cy - d.bounds.y, r: c.r });
+    if (win.roomKey === room) return;
+    win.roomKey = room;
+    win.webContents.executeJavaScript(`window.fsRoom && window.fsRoom(${room})`).catch(() => {});
   }
 
   // The Feng Shui button: a small round window in the lower-right corner of

@@ -48,6 +48,14 @@ awake and open settings.
 
 ## What's new
 
+- **A living yin yang.** The Feng Shui layout now has a flat, generative yin
+  yang at its centre on warm paper: two halves that keep changing shape and
+  trade places, orbits, particles and rose curves that draw themselves and
+  fade. The Five Elements sit around it as small animated systems on the
+  generating ring (火 土 金 水 木), with the controlling star inside and live
+  readings. Widgets take a light, warm glass with charcoal type, and the
+  bagua arrangement keeps the centre open; the yin yang finds the free space
+  and sizes itself to it.
 - **The Feng Shui look.** A layout named "Feng Shui" puts every widget on one
   shared liquid glass, with the same tint, radius and light, over ink
   mountains in mist at dusk. Each widget carries one quiet note of its element

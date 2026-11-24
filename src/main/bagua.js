@@ -274,15 +274,27 @@ function arrange(widgets, work) {
     }
     const free = content.height - used();
     const gap = members.length > 1 ? Math.max(gutter, Math.min(56, free / (members.length + 1))) : 0;
-    let y = content.y + (content.height - used() - gap * (members.length - 1)) / 2;
-    for (const it of members) {
+    const seat = (it, y) => {
       let x;
       if (ci === 0) x = colX[0];
       else if (ci === 2) x = colX[2] + cellW - it.size.width;
       else x = colX[1] + (cellW - it.size.width) / 2;
       placed[it.id] = { x: snap(x), y: snap(y), width: it.size.width, height: it.size.height };
-      y += it.size.height + gap;
+    };
+    if (ci === 1) {
+      // The middle column leaves the centre open for the yin yang: Fame (and
+      // a quiet centre widget) rests against the top of the room, Career
+      // against the bottom.
+      const upper = [...occupancy.fame, ...occupancy.center];
+      const lower = occupancy.career;
+      let y = content.y;
+      for (const it of upper) { seat(it, y); y += it.size.height + gutter; }
+      y = content.y + content.height;
+      for (const it of [...lower].reverse()) { y -= it.size.height; seat(it, y); y -= gutter; }
+      return;
     }
+    let y = content.y + (content.height - used() - gap * (members.length - 1)) / 2;
+    for (const it of members) { seat(it, y); y += it.size.height + gap; }
   });
 
   // Keep everything inside the room after snapping.
@@ -314,6 +326,38 @@ function arrange(widgets, work) {
   return { placed, report };
 }
 
+// The open centre of the room: the largest clear space around the middle of
+// the screen that the widgets leave free, for the wallpaper's yin yang.
+// rects: the visible widgets' bounds; work: the screen's work area.
+// Returns { cx, cy, r } in screen points, r being the yin yang's radius.
+function openCentre(rects, work) {
+  const top = work.y + MARGIN + BAR, bottom = work.y + work.height - MARGIN;
+  const left = work.x + MARGIN, right = work.x + work.width - MARGIN;
+  const cx0 = (left + right) / 2, cy0 = (top + bottom) / 2;
+  const PAD = 12, BAND = 56;
+  // The free stretches of [lo, hi] once the blocks are taken out; the one
+  // that is long and near 'at' wins.
+  function span(lo, hi, blocks, at) {
+    const cuts = blocks.map(([a, b]) => [Math.max(lo, a), Math.min(hi, b)]).filter(([a, b]) => b > a).sort((p, q) => p[0] - q[0]);
+    const gaps = [];
+    let x = lo;
+    for (const [a, b] of cuts) { if (a > x) gaps.push([x, a]); x = Math.max(x, b); }
+    if (hi > x) gaps.push([x, hi]);
+    if (!gaps.length) return [at, at];
+    const score = ([a, b]) => (b - a) - 0.6 * Math.max(0, a - at, at - b);
+    return gaps.reduce((best, gp) => (score(gp) > score(best) ? gp : best));
+  }
+  const vert = span(top, bottom, rects.filter((r) => r.x < cx0 + BAND && r.x + r.width > cx0 - BAND).map((r) => [r.y - PAD, r.y + r.height + PAD]), cy0);
+  const cy = (vert[0] + vert[1]) / 2;
+  const horiz = span(left, right, rects.filter((r) => r.y < cy + BAND && r.y + r.height > cy - BAND).map((r) => [r.x - PAD, r.x + r.width + PAD]), cx0);
+  const h = vert[1] - vert[0], w = horiz[1] - horiz[0];
+  // The element ring reaches about 1.9 radii out, plus its labels.
+  const r = Math.max(64, Math.min((h - 76) / 3.8, (w - 140) / 3.7, work.height * 0.2));
+  const half = 1.85 * r + 70;
+  const cx = w >= 2 * half ? Math.max(horiz[0] + half, Math.min(cx0, horiz[1] - half)) : (horiz[0] + horiz[1]) / 2;
+  return { cx: Math.round(cx), cy: Math.round(cy), r: Math.round(r) };
+}
+
 // What the skin needs to draw a widget: its element, seal and title.
 function skinFor(w, typeName) {
   const k = classify(w);
@@ -322,4 +366,4 @@ function skinFor(w, typeName) {
 
 const isFengShuiLayout = (layout) => !!layout && (layout.skin === 'fengshui' || (layout.skin == null && /feng\s*shui/i.test(layout.name)));
 
-module.exports = { arrange, classify, skinFor, isFengShuiLayout, TITLE, HANZI };
+module.exports = { arrange, classify, skinFor, isFengShuiLayout, openCentre, TITLE, HANZI };
