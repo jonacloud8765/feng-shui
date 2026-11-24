@@ -21,6 +21,20 @@ const library = () => libraryService || (libraryService = (() => {
   lib.on('status', tell);
   return lib;
 })());
+let squeezeService;
+const squeeze = () => squeezeService || (squeezeService = (() => {
+  const { Engine } = require('./squeeze/engine');
+  const eng = new Engine({ dataDir: app.getPath('userData') });
+  // Only SQUEEZE windows hear about the queue.
+  eng.on('change', (snap) => {
+    if (!windows) return;
+    for (const win of windows.windows.values()) {
+      if (!win.isDestroyed() && store.widget(win.widgetId)?.type === 'squeeze') win.webContents.send('fengshui:squeeze-changed', snap);
+    }
+  });
+  return eng;
+})());
+const squeezeOutDir = (w) => (w.config.outDir ? w.config.outDir : path.join(app.getPath('documents'), 'SQUEEZE'));
 const pizzint = () => pizzintService || (pizzintService = require('./pizzint').createPizzint(app.getPath('userData')));
 
 // The app keeps its data in Application Support/Feng Shui.
@@ -643,6 +657,74 @@ function registerIpc() {
       return { ok: false, error: err.message };
     }
   });
+  ipcMain.handle('fengshui:squeeze', async (e, op, ...args) => {
+    const w = store.widgets.find((x) => x.id === senderWidgetId(e));
+    if (!w || w.type !== 'squeeze') return { ok: false, error: 'Not SQUEEZE.' };
+    const eng = squeeze();
+    const outDir = squeezeOutDir(w);
+    const resultOf = (id, which) => {
+      const it = eng.item(String(id));
+      return it && (which === 'before' ? it.path : it.result?.path);
+    };
+    try {
+      switch (op) {
+        case 'state': return { ok: true, state: eng.snapshot(), outDir };
+        case 'add': return await eng.add((Array.isArray(args[0]) ? args[0] : []).map(String), { outDir });
+        case 'pick': {
+          app.focus({ steal: true });
+          const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender) || undefined, {
+            properties: args[0] === 'folder' ? ['openDirectory', 'multiSelections'] : ['openFile', 'openDirectory', 'multiSelections'],
+            message: args[0] === 'folder' ? 'Choose folders to squeeze' : 'Choose files or folders to squeeze',
+            buttonLabel: 'Add to SQUEEZE',
+          });
+          if (r.canceled) return { ok: false, canceled: true };
+          return await eng.add(r.filePaths, { outDir });
+        }
+        case 'pick-output': {
+          app.focus({ steal: true });
+          const r = await dialog.showOpenDialog(BrowserWindow.fromWebContents(e.sender) || undefined, { properties: ['openDirectory', 'createDirectory'], defaultPath: outDir, message: 'Choose where SQUEEZE saves its results', buttonLabel: 'Save Here' });
+          if (r.canceled) return { ok: false, canceled: true };
+          store.updateWidget(w.id, { config: { outDir: r.filePaths[0] } });
+          return { ok: true, outDir: r.filePaths[0] };
+        }
+        case 'remove': eng.remove(String(args[0])); return { ok: true };
+        case 'clear': eng.clear(); return { ok: true };
+        case 'start': {
+          const o = args[1] && typeof args[1] === 'object' ? args[1] : {};
+          const options = {
+            approved: !!o.approved, lossyImages: !!o.lossyImages, video: !!o.video, flac: !!o.flac, aac: !!o.aac,
+            imageQuality: Math.min(0.95, Math.max(0.6, Number(o.imageQuality) || 0.85)),
+            keepTags: w.config.keepTags !== false, keepArt: w.config.keepArt !== false,
+          };
+          return await eng.start({ mode: ['quick', 'pure', 'maximum'].includes(args[0]) ? args[0] : 'quick', options, outDir });
+        }
+        case 'pause': eng.pause(); return { ok: true };
+        case 'resume': eng.resume(); return { ok: true };
+        case 'cancel': eng.cancel(); return { ok: true };
+        case 'estimate': return { ok: true, estimates: await eng.estimate() };
+        case 'preview': return await eng.preview(String(args[0]), args[1] === 'after' ? 'after' : 'before', Math.max(1, Number(args[2]) || 1));
+        case 'reveal': {
+          const p = args[0] === 'batch' ? eng.batch?.dir : resultOf(args[0], args[1]);
+          if (p) shell.showItemInFolder(p);
+          return { ok: !!p };
+        }
+        case 'open': {
+          const p = resultOf(args[0], args[1]);
+          if (p) await shell.openPath(p);
+          return { ok: !!p };
+        }
+        case 'open-output': {
+          const p = eng.batch?.dir || outDir;
+          await require('fs').promises.mkdir(p, { recursive: true });
+          await shell.openPath(p);
+          return { ok: true };
+        }
+        default: return { ok: false, error: 'Unknown SQUEEZE request.' };
+      }
+    } catch (err) {
+      return { ok: false, error: String(err.message || err) };
+    }
+  });
   ipcMain.handle('fengshui:cabinet', async (e, op, ...args) => {
     const cab = require('./cabinet');
     const wid = senderWidgetId(e);
@@ -764,6 +846,13 @@ app.whenReady().then(() => {
     store.updateSettings({ libraryLayout: true });
   }
 
+  // SQUEEZE arrives the same way: its own layout, once, filling the main screen.
+  if (!store.doc.settings.squeezeLayout && require('fs').existsSync(store.file)) {
+    const area = screen.getPrimaryDisplay().workArea;
+    store.createLayoutWith('SQUEEZE', [{ type: 'squeeze', bounds: { x: area.x + 16, y: area.y + 56, width: area.width - 32, height: area.height - 72 } }]);
+    store.updateSettings({ squeezeLayout: true });
+  }
+
   // First launch: start with a calm, useful arrangement instead of an empty desktop.
   if (!store.widgets.length && !require('fs').existsSync(store.file)) {
     const area = screen.getPrimaryDisplay().workArea;
@@ -773,6 +862,22 @@ app.whenReady().then(() => {
     store.updateWidget(cd.id, { config: { title: 'New Year', target: `${new Date().getFullYear() + 1}-01-01T00:00`, layout: 'days' } });
     store.addWidget('random', { x: right - 174, y: area.y + 216, width: 150, height: 150 });
     openSettings();
+  }
+
+  // Development aid: FENGSHUI_SQUEEZE_TEST=<path>:<path> adds those to SQUEEZE
+  // (never used by the packaged app); FENGSHUI_SQUEEZE_RUN=quick|pure starts it.
+  if (process.env.FENGSHUI_SQUEEZE_TEST && process.env.FENGSHUI_DATA_DIR) {
+    const w = store.widgets.find((x) => x.type === 'squeeze');
+    setTimeout(async () => {
+      await squeeze().add(process.env.FENGSHUI_SQUEEZE_TEST.split(':'), { outDir: w ? squeezeOutDir(w) : undefined });
+      // FENGSHUI_SQUEEZE_PICK=<n> opens the n-th file's comparison when the batch is done.
+      if (process.env.FENGSHUI_SQUEEZE_PICK) squeeze().once('finished', () => setTimeout(() => {
+        for (const win of windows.windows.values()) {
+          if (store.widget(win.widgetId)?.type === 'squeeze') win.webContents.executeJavaScript(`[...document.querySelectorAll('.sq-sheet button')].find((b) => /Preview/.test(b.textContent))?.click(); setTimeout(() => document.querySelectorAll('.sq-row')[${Number(process.env.FENGSHUI_SQUEEZE_PICK) || 0}]?.click(), 300);`);
+        }
+      }, 600));
+      if (process.env.FENGSHUI_SQUEEZE_RUN) setTimeout(() => squeeze().start({ mode: process.env.FENGSHUI_SQUEEZE_RUN, options: {}, outDir: w ? squeezeOutDir(w) : undefined }), 1500);
+    }, 800);
   }
 
   if (process.env.FENGSHUI_OPEN_SETTINGS) openSettings(process.env.FENGSHUI_OPEN_SETTINGS);
@@ -811,4 +916,4 @@ if (process.env.FENGSHUI_CAPTURE) {
 
 app.on('second-instance', () => openSettings());
 app.on('window-all-closed', (e) => e.preventDefault?.());
-app.on('before-quit', () => store && store.flush());
+app.on('before-quit', () => { if (squeezeService) squeezeService.cancel(); if (store) store.flush(); });

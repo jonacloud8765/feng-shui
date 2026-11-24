@@ -11,6 +11,10 @@ PLIST="$APP/Contents/Info.plist"
 
 [[ -f build/icon.icns ]] || npx electron scripts/make-icon.js
 [[ -f native/build/Release/fengshui_native.node ]] || npm run native || echo "Native helper not built; packaging without it."
+# SQUEEZE's helper (Swift, built with the Command Line Tools).
+if [[ ! -x native/build/squeeze-helper || native/squeeze/main.swift -nt native/build/squeeze-helper ]]; then
+  npm run squeeze-helper || echo "SQUEEZE helper not built; SQUEEZE will say so."
+fi
 
 rm -rf dist
 mkdir -p dist
@@ -21,6 +25,10 @@ cp -R package.json src "$RES/app/"
 if [[ -f native/build/Release/fengshui_native.node ]]; then
   mkdir -p "$RES/app/native/build/Release"
   cp native/build/Release/fengshui_native.node "$RES/app/native/build/Release/"
+fi
+if [[ -x native/build/squeeze-helper ]]; then
+  mkdir -p "$RES/app/native/build"
+  cp native/build/squeeze-helper "$RES/app/native/build/"
 fi
 cp build/icon.icns "$RES/electron.icns"
 

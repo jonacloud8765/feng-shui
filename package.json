@@ -11,6 +11,7 @@
     "test": "node --test test/*.test.js test/*.test.mjs",
     "selftest": "rm -rf .selftestdata && FENGSHUI_DATA_DIR=./.selftestdata FENGSHUI_SELFTEST=1 electron .",
     "package": "./scripts/package.sh",
+    "squeeze-helper": "mkdir -p native/build && swiftc -O -swift-version 5 -target arm64-apple-macos15 native/squeeze/main.swift -o native/build/squeeze-helper",
     "icon": "electron scripts/make-icon.js"
   },
   "author": "jonacloud8765",
