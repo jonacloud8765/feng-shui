@@ -155,12 +155,55 @@ class Engine extends EventEmitter {
     this.running = false;
     this.paused = false;
     this.canceled = false;
-    this.child = null;
+    this.children = new Set(); // helper processes doing batch work right now
+    this.resumeWaits = [];
     this.worker = null;
+    // The queue is saved here, so a quit or crash in the middle of a big
+    // batch can carry on where it stopped.
+    this.queueFile = path.join(dataDir, 'squeeze-queue.json');
+    this.saveTimer = null;
     this.workerCalls = new Map();
     this.nextCall = 1;
     this.timer = null;
     fs.rmSync(this.previewDir, { recursive: true, force: true });
+    this.restore();
+  }
+
+  // ---- Saved queue ----
+  restore() {
+    let saved;
+    try { saved = JSON.parse(fs.readFileSync(this.queueFile, 'utf8')); } catch { return; }
+    if (!saved || !Array.isArray(saved.items)) return;
+    for (const it of saved.items) {
+      // Work that was cut off goes back to "ready", unless its original is gone.
+      if (['queued', 'working', 'analysing'].includes(it.status)) {
+        if (!fs.existsSync(it.path)) continue;
+        it.status = it.format ? 'ready' : 'analysing';
+        it.progress = 0;
+        it.phase = it.status === 'ready' ? 'Ready to carry on' : 'Looking inside…';
+      }
+      it.inBatch = false;
+      this.items.push(it);
+    }
+    for (const it of this.items) if (it.status === 'analysing') this.analyse(it).catch(() => {});
+    this.resumed = this.items.filter((i) => i.status === 'ready').length;
+  }
+
+  save(now = false) {
+    if (now) { clearTimeout(this.saveTimer); this.saveTimer = null; return this.writeQueue(); }
+    if (this.saveTimer) return;
+    this.saveTimer = setTimeout(() => { this.saveTimer = null; this.writeQueue(); }, 1500);
+  }
+
+  writeQueue() {
+    const keep = ['id', 'path', 'name', 'rel', 'size', 'status', 'format', 'kind', 'info', 'found', 'reason', 'result', 'trashed', 'before'];
+    const items = this.items.map((it) => Object.fromEntries(keep.filter((k) => it[k] !== undefined).map((k) => [k, it[k]])));
+    const tmp = `${this.queueFile}.tmp`;
+    try {
+      fs.mkdirSync(path.dirname(this.queueFile), { recursive: true });
+      fs.writeFileSync(tmp, JSON.stringify({ items }));
+      fs.renameSync(tmp, this.queueFile);
+    } catch { /* the queue is a convenience; the work itself is safe */ }
   }
 
   get helperAvailable() { return fs.existsSync(HELPER); }
@@ -185,6 +228,7 @@ class Engine extends EventEmitter {
       cleaned: done.filter((i) => i.result.removed.length).length,
       verified: done.every((i) => i.result.verified),
       lossy: done.filter((i) => i.result.lossy).length,
+      already: done.filter((i) => i.result.noCopy).length,
     };
     const work = this.items.filter((i) => i.inBatch);
     const workBytes = work.reduce((a, i) => a + Math.max(i.size, 1), 0);
@@ -192,14 +236,18 @@ class Engine extends EventEmitter {
     return {
       items, totals, running: this.running, paused: this.paused,
       overall: workBytes ? doneBytes / workBytes : 0,
+      progressCount: { total: work.length, finished: work.filter((i) => ['done', 'failed', 'skipped', 'canceled'].includes(i.status)).length },
       batch: this.batch && { dir: this.batch.dir, name: path.basename(this.batch.dir), finished: this.batch.finished, mode: this.batch.mode, started: this.batch.started },
       helper: this.helperAvailable,
     };
   }
 
   changed() {
+    this.save();
     if (this.timer) return;
-    this.timer = setTimeout(() => { this.timer = null; this.emit('change', this.snapshot()); }, 80);
+    // Big batches update the window less often, so 1,500 rows stay smooth.
+    const wait = this.items.length > 300 ? 400 : this.items.length > 60 ? 160 : 80;
+    this.timer = setTimeout(() => { this.timer = null; this.emit('change', this.snapshot()); }, wait);
   }
 
   // ---- Adding files ----
@@ -243,7 +291,16 @@ class Engine extends EventEmitter {
     return { ok: true, added: added.length };
   }
 
+  // At most four files are looked at a time, however many are added.
   async analyse(it) {
+    this.analysing = this.analysing || { n: 0, waiting: [] };
+    const a = this.analysing;
+    if (a.n >= 4) await new Promise((r) => a.waiting.push(r));
+    a.n++;
+    try { await this.analyseOne(it); } finally { a.n--; const next = a.waiting.shift(); if (next) next(); }
+  }
+
+  async analyseOne(it) {
     try {
       const d = await sniff(it.path);
       if (d.unsupported) { it.status = 'unsupported'; it.reason = UNSUPPORTED[d.unsupported]; it.phase = ''; this.changed(); return; }
@@ -286,12 +343,18 @@ class Engine extends EventEmitter {
   }
 
   // ---- Helper and worker processes ----
-  helper(args, { onProgress, timeout = 0, track = true } = {}) {
+  // Batch steps get a time limit (5 minutes, or 2 hours for exports that
+  // report progress), so one stuck file is skipped instead of holding up the
+  // rest. Time spent paused does not count.
+  helper(args, { onProgress, timeout, track = true } = {}) {
+    if (timeout === undefined) timeout = track ? (onProgress ? 2 * 3600e3 : 5 * 60e3) : 0;
     return new Promise((resolve) => {
       const child = spawn(HELPER, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-      if (track) this.child = child;
-      let out = '', err = '', timer = null;
-      if (timeout) timer = setTimeout(() => child.kill('SIGKILL'), timeout);
+      if (track) this.children.add(child);
+      if (track && this.paused) try { child.kill('SIGSTOP'); } catch { /* gone */ }
+      let out = '', err = '', timer = null, timedOut = false;
+      const arm = (ms) => { timer = setTimeout(() => { if (this.paused) return arm(5000); timedOut = true; child.kill('SIGKILL'); }, ms); };
+      if (timeout) arm(timeout);
       child.stdout.on('data', (d) => {
         out += d;
         if (onProgress) {
@@ -303,10 +366,10 @@ class Engine extends EventEmitter {
       child.on('error', (e) => { clearTimeout(timer); resolve({ ok: false, error: e.message }); });
       child.on('close', (code, signal) => {
         clearTimeout(timer);
-        if (track && this.child === child) this.child = null;
+        this.children.delete(child);
         const last = out.trim().split('\n').filter((l) => l.startsWith('{')).pop();
         if (last) { try { return resolve(JSON.parse(last)); } catch { /* fall through */ } }
-        resolve({ ok: false, error: signal ? (this.canceled ? 'Canceled.' : 'The helper stopped.') : (err.trim().split('\n').pop() || `The helper failed (${code}).`) });
+        resolve({ ok: false, error: signal ? (this.canceled ? 'Canceled.' : timedOut ? 'This file took too long and was skipped; the original is untouched.' : 'The helper stopped.') : (err.trim().split('\n').pop() || `The helper failed (${code}).`) });
       });
     });
   }
@@ -314,11 +377,12 @@ class Engine extends EventEmitter {
   tool(cmd, args) {
     return new Promise((resolve) => {
       const child = spawn(cmd, args, { stdio: ['ignore', 'ignore', 'pipe'] });
-      this.child = child;
+      this.children.add(child);
+      const timer = setTimeout(() => child.kill('SIGKILL'), 30 * 60e3);
       let err = '';
       child.stderr.on('data', (d) => { err += d; });
       child.on('error', (e) => resolve({ ok: false, error: e.message }));
-      child.on('close', (code) => { if (this.child === child) this.child = null; resolve(code === 0 ? { ok: true } : { ok: false, error: err.trim() || `${path.basename(cmd)} failed.` }); });
+      child.on('close', (code) => { clearTimeout(timer); this.children.delete(child); resolve(code === 0 ? { ok: true } : { ok: false, error: err.trim() || `${path.basename(cmd)} failed.` }); });
     });
   }
 
@@ -344,30 +408,30 @@ class Engine extends EventEmitter {
   pause() {
     if (!this.running || this.paused) return;
     this.paused = true;
-    if (this.child) try { this.child.kill('SIGSTOP'); } catch { /* gone */ }
+    for (const c of this.children) try { c.kill('SIGSTOP'); } catch { /* gone */ }
     this.changed();
   }
 
   resume() {
     if (!this.paused) return;
     this.paused = false;
-    if (this.child) try { this.child.kill('SIGCONT'); } catch { /* gone */ }
-    if (this.resumeWait) { this.resumeWait(); this.resumeWait = null; }
+    for (const c of this.children) try { c.kill('SIGCONT'); } catch { /* gone */ }
+    for (const r of this.resumeWaits.splice(0)) r();
     this.changed();
   }
 
   cancel() {
     if (!this.running) return;
     this.canceled = true;
-    if (this.child) { try { this.child.kill('SIGCONT'); this.child.kill('SIGKILL'); } catch { /* gone */ } }
+    for (const c of this.children) { try { c.kill('SIGCONT'); c.kill('SIGKILL'); } catch { /* gone */ } }
     if (this.worker) this.worker.terminate();
     this.paused = false;
-    if (this.resumeWait) { this.resumeWait(); this.resumeWait = null; }
+    for (const r of this.resumeWaits.splice(0)) r();
     this.changed();
   }
 
   async waitIfPaused() {
-    while (this.paused && !this.canceled) await new Promise((r) => { this.resumeWait = r; });
+    while (this.paused && !this.canceled) await new Promise((r) => { this.resumeWaits.push(r); });
   }
 
   // ---- Running a batch ----
@@ -389,8 +453,14 @@ class Engine extends EventEmitter {
     // Files from earlier batches stay listed but do not count towards this one.
     for (const it of this.items) if (!todo.includes(it)) it.inBatch = false;
     this.changed();
-    (async () => {
-      for (const it of todo) {
+    // A few files at a time (2 to 3, by the Mac's cores and memory); each
+    // runner takes the next file when it finishes one.
+    const lanes = Math.max(1, Math.min(3, Math.floor(os.cpus().length / 3), Math.floor(os.totalmem() / 6e9)));
+    this.batch.lanes = lanes;
+    let next = 0;
+    const runner = async () => {
+      while (next < todo.length) {
+        const it = todo[next++];
         await this.waitIfPaused();
         if (this.canceled) { it.status = 'canceled'; it.phase = 'Canceled; the original is untouched.'; continue; }
         it.status = 'working';
@@ -404,8 +474,12 @@ class Engine extends EventEmitter {
           else { it.status = err.skip ? 'skipped' : 'failed'; it.reason = msg; it.phase = ''; }
         }
         await this.cleanTemp(it);
+        if (it.status === 'done' && it.trashed) this.save(true); // a replaced original is recorded at once
         this.changed();
       }
+    };
+    (async () => {
+      await Promise.all(Array.from({ length: lanes }, runner));
       await fsp.rm(workDir, { recursive: true, force: true }).catch(() => {});
       this.batch.finished = Date.now();
       this.running = false;
@@ -467,9 +541,14 @@ class Engine extends EventEmitter {
     const notes = plan.notes = plan.notes || [];
     const st = await fsp.stat(it.path);
     if (st.size !== it.size) { notes.push('The original changed while SQUEEZE worked, so it was not moved to the Trash.'); return dest; }
-    await fsp.mkdir(this.keepDir, { recursive: true });
+    // For small batches a hard link keeps the original's "before" view; big
+    // batches skip it so trashed originals do not keep using disk space.
+    const small = this.items.filter((i) => i.inBatch).length <= 100;
     const keep = path.join(this.keepDir, `${it.id}${ext}`);
-    try { await fsp.link(it.path, keep); } catch { try { await fsp.copyFile(it.path, keep, fs.constants.COPYFILE_EXCL); } catch { /* preview only */ } }
+    if (small) {
+      await fsp.mkdir(this.keepDir, { recursive: true });
+      try { await fsp.link(it.path, keep); } catch { try { await fsp.copyFile(it.path, keep, fs.constants.COPYFILE_EXCL); } catch { /* preview only */ } }
+    }
     try {
       await this.trash(it.path);
     } catch (err) {
@@ -477,7 +556,7 @@ class Engine extends EventEmitter {
       notes.push(`The original could not be moved to the Trash (${String(err.message || err).replace(/\.$/, '')}), so both files are kept.`);
       return dest;
     }
-    it.before = keep;
+    it.before = small ? keep : path.join(os.homedir(), '.Trash', path.basename(it.path));
     it.trashed = it.path;
     const target = path.join(path.dirname(it.path), `${path.basename(it.name, ext)}${plan.ext || ext}`);
     try {
@@ -723,6 +802,10 @@ class Engine extends EventEmitter {
   async heicToJpeg(it, start) {
     if ((it.info?.frames || 1) > 1) throw new Error('it holds more than one picture, and a JPG can hold only one');
     let last = null;
+    // Most HEICs are smaller than any good JPG: one try at the lowest quality
+    // settles that quickly, which matters in big batches.
+    const floor = await this.heicToJpegAt(it, 0.72).catch(() => null);
+    if (floor && floor.size >= it.size) throw new Error('a JPG that looks the same would be larger than the HEIC, so it was not converted');
     for (const q of [0.92, 0.88, 0.84, 0.80, 0.76, 0.72].filter((x) => x <= start + 1e-9)) {
       if (this.canceled) throw new Error('Canceled.');
       let r;

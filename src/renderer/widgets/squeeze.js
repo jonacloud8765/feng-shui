@@ -310,7 +310,7 @@ export function mount(root, ctx) {
       list.replaceChildren(h('div.sq-drop', {},
         h('div.glyph', { html: GLYPH }),
         h('div.t', {}, 'Drop files or folders here'),
-        h('div.s', {}, 'Originals are never changed. Results go to a new folder, and every one is checked before it is kept.'),
+        h('div.s', {}, 'Every result is checked against its original before it is kept. Large folders are fine: the queue is saved, so it can carry on after a quit.'),
         h('div.btns', {}, h('button.sq-btn', { onclick: () => pick('files') }, 'Choose Files…'), h('button.sq-btn', { onclick: () => pick('folder') }, 'Choose Folder…')),
         h('div.fmts', {}, 'JPEG · PNG · HEIC · WebP · TIFF · GIF · SVG · PDF · MP4 · MOV · M4A · MP3 · WAV · AIFF · FLAC · AAC')));
       list.style.display = 'flex';
@@ -331,6 +331,10 @@ export function mount(root, ctx) {
         row._x = h('button.sq-x', { title: 'Remove from the list', onclick: (e) => { e.stopPropagation(); api('remove', it.id); if (selected === it.id) selected = null; } }, '×');
         row.append(row._ico, h('div.sq-name', {}, row._n, row._m, row._prog), h('div', { style: { display: 'flex', alignItems: 'center', gap: '4px' } }, row._side, row._x));
       }
+      // Unchanged rows are left alone, so long lists stay fast.
+      const sig = `${it.status}|${Math.round((it.progress || 0) * 50)}|${it.result ? it.result.size : ''}|${selected === it.id}|${state.running}|${it.phase || ''}|${it.kind}`;
+      if (row._sig === sig) return row;
+      row._sig = sig;
       row.classList.toggle('sel', selected === it.id);
       const ico = ICON[it.kind] || ICON.other;
       if (row._ico.dataset.k !== (it.kind || 'other')) { row._ico.innerHTML = ico; row._ico.dataset.k = it.kind || 'other'; }
@@ -345,7 +349,8 @@ export function mount(root, ctx) {
         : it.status === 'working' ? [h('div.sub', {}, `${Math.round(it.progress * 100)}%`)] : []));
       return row;
     });
-    list.replaceChildren(...rows);
+    const order = rows.map((r) => r.dataset.id).join(',');
+    if (list._order !== order) { list.replaceChildren(...rows); list._order = order; }
   }
 
   function techProps(info, kind) {
@@ -485,7 +490,16 @@ export function mount(root, ctx) {
         ? h('span', {}, 'Grew', h('b', {}, `${human(t.result - t.original)} · +${((t.result / t.original - 1) * 100).toFixed(1)}%`))
         : h('span', {}, 'Saved', h('b.ok', {}, `${human(Math.max(0, (t.original || 0) - (t.result || 0)))}${t.original ? ` · ${pct(t.original, t.result)}` : ''}`)));
     overall.style.visibility = state.running || (state.batch && inBatch.length) ? 'visible' : 'hidden';
-    overallLbl.replaceChildren(h('span', {}, state.running ? (state.paused ? 'Paused, safe to leave as it is' : 'Squeezing') : state.batch?.finished ? 'Complete' : ''), h('span', {}, `${Math.round((state.overall || 0) * 100)}%`));
+    const inB = state.progressCount?.total || 0;
+    const finished = state.progressCount?.finished || 0;
+    let eta = '';
+    const f = state.overall || 0;
+    if (state.running && !state.paused && state.batch?.started && f > 0.01) {
+      const left = ((Date.now() - state.batch.started) * (1 - f)) / f / 1000;
+      eta = left < 90 ? ' · under 2 min left' : left < 3600 ? ` · about ${Math.round(left / 60)} min left` : ` · about ${(left / 3600).toFixed(1)} h left`;
+    }
+    const count = state.running || state.batch?.finished ? `${Math.max(0, finished)} of ${inB}${eta}` : '';
+    overallLbl.replaceChildren(h('span', {}, state.running ? (state.paused ? `Paused, safe to leave as it is · ${count}` : `Squeezing ${count}`) : state.batch?.finished ? `Complete · ${count}` : ''), h('span', {}, `${Math.round(f * 100)}%`));
     overallBar.style.width = `${Math.round((state.overall || 0) * 100)}%`;
     const replace = ctx.config.replaceOriginal !== false;
     outBtn.textContent = replace ? 'Originals go to the Trash' : 'Saved next to the originals';
@@ -562,6 +576,7 @@ export function mount(root, ctx) {
         row('Integrity', t.done ? 'Verified' : '—', t.done ? 'ok' : ''),
         row('Succeeded', `${t.done}`),
         row('Failed', `${failed}`, failed ? 'bad' : ''),
+        ...(t.already ? [row('Already optimized', `${t.already} (left as they were)`)] : []),
         ...(skipped ? [row('Skipped', `${skipped}`, 'warn')] : []),
         ...(canceled ? [row('Canceled', `${canceled}`)] : []),
         ...(t.lossy ? [row('Lossy, as approved', `${t.lossy}`, 'warn')] : [])),
