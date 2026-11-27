@@ -369,7 +369,7 @@ const TYPES = {
     min: { width: 820, height: 560 },
     max: { width: 3200, height: 2000 },
     // Results are saved beside their originals as "name (squeezed).ext".
-    config: { mode: 'quick', replaceOriginal: true, convertHeic: true, keepTags: true, keepArt: true, imageQuality: 85, lossyImages: true, video: true, flac: true, aac: false },
+    config: { mode: 'quick', replaceOriginal: true, convertHeic: true, keepTags: true, keepArt: true, lossyImages: true, resize: true, heicOut: false, video: true, flac: true, aac: false },
     appearance: { tintOpacity: 0, highlight: 0, shadow: false, radius: 16, padding: 0 },
     fields: [
       { key: 'replaceOriginal', label: 'Replace originals', type: 'toggle', hint: 'The original goes to the Trash and the squeezed file takes its name and place. Off keeps both, with “(squeezed)” added to the new name.' },

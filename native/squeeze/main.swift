@@ -18,6 +18,7 @@ import PDFKit
 import AVFoundation
 import AppKit
 import CryptoKit
+import CoreImage
 
 // MARK: - Output
 
@@ -164,11 +165,16 @@ func imageEncode(_ input: String, _ output: String) -> [String: Any] {
   guard let dst = CGImageDestinationCreateWithURL(url(output) as CFURL, typeArg as CFString, count, nil) else { fail("macOS cannot write \(typeArg).") }
   let quality = Double(arg("--quality") ?? "") ?? 0
   for i in 0..<count {
-    guard let img = CGImageSourceCreateImageAtIndex(src, i, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else { fail("Picture \(i + 1) could not be decoded.") }
+    guard var img = CGImageSourceCreateImageAtIndex(src, i, [kCGImageSourceShouldCacheImmediately: true] as CFDictionary) else { fail("Picture \(i + 1) could not be decoded.") }
+    if let edge = Int(arg("--max-edge") ?? ""), edge > 0, max(img.width, img.height) > edge {
+      guard let small = lanczos(img, CGFloat(edge) / CGFloat(max(img.width, img.height))) else { fail("The picture could not be resized.") }
+      img = small
+    }
     let props = (CGImageSourceCopyPropertiesAtIndex(src, i, nil) as? [String: Any]) ?? [:]
     var out: [CFString: Any] = [:]
     if let o = props[kCGImagePropertyOrientation as String] { out[kCGImagePropertyOrientation] = o }
     if quality > 0 { out[kCGImageDestinationLossyCompressionQuality] = quality }
+    if flag("--progressive") { out[kCGImagePropertyJFIFDictionary] = [kCGImagePropertyJFIFIsProgressive: true] }
     if flag("--lzw") { out[kCGImagePropertyTIFFDictionary] = [kCGImagePropertyTIFFCompression: 5] }
     if let dpi = props[kCGImagePropertyDPIWidth as String] { out[kCGImagePropertyDPIWidth] = dpi; out[kCGImagePropertyDPIHeight] = props[kCGImagePropertyDPIHeight as String] ?? dpi }
     if let gif = props[kCGImagePropertyGIFDictionary as String] as? [String: Any] {
@@ -179,7 +185,7 @@ func imageEncode(_ input: String, _ output: String) -> [String: Any] {
       out[kCGImagePropertyGIFDictionary] = g
     }
     CGImageDestinationAddImage(dst, img, out as CFDictionary)
-    for t in [kCGImageAuxiliaryDataTypeHDRGainMap, kCGImageAuxiliaryDataTypeISOGainMap] {
+    for t in (arg("--max-edge") != nil || flag("--no-aux") ? [] : [kCGImageAuxiliaryDataTypeHDRGainMap, kCGImageAuxiliaryDataTypeISOGainMap]) {
       if let info = CGImageSourceCopyAuxiliaryDataInfoAtIndex(src, i, t) { CGImageDestinationAddAuxiliaryDataInfo(dst, t, info) }
     }
   }
@@ -227,6 +233,69 @@ func compareBuffers(_ a: Data, _ b: Data, deep: Bool) -> (Bool, Double, Int) {
   let mse = sum / max(n, 1)
   let psnr = mse == 0 ? 99 : 10 * log10(255 * 255 / mse)
   return (false, psnr, maxD)
+}
+
+// High-quality Lanczos resampling through Core Image.
+func lanczos(_ img: CGImage, _ scale: CGFloat) -> CGImage? {
+  let ci = CIImage(cgImage: img)
+  guard let f = CIFilter(name: "CILanczosScaleTransform") else { return nil }
+  f.setValue(ci, forKey: kCIInputImageKey)
+  f.setValue(scale, forKey: kCIInputScaleKey)
+  f.setValue(1.0, forKey: kCIInputAspectRatioKey)
+  guard let out = f.outputImage else { return nil }
+  let w = Int((CGFloat(img.width) * scale).rounded()), h = Int((CGFloat(img.height) * scale).rounded())
+  let space = img.colorSpace ?? CGColorSpace(name: CGColorSpace.sRGB)!
+  let ctx = CIContext(options: [.workingColorSpace: space, .outputColorSpace: space])
+  return ctx.createCGImage(out, from: CGRect(x: 0, y: 0, width: w, height: h), format: .RGBA8, colorSpace: space)
+}
+
+// Mean SSIM of the luminance over 8×8 blocks: 1 is identical; the app turns
+// it into DSSIM (1/SSIM − 1), as Squoosh-style tools do.
+func gray(_ img: CGImage, _ w: Int, _ h: Int) -> [UInt8]? {
+  var buf = [UInt8](repeating: 0, count: w * h)
+  let ok = buf.withUnsafeMutableBytes { (p: UnsafeMutableRawBufferPointer) -> Bool in
+    guard let ctx = CGContext(data: p.baseAddress, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w, space: CGColorSpaceCreateDeviceGray(), bitmapInfo: CGImageAlphaInfo.none.rawValue) else { return false }
+    ctx.interpolationQuality = .high
+    ctx.draw(img, in: CGRect(x: 0, y: 0, width: w, height: h))
+    return true
+  }
+  return ok ? buf : nil
+}
+
+func ssim(_ a: CGImage, _ b: CGImage) -> Double? {
+  // Both are compared at the result's size (the original is resampled when
+  // the result was made smaller), capped at 3000 px for speed.
+  var w = b.width, h = b.height
+  let cap = 3000.0 / Double(max(w, h))
+  if cap < 1 { w = Int(Double(w) * cap); h = Int(Double(h) * cap) }
+  let src = (a.width == w && a.height == h) ? a : (lanczos(a, CGFloat(w) / CGFloat(a.width)) ?? a)
+  let dst = (b.width == w && b.height == h) ? b : (lanczos(b, CGFloat(w) / CGFloat(b.width)) ?? b)
+  guard let x = gray(src, w, h), let y = gray(dst, w, h) else { return nil }
+  let c1 = 6.5025, c2 = 58.5225
+  var total = 0.0, n = 0
+  var by = 0
+  while by + 8 <= h {
+    var bx = 0
+    while bx + 8 <= w {
+      var sx = 0.0, sy = 0.0, sxx = 0.0, syy = 0.0, sxy = 0.0
+      for j in 0..<8 { let row = (by + j) * w + bx; for i in 0..<8 { let u = Double(x[row + i]), v = Double(y[row + i]); sx += u; sy += v; sxx += u * u; syy += v * v; sxy += u * v } }
+      let mx = sx / 64, my = sy / 64
+      let vx = sxx / 64 - mx * mx, vy = syy / 64 - my * my, cxy = sxy / 64 - mx * my
+      total += ((2 * mx * my + c1) * (2 * cxy + c2)) / ((mx * mx + my * my + c1) * (vx + vy + c2))
+      n += 1
+      bx += 8
+    }
+    by += 8
+  }
+  return n > 0 ? total / Double(n) : nil
+}
+
+func imageSSIM(_ a: String, _ b: String) -> [String: Any] {
+  guard let sa = imageSource(a), let x = CGImageSourceCreateImageAtIndex(sa, 0, nil) else { fail("The original could not be read.") }
+  guard let sb = imageSource(b), let y = CGImageSourceCreateImageAtIndex(sb, 0, nil) else { return ["ok": true, "opens": false] }
+  guard let v = ssim(x, y) else { fail("The pictures could not be compared.") }
+  let o = ((CGImageSourceCopyPropertiesAtIndex(sb, 0, nil) as? [String: Any])?[kCGImagePropertyOrientation as String] as? Int) ?? 1
+  return ["ok": true, "opens": true, "ssim": v, "dssim": 1 / max(v, 1e-9) - 1, "width": y.width, "height": y.height, "orientation": o]
 }
 
 func svgImage(_ p: String) -> CGImage? {
@@ -532,6 +601,7 @@ case "image-info": result = imageInfo(input)
 case "image-clean": result = imageClean(input, needOut())
 case "image-encode": result = imageEncode(input, needOut())
 case "image-compare": result = imageCompare(input, needOut())
+case "image-ssim": result = imageSSIM(input, needOut())
 case "image-preview": result = imagePreview(input, needOut())
 case "pdf-info": result = pdfInfo(input)
 case "pdf-write": result = pdfWrite(input, needOut())

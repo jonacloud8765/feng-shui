@@ -687,8 +687,7 @@ function registerIpc() {
         case 'start': {
           const o = args[1] && typeof args[1] === 'object' ? args[1] : {};
           const options = {
-            approved: !!o.approved, lossyImages: !!o.lossyImages, video: !!o.video, flac: !!o.flac, aac: !!o.aac,
-            imageQuality: Math.min(0.95, Math.max(0.6, Number(o.imageQuality) || 0.85)),
+            approved: !!o.approved, lossyImages: !!o.lossyImages, resize: !!o.resize, heicOut: !!o.heicOut, video: !!o.video, flac: !!o.flac, aac: !!o.aac,
             keepTags: w.config.keepTags !== false, keepArt: w.config.keepArt !== false, convertHeic: w.config.convertHeic !== false, replaceOriginal: w.config.replaceOriginal !== false,
           };
           return await eng.start({ mode: ['quick', 'pure', 'maximum'].includes(args[0]) ? args[0] : 'quick', options });
@@ -878,6 +877,12 @@ app.whenReady().then(() => {
           if (store.widget(win.widgetId)?.type === 'squeeze') win.webContents.executeJavaScript(`[...document.querySelectorAll('.sq-sheet button')].find((b) => /Preview/.test(b.textContent))?.click(); setTimeout(() => document.querySelectorAll('.sq-row')[${Number(process.env.FENGSHUI_SQUEEZE_PICK) || 0}]?.click(), 300);`);
         }
       }, 600));
+      // FENGSHUI_SQUEEZE_SHEET=1 opens the Maximum approval sheet.
+      if (process.env.FENGSHUI_SQUEEZE_SHEET) setTimeout(() => {
+        for (const win of windows.windows.values()) {
+          if (store.widget(win.widgetId)?.type === 'squeeze') win.webContents.executeJavaScript(`[...document.querySelectorAll('.sq-seg button')].find((b) => /MAXIMUM/.test(b.textContent))?.click(); setTimeout(() => document.querySelector('.sq-btn.primary')?.click(), 300);`);
+        }
+      }, 2500);
       if (process.env.FENGSHUI_SQUEEZE_RUN) setTimeout(() => squeeze().start({ mode: process.env.FENGSHUI_SQUEEZE_RUN, options: { convertHeic: w?.config.convertHeic !== false } }), 1500);
     }, 800);
   }

@@ -145,6 +145,10 @@ const css = `
 .sq-opt input[type=checkbox] { margin: 2px 0 0; accent-color: #c9ccd2; width: 15px; height: 15px; }
 .sq-opt .t { color: var(--fg); font-size: 13px; }
 .sq-opt .d { color: var(--mute); font-size: 12px; margin-top: 3px; }
+.sq-sub { display: grid; grid-template-columns: 22px 1fr; gap: 10px; padding: 0 0 10px 32px; }
+.sq-sub input[type=checkbox] { margin: 2px 0 0; accent-color: #c9ccd2; width: 14px; height: 14px; }
+.sq-sub .t { color: var(--fg); font-size: 12.5px; }
+.sq-sub .d { color: var(--mute); font-size: 11.5px; margin-top: 2px; }
 .sq-opt .tag { display: inline-block; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase; padding: 1px 6px; border-radius: 4px; margin-left: 6px; vertical-align: 1px; }
 .sq-opt .tag.lossy { color: var(--warn); box-shadow: inset 0 0 0 1px rgba(207,178,122,0.4); }
 .sq-opt .tag.lossless { color: var(--ok); box-shadow: inset 0 0 0 1px rgba(148,184,168,0.4); }
@@ -265,7 +269,7 @@ export function mount(root, ctx) {
   }
 
   async function approveMax(opts) {
-    ctx.setConfig({ lossyImages: opts.lossyImages, video: opts.video, flac: opts.flac, aac: opts.aac, imageQuality: Math.round(opts.imageQuality * 100) });
+    ctx.setConfig({ lossyImages: opts.lossyImages, resize: opts.resize, heicOut: opts.heicOut, video: opts.video, flac: opts.flac, aac: opts.aac });
     sheet = null;
     render();
     const r = await api('start', 'maximum', { ...opts, approved: true });
@@ -337,7 +341,7 @@ export function mount(root, ctx) {
       row._prog.firstChild.style.width = `${Math.round((it.progress || 0) * 100)}%`;
       row._x.style.display = it.status === 'working' || state.running ? 'none' : '';
       row._side.replaceChildren(...(it.status === 'done'
-        ? [h('div.pct', {}, it.result.saved > 0 ? `−${it.result.percent.toFixed(1)}%` : it.result.saved < 0 ? `+${(-it.result.percent).toFixed(1)}%` : '0%'), h('div.sub', {}, it.result.saved > 0 ? `${human(it.result.saved)} saved` : it.result.saved < 0 ? `${human(-it.result.saved)} larger` : 'unchanged')]
+        ? [h('div.pct', {}, it.result.saved > 0 ? `−${it.result.percent.toFixed(1)}%` : it.result.saved < 0 ? `+${(-it.result.percent).toFixed(1)}%` : '0%'), h('div.sub', {}, it.result.saved > 0 ? `${human(it.result.saved)} saved` : it.result.saved < 0 ? `${human(-it.result.saved)} larger` : it.result.noCopy ? 'already optimized' : 'unchanged')]
         : it.status === 'working' ? [h('div.sub', {}, `${Math.round(it.progress * 100)}%`)] : []));
       return row;
     });
@@ -516,24 +520,27 @@ export function mount(root, ctx) {
     const pcm = has((i) => i.format === 'wav' || i.format === 'aiff');
     const lossless = has((i) => i.format === 'wav' || i.format === 'aiff' || i.format === 'flac');
     const c = ctx.config;
-    const o = { lossyImages: c.lossyImages !== false, video: c.video !== false, flac: c.flac !== false, aac: !!c.aac, imageQuality: (Number(c.imageQuality) || 85) / 100 };
+    const o = { lossyImages: c.lossyImages !== false, resize: c.resize !== false, heicOut: !!c.heicOut, video: c.video !== false, flac: c.flac !== false, aac: !!c.aac };
     const box = (key, title, tag, desc, extra) => {
       const input = h('input', { type: 'checkbox', checked: o[key], onchange: (e) => { o[key] = e.target.checked; } });
-      return h('label.sq-opt', {}, input, h('div', {}, h('div.t', {}, title, h(`span.tag.${tag}`, {}, tag)), h('div.d', {}, desc), extra || null));
+      const lab = h('label.sq-opt', {}, input, h('div', {}, h('div.t', {}, title, h(`span.tag.${tag}`, {}, tag)), h('div.d', {}, desc)));
+      return extra ? h('div', {}, lab, extra) : lab;
     };
-    const ql = h('span', {}, `${Math.round(o.imageQuality * 100)}`);
-    const quality = h('div.d', { style: { marginTop: '8px' } }, h('input', { type: 'range', min: 70, max: 95, step: 1, value: Math.round(o.imageQuality * 100), oninput: (e) => { o.imageQuality = Number(e.target.value) / 100; ql.textContent = e.target.value; } }), 'Quality ', ql);
+    const sub = (key, title, desc) => h('label.sq-sub', {}, h('input', { type: 'checkbox', checked: o[key], onchange: (e) => { o[key] = e.target.checked; } }), h('div', {}, h('div.t', {}, title), h('div.d', {}, desc)));
+    const photoExtras = h('div', {},
+      sub('resize', 'Resize big photos to 2,560 px', 'Photos over about 15 megapixels (24 and 48 MP iPhone shots) get a 2,560 px long edge, with Lanczos resampling. This cuts most of the size; the picture gets fewer pixels.'),
+      sub('heicOut', 'Save photos as HEIC', 'Usually 40–50% smaller than JPG at the same look. HEIC opens on Apple devices and most modern apps, but not everywhere.'));
     const est = videos ? (estimates === null ? 'Estimating…' : estimates.length ? estimates.map((e) => `${e.name}: about ${human(e.from)} → ${human(e.to)}`).join(' · ') : 'Already HEVC or not worth it; these will stay lossless.') : '';
     const opts = [];
-    if (photos) opts.push(box('lossyImages', `Re-encode ${photos} photo${photos === 1 ? '' : 's'} (JPEG, HEIC)`, 'lossy', 'Kept only if at least 5% smaller and the measured difference stays small (PSNR 38 dB or better). HDR and portrait photos stay lossless. Size and orientation never change.', quality));
+    if (photos) opts.push(box('lossyImages', `Smart compression for ${photos} photo${photos === 1 ? '' : 's'}`, 'lossy', 'Instead of one fixed quality, SQUEEZE starts at 85 and steps down (80, 75, 70…), measuring the difference each time (DSSIM), and stops just before it would become visible. Kept only if at least 5% smaller; otherwise marked “Already optimized”. Orientation and colour stay; HDR and portrait depth may not carry over.', photoExtras));
     if (videos) opts.push(box('video', `Re-encode ${videos} video${videos === 1 ? '' : 's'} as HEVC`, 'lossy', `macOS’s highest quality HEVC setting. Same resolution, frame rate and duration. Skipped for videos that are already HEVC. ${est}`));
     if (pcm) opts.push(box('flac', `Convert ${pcm} WAV/AIFF file${pcm === 1 ? '' : 's'} to FLAC`, 'lossless', 'Identical sound, usually 40–60% smaller. The file type changes to .flac; markers, loops and broadcast details do not carry over.'));
     if (lossless) opts.push(box('aac', 'Encode lossless audio as AAC 256 kbps instead', 'lossy', 'Much smaller, but no longer lossless. Off unless you choose it. Used only when FLAC is not chosen or not smaller.'));
     const sheetEl = h('div.sq-sheet', {},
       h('h2', {}, 'MAXIMUM'),
-      h('p.lead', {}, opts.length ? 'These steps can make files smaller than lossless methods can. Choose what you are comfortable with. Anything you leave unticked stays lossless, and the originals are never changed.' : 'Nothing in this batch has a stronger option, so Maximum Squeeze will use the most thorough lossless settings.'),
+      h('p.lead', {}, opts.length ? 'These steps can make files smaller than lossless methods can. Choose what you are comfortable with. Anything you leave unticked stays lossless.' : 'Nothing in this batch has a stronger option, so Maximum Squeeze will use the most thorough lossless settings.'),
       ...opts,
-      h('div.always', {}, 'Always lossless, whatever you choose: PNG, GIF, WebP, SVG, TIFF, PDF, MP3, AAC and M4A. Lossy files are never encoded again, which would only lose more quality.'),
+      h('div.always', {}, 'Always lossless, whatever you choose: PNG, GIF, WebP, SVG, TIFF, PDF, MP3, AAC and M4A. MP3 and AAC are never encoded again, which would only lose more quality.'),
       h('div.foot', {}, h('button.sq-btn', { onclick: () => { sheet = null; render(); } }, 'Cancel'), h('button.sq-btn.primary', { onclick: () => approveMax(o) }, 'APPROVE AND SQUEEZE')));
     return h('div.sq-veil', { onclick: (e) => { if (e.target === e.currentTarget) { sheet = null; render(); } } }, sheetEl);
   }

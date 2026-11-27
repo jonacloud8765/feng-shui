@@ -540,10 +540,13 @@ class Engine extends EventEmitter {
       if (it.format === 'mp4' || it.format === 'mov' || it.format === 'm4v' || it.format === 'm4a') return this.remux(it, ext, o);
       return this.audioClean(it, ext, o);
     };
+    const smartPhotos = lossyOk && o.lossyImages && (it.format === 'jpeg' || it.format === 'heif');
     // HEIC photos become JPG when that setting is on (it is by default).
-    if (it.format === 'heif' && o.convertHeic) {
+    // In Maximum with photo compression approved, the smart pipeline below
+    // handles HEIC photos instead.
+    if (it.format === 'heif' && o.convertHeic && !smartPhotos) {
       try {
-        return await this.heicToJpeg(it, mode === 'maximum' && o.approved && o.lossyImages ? Math.max(0.72, o.imageQuality || 0.85) : 0.92);
+        return await this.heicToJpeg(it, 0.92);
       } catch (err) {
         if (this.canceled) throw err;
         best = await tryLossless();
@@ -557,8 +560,10 @@ class Engine extends EventEmitter {
     if (lossyOk && !this.canceled) {
       let alt = null;
       try {
-        if (it.format === 'jpeg' && o.lossyImages) alt = await this.reencodeImage(it, 'public.jpeg', '.jpg', o.imageQuality || 0.85);
-        else if (it.format === 'heif' && o.lossyImages) alt = await this.reencodeImage(it, 'public.heic', ext, o.imageQuality || 0.85);
+        if (smartPhotos) {
+          const toHeic = o.heicOut || (it.format === 'heif' && !o.convertHeic);
+          alt = await this.smartPhoto(it, toHeic ? 'public.heic' : 'public.jpeg', toHeic ? (it.format === 'heif' ? ext : '.heic') : (it.format === 'jpeg' ? ext : '.jpg'), o.resize ? 2560 : 0);
+        }
         else if (it.kind === 'video' && o.video) alt = await this.reencodeVideo(it, ext);
         else if ((it.format === 'wav' || it.format === 'aiff') && o.flac) alt = await this.toFlac(it, o);
         else if ((it.format === 'wav' || it.format === 'aiff' || it.format === 'flac') && o.aac) alt = await this.toAac(it);
@@ -566,16 +571,18 @@ class Engine extends EventEmitter {
         if (this.canceled) throw err;
         (best ? best.notes : []).push(`The stronger option was not used: ${err.message}`);
       }
-      if (alt && best && alt.size < best.size * 0.95) {
+      if (alt && best && alt.size < best.size * 0.95 && alt.size < it.size * 0.95) {
         alt.removed = [...new Set([...(best.removed || []), ...(alt.removed || [])])];
         best = alt;
       } else if (alt && best) {
-        best.notes.push('The stronger setting would not have saved enough to be worth the quality cost, so the lossless result was kept.');
+        best.alreadyOptimized = true;
+        best.notes.push('Already optimized: compressing it harder would have saved less than 5% (or made it bigger), so the lossless result was kept.');
       } else if (alt && !best) best = alt;
     }
     if (!best) throw Object.assign(new Error('No safe way to optimise this file was found.'), { skipOnly: true });
     // Nothing gained and nothing removed: hand back an exact copy.
     if (best.size >= it.size && !best.removed.length && !best.lossy && !best.converted) return this.copyPlan(it, ext, best.notes);
+    if (best.alreadyOptimized && best.size >= it.size * 0.95 && !best.removed.length) return this.copyPlan(it, ext, best.notes);
     return best;
   }
 
@@ -645,24 +652,67 @@ class Engine extends EventEmitter {
     return left.map((k) => LABELS[k] || k);
   }
 
-  async reencodeImage(it, type, ext, quality) {
-    if (it.format === 'heif' && (it.info?.auxiliary || []).some((a) => a === 'depth' || a === 'disparity' || a === 'matte')) {
-      throw new Error('this HEIC has portrait depth or matte data that re-encoding would drop');
+  // Maximum Squeeze for photos, in three steps:
+  //   1. Photos over about 15 megapixels can be resized so the long edge is
+  //      2,560 px (Lanczos), if the person ticked that.
+  //   2. Metadata is removed; orientation and the colour profile stay.
+  //   3. A perceptual loop: encode at quality 85, measure DSSIM (from SSIM)
+  //      against a top-quality (95) encode of the same picture, and step down
+  //      80, 75, 70… keeping the lowest quality that stays under the
+  //      visible-difference limit. Measuring against the top-quality encode,
+  //      not the raw original, keeps sensor noise and resizing out of the
+  //      score, so only the compression's own artifacts count.
+  async smartPhoto(it, type, outExt, maxEdge) {
+    const LIMIT = 0.010; // calibrated on iPhone photos: beyond it the steps get visibly blockier
+    const info = it.info || {};
+    const long = Math.max(info.width || 0, info.height || 0);
+    const resize = maxEdge && long > 4500 ? maxEdge : 0;
+    const fmt = type === 'public.heic' ? 'heif' : 'jpeg';
+    const encode = async (q, out) => {
+      const args = ['image-encode', it.path, out, '--type', type, '--quality', String(q)];
+      if (fmt === 'jpeg') args.push('--progressive');
+      if (resize) args.push('--max-edge', String(resize));
+      const r = await this.helper(args);
+      if (!r.ok) throw new Error(r.error);
+    };
+    this.step(it, resize ? 'Resizing' : 'Preparing a reference', 0.25);
+    const ref = this.temp(it, outExt);
+    await encode(0.95, ref);
+    let pick = null;
+    for (const q of [0.85, 0.80, 0.75, 0.70, 0.65, 0.60]) {
+      if (this.canceled) throw new Error('Canceled.');
+      this.step(it, `${resize ? 'Resizing and e' : 'E'}ncoding at quality ${Math.round(q * 100)}`, 0.3 + (0.85 - q) * 1.2);
+      const raw = this.temp(it, outExt);
+      await encode(q, raw);
+      const file = this.temp(it, outExt);
+      const c = await this.work({ op: 'clean', format: fmt, input: raw, output: file, opts: {} });
+      if (!c.ok) throw new Error(c.error);
+      const m = await this.helper(['image-ssim', ref, file]);
+      if (!m.ok) throw new Error(m.error);
+      if (!m.opens) throw new Error('the new photo does not open');
+      if (pick && m.dssim > LIMIT) break;
+      pick = { file, size: c.size, q, m, removed: c.removed || [], notes: c.notes || [] };
+      if (m.dssim > LIMIT) break; // even quality 85 is at the limit: stop there
     }
-    this.step(it, `Re-encoding at quality ${Math.round(quality * 100)}`, 0.5);
-    const raw = this.temp(it, ext);
-    const r = await this.helper(['image-encode', it.path, raw, '--type', type, '--quality', String(quality)]);
-    if (!r.ok) throw new Error(r.error);
-    const file = this.temp(it, ext);
-    const c = await this.work({ op: 'clean', format: it.format, input: raw, output: file, opts: {} });
-    if (!c.ok) throw new Error(c.error);
-    const { cmp, checks } = await this.verifyImage(it, file, { lossless: false });
-    if (cmp.psnr < 38) throw new Error(`the quality loss would be visible (PSNR ${cmp.psnr} dB)`);
-    checks.push(`Visual difference measured: PSNR ${cmp.psnr} dB`);
+    if (!pick) throw new Error('no version could be made');
+    const after = await this.helper(['image-info', pick.file]);
+    if (!after.ok) throw new Error('the new photo does not open as an image');
+    if ((info.orientation || 1) !== (after.orientation || 1)) throw new Error('the orientation would change');
+    if ((info.profile || '') !== (after.profile || '')) throw new Error('the colour profile would change');
+    if (resize ? Math.max(after.width, after.height) !== resize : (after.width !== info.width || after.height !== info.height)) throw new Error('the picture size came out wrong');
+    it.afterInfo = after;
+    const aux = info.auxiliary || [];
+    const gain = (l) => (l || []).some((a) => a === 'gainmap' || a === 'isogainmap');
+    const notes = [...pick.notes];
+    if (gain(aux) && !gain(after.auxiliary)) notes.push('The HDR brightness boost (gain map) was not kept, so it shows as a standard photo on HDR screens.');
+    if (aux.some((a) => a === 'depth' || a === 'disparity' || a === 'matte')) notes.push('Portrait depth and matte data were not kept, so the portrait effect can no longer be edited.');
+    const label = type === 'public.heic' ? 'HEIC' : 'JPG';
+    const checks = [`Opens as a ${label}`, resize ? `Resized from ${info.width} × ${info.height} to ${after.width} × ${after.height}` : `Same size: ${after.width} × ${after.height}`, 'Orientation and colour profile kept', `Perceptual difference from a top-quality encode: DSSIM ${pick.m.dssim.toFixed(4)} (SSIM ${pick.m.ssim.toFixed(4)}; the limit is ${LIMIT})`];
     return {
-      file, size: c.size, removed: [...(it.found || []), ...(c.removed || [])], lossy: true, checks, notes: c.notes || [], after: this.afterMeta(it),
-      method: `Re-encoded as ${FORMATS[it.format].label} at quality ${Math.round(quality * 100)} (you approved this)`,
-      quality: `Lossy · high quality, not identical (PSNR ${cmp.psnr} dB)`,
+      file: pick.file, size: pick.size, ext: outExt, lossy: true, converted: outExt.toLowerCase() !== path.extname(it.name).toLowerCase(), resized: !!resize, checks, notes, after: this.afterMeta(it),
+      removed: [...(it.found || []), ...pick.removed],
+      method: `${resize ? `Resized to ${resize} px on the long edge, then e` : 'E'}ncoded as ${label}${fmt === 'jpeg' ? ' (progressive)' : ''} at quality ${Math.round(pick.q * 100)}, ${pick.q < 0.85 ? 'the lowest that stayed under the visible-difference limit' : 'the starting quality (lower would have been visibly different)'} (you approved this)`,
+      quality: `Lossy · ${resize ? 'smaller picture, ' : ''}perceptually close, not identical (DSSIM ${pick.m.dssim.toFixed(4)})`,
     };
   }
 

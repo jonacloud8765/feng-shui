@@ -56,6 +56,10 @@ awake and open settings.
   Each result is checked against its original first; then the original goes
   to the Trash and the squeezed file takes its name and place (a setting
   keeps both instead, as `name (squeezed).ext`). Nothing is ever made bigger.
+  Maximum Squeeze has smart photo compression: big photos can be resized to
+  2,560 px, and quality steps down from 85 until a perceptual check (DSSIM)
+  says the next step would show; photos that will not shrink 5% are marked
+  “Already optimized”.
   HEIC photos are converted to high-quality JPGs (a setting turns this off).
 
 - **A living yin yang.** The Feng Shui layout now has a flat, generative yin
