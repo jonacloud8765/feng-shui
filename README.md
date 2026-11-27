@@ -53,8 +53,9 @@ awake and open settings.
   photos, PDFs, video and audio, all on this Mac. Drop files or folders in,
   pick Quick Squeeze (lossless, the default), Pure Clean (metadata only) or
   Maximum Squeeze (smaller, with any quality loss shown and approved first).
-  Originals are never touched: each result is saved beside its original as
-  `name (squeezed).ext`, and is checked against the original before it is kept.
+  Each result is checked against its original first; then the original goes
+  to the Trash and the squeezed file takes its name and place (a setting
+  keeps both instead, as `name (squeezed).ext`). Nothing is ever made bigger.
   HEIC photos are converted to high-quality JPGs (a setting turns this off).
 
 - **A living yin yang.** The Feng Shui layout now has a flat, generative yin

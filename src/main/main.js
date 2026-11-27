@@ -24,7 +24,7 @@ const library = () => libraryService || (libraryService = (() => {
 let squeezeService;
 const squeeze = () => squeezeService || (squeezeService = (() => {
   const { Engine } = require('./squeeze/engine');
-  const eng = new Engine({ dataDir: app.getPath('userData') });
+  const eng = new Engine({ dataDir: app.getPath('userData'), trash: (p) => shell.trashItem(p) });
   // Only SQUEEZE windows hear about the queue.
   eng.on('change', (snap) => {
     if (!windows) return;
@@ -689,7 +689,7 @@ function registerIpc() {
           const options = {
             approved: !!o.approved, lossyImages: !!o.lossyImages, video: !!o.video, flac: !!o.flac, aac: !!o.aac,
             imageQuality: Math.min(0.95, Math.max(0.6, Number(o.imageQuality) || 0.85)),
-            keepTags: w.config.keepTags !== false, keepArt: w.config.keepArt !== false, convertHeic: w.config.convertHeic !== false,
+            keepTags: w.config.keepTags !== false, keepArt: w.config.keepArt !== false, convertHeic: w.config.convertHeic !== false, replaceOriginal: w.config.replaceOriginal !== false,
           };
           return await eng.start({ mode: ['quick', 'pure', 'maximum'].includes(args[0]) ? args[0] : 'quick', options });
         }
@@ -701,6 +701,11 @@ function registerIpc() {
         case 'reveal': {
           // For the whole batch, show the first result selected in its folder.
           const first = eng.items.find((x) => x.inBatch && x.status === 'done' && x.result?.path);
+          if (args[1] === 'before' && eng.item(String(args[0]))?.trashed) {
+            const t = path.join(app.getPath('home'), '.Trash', path.basename(eng.item(String(args[0])).trashed));
+            if (require('fs').existsSync(t)) shell.showItemInFolder(t); else await shell.openPath(path.join(app.getPath('home'), '.Trash'));
+            return { ok: true };
+          }
           const p = args[0] === 'batch' ? first?.result.path : resultOf(args[0], args[1]);
           if (p) shell.showItemInFolder(p);
           return { ok: !!p };

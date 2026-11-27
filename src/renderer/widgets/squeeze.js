@@ -232,7 +232,7 @@ export function mount(root, ctx) {
   const overallLbl = h('div.lbl');
   const overallBar = h('i');
   const overall = h('div.sq-overall', {}, overallLbl, h('div.sq-prog', {}, overallBar));
-  const outBtn = h('span.sq-out', { title: 'Each result is saved in the same folder as its original, with “(squeezed)” added to the name. Originals are never changed.' }, 'Saved next to the originals');
+  const outBtn = h('span.sq-out');
   const acts = h('div.acts');
   const foot = h('div.sq-foot', {}, totals, overall, outBtn, acts);
   const veil = h('div.sq-dropveil', {}, h('div', {}, 'Drop to add to SQUEEZE'));
@@ -407,7 +407,7 @@ export function mount(root, ctx) {
     parts.push(h('div.sq-dh', {},
       h('div', {}, h('div.n', {}, it.name), h('div.m', {}, [it.formatLabel, human(it.size), ...techProps(it.info, it.kind)].filter(Boolean).join(' · '))),
       h('div.acts', {},
-        h('button.sq-btn', { onclick: () => api('reveal', it.id, 'before'), title: 'Show the original in Finder' }, 'Original in Finder'),
+        h('button.sq-btn', { onclick: () => api('reveal', it.id, 'before'), title: it.trashed ? 'Show the original in the Trash' : 'Show the original in Finder' }, it.trashed ? 'Original in Trash' : 'Original in Finder'),
         r && !r.noCopy ? h('button.sq-btn', { onclick: () => api('reveal', it.id, 'after'), title: 'Show the squeezed file in Finder' }, 'Reveal in Finder') : null,
         r && !r.noCopy ? h('button.sq-btn', { onclick: () => api('open', it.id, 'after') }, 'Open') : null)));
     if (it.status === 'unsupported' || it.status === 'skipped' || it.status === 'failed') {
@@ -483,6 +483,9 @@ export function mount(root, ctx) {
     overall.style.visibility = state.running || (state.batch && inBatch.length) ? 'visible' : 'hidden';
     overallLbl.replaceChildren(h('span', {}, state.running ? (state.paused ? 'Paused, safe to leave as it is' : 'Squeezing') : state.batch?.finished ? 'Complete' : ''), h('span', {}, `${Math.round((state.overall || 0) * 100)}%`));
     overallBar.style.width = `${Math.round((state.overall || 0) * 100)}%`;
+    const replace = ctx.config.replaceOriginal !== false;
+    outBtn.textContent = replace ? 'Originals go to the Trash' : 'Saved next to the originals';
+    outBtn.title = replace ? 'Each original is moved to the Trash (you can put it back from there) and the squeezed file takes its name and place. Change this in the widget’s settings.' : 'Each result is saved in the same folder as its original, with “(squeezed)” added to the name. Originals are never changed.';
     const btns = [];
     if (state.running) {
       btns.push(h('button.sq-btn', { onclick: () => api(state.paused ? 'resume' : 'pause') }, state.paused ? 'Resume' : 'Pause'));

@@ -141,9 +141,14 @@ const human = (n) => {
 };
 
 class Engine extends EventEmitter {
-  constructor({ dataDir }) {
+  constructor({ dataDir, trash = null }) {
     super();
     this.dataDir = dataDir;
+    // trash(path) moves a file to the Trash (Electron's shell.trashItem).
+    this.trash = trash;
+    // Hard links to originals that were moved to the Trash, so the
+    // before/after view keeps working. Cleared with the list.
+    this.keepDir = path.join(dataDir, 'squeeze-originals');
     this.previewDir = path.join(dataDir, 'squeeze-previews');
     this.items = [];
     this.batch = null;
@@ -163,7 +168,7 @@ class Engine extends EventEmitter {
   // ---- State sent to the window ----
   snapshot() {
     const items = this.items.map((it) => ({
-      id: it.id, name: it.name, rel: it.rel, size: it.size, format: it.format, formatLabel: it.format ? FORMATS[it.format].label : '', kind: it.kind,
+      id: it.id, trashed: !!it.trashed, name: it.name, rel: it.rel, size: it.size, format: it.format, formatLabel: it.format ? FORMATS[it.format].label : '', kind: it.kind,
       status: it.status, progress: it.progress, phase: it.phase, reason: it.reason, info: it.info, found: (it.found || []).map((k) => LABELS[k] || k),
       result: it.result,
     }));
@@ -276,6 +281,7 @@ class Engine extends EventEmitter {
     this.items = [];
     this.batch = null;
     fs.rmSync(this.previewDir, { recursive: true, force: true });
+    fs.rmSync(this.keepDir, { recursive: true, force: true });
     this.changed();
   }
 
@@ -441,7 +447,8 @@ class Engine extends EventEmitter {
     const after = await fsp.stat(it.path);
     if (after.size !== before.size || after.mtimeMs !== before.mtimeMs) throw new Error('The original changed while it was being read (another app is writing to it), so the result was thrown away.');
     this.step(it, 'Saving', 0.98);
-    const dest = plan.file ? await this.place(plan.file, path.join(path.dirname(it.path), `${path.basename(it.name, ext)} (squeezed)${plan.ext || ext}`)) : it.path;
+    let dest = plan.file ? await this.place(plan.file, path.join(path.dirname(it.path), `${path.basename(it.name, ext)} (squeezed)${plan.ext || ext}`)) : it.path;
+    if (plan.file && this.batch.options?.replaceOriginal && this.trash) dest = await this.replaceOriginal(it, dest, ext, plan);
     it.result = {
       size: plan.size, path: dest, name: path.basename(dest), saved: it.size - plan.size, percent: it.size ? (1 - plan.size / it.size) * 100 : 0,
       removed: [...new Set(plan.removed)].map((k) => LABELS[k] || k), remaining: plan.remaining || [], method: plan.method, quality: plan.quality, lossy: !!plan.lossy,
@@ -450,6 +457,38 @@ class Engine extends EventEmitter {
     it.status = 'done';
     it.progress = 1;
     it.phase = '';
+  }
+
+  // The squeezed file takes the original's place: the original goes to the
+  // Trash (so it can always be put back), then the result is renamed to the
+  // original's name. If that name cannot be used, the result keeps its
+  // "(squeezed)" name and nothing is lost.
+  async replaceOriginal(it, dest, ext, plan) {
+    const notes = plan.notes = plan.notes || [];
+    const st = await fsp.stat(it.path);
+    if (st.size !== it.size) { notes.push('The original changed while SQUEEZE worked, so it was not moved to the Trash.'); return dest; }
+    await fsp.mkdir(this.keepDir, { recursive: true });
+    const keep = path.join(this.keepDir, `${it.id}${ext}`);
+    try { await fsp.link(it.path, keep); } catch { try { await fsp.copyFile(it.path, keep, fs.constants.COPYFILE_EXCL); } catch { /* preview only */ } }
+    try {
+      await this.trash(it.path);
+    } catch (err) {
+      await fsp.rm(keep, { force: true }).catch(() => {});
+      notes.push(`The original could not be moved to the Trash (${String(err.message || err).replace(/\.$/, '')}), so both files are kept.`);
+      return dest;
+    }
+    it.before = keep;
+    it.trashed = it.path;
+    const target = path.join(path.dirname(it.path), `${path.basename(it.name, ext)}${plan.ext || ext}`);
+    try {
+      await fsp.link(dest, target);
+      await fsp.rm(dest, { force: true });
+      notes.push('The original was moved to the Trash and this file took its place.');
+      return target;
+    } catch (err) {
+      notes.push(`The original was moved to the Trash, but ${path.basename(target)} already exists here, so this file kept its “(squeezed)” name.`);
+      return dest;
+    }
   }
 
   // Moves a finished temporary file to its place without ever replacing anything.
@@ -832,7 +871,7 @@ class Engine extends EventEmitter {
   async preview(id, which, page = 1) {
     const it = this.items.find((x) => x.id === id);
     if (!it) return { ok: false, error: 'Not found.' };
-    const file = which === 'after' ? it.result?.path : it.path;
+    const file = which === 'after' ? it.result?.path : (it.before || it.path);
     if (!file) return { ok: false, error: 'No result yet.' };
     const direct = ['jpeg', 'png', 'gif', 'webp', 'svg'];
     const resultExt = path.extname(file).slice(1).toLowerCase();
